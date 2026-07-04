@@ -68,12 +68,20 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>Stats Dashboard</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{session.user?.playerUsername}</p>
           </div>
-          <button
-            onClick={() => signOut()}
-            className="px-4 py-2 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-lg transition text-white text-sm font-medium"
-          >
-            Sign Out
-          </button>
+          <div className="flex gap-2">
+            <Link
+              href="/settings"
+              className="px-4 py-2 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-lg transition text-white text-sm font-medium"
+            >
+              ⚙️ Settings
+            </Link>
+            <button
+              onClick={() => signOut()}
+              className="px-4 py-2 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-lg transition text-white text-sm font-medium"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </header>
 
