@@ -43,7 +43,7 @@ export async function GET(
 
     const isEditor = await prisma.reviewParticipant.findUnique({
       where: { sessionId_playerId: { sessionId: id, playerId: currentPlayerId } },
-    }).then(p => p?.role === 'editor' ? true : false);
+    }).then((p: any) => p?.role === 'editor' ? true : false);
 
     const stats = await prisma.$queryRaw`
       SELECT
@@ -121,7 +121,7 @@ export async function PUT(
     const currentPlayerId = (session.user as any)?.playerId;
     const isEditor = await prisma.reviewParticipant.findUnique({
       where: { sessionId_playerId: { sessionId: id, playerId: currentPlayerId } },
-    }).then(p => p?.role === 'editor' ? true : false);
+    }).then((p: any) => p?.role === 'editor' ? true : false);
 
     if (!isEditor) {
       return NextResponse.json({ error: 'You are not authorized to edit these stats' }, { status: 403 });
