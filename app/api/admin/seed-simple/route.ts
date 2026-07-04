@@ -164,15 +164,26 @@ async function seedDatabase() {
     }
 
     console.log('📈 Creating stat values...');
+    const now = new Date().toISOString();
+    const statEntries = Object.entries(stats);
+
     for (const playerId of players) {
-      for (const [, statId] of Object.entries(stats)) {
-        const initialValue = Math.floor(Math.random() * 4) + 4;
-        const now = new Date().toISOString();
-        await query(
-          'INSERT INTO StatValue (id, statId, playerId, value, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
-          [uuid(), statId, playerId, initialValue, now, now]
+      // Batch inserts in groups of 10 for faster execution
+      const promises = [];
+      for (let i = 0; i < statEntries.length; i += 10) {
+        const batch = statEntries.slice(i, i + 10);
+        const batchPromise = Promise.all(
+          batch.map(([, statId]) => {
+            const initialValue = Math.floor(Math.random() * 4) + 4;
+            return query(
+              'INSERT INTO StatValue (id, statId, playerId, value, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
+              [uuid(), statId, playerId, initialValue, now, now]
+            );
+          })
         );
+        promises.push(batchPromise);
       }
+      await Promise.all(promises);
     }
 
     console.log('✅ Seed complete!');
