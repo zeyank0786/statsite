@@ -48,6 +48,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     callbacks: {
       async jwt({ token, user }) {
         if (user) {
+          token.id = (user as any).id;
           token.playerId = (user as any).playerId;
           token.playerUsername = (user as any).playerUsername;
         }
@@ -55,6 +56,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
       },
       async session({ session, token }) {
         if (session.user) {
+          (session.user as any).id = token.id;
           (session.user as any).playerId = token.playerId;
           (session.user as any).playerUsername = token.playerUsername;
         }
