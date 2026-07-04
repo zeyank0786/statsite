@@ -46,7 +46,7 @@ export async function PUT(
         'INSERT INTO StatValue (id, statId, playerId, value) VALUES (?, ?, ?, ?)',
         [newId, stat.id, id, 5]
       );
-      current = { id: newId, value: 5 };
+      current = { id: newId, value: 5 } as any;
     }
 
     const oldValue = current.value;
