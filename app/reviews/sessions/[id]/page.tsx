@@ -4,6 +4,8 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import StatDescriptionModal from '@/components/StatDescriptionModal';
+import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 
 interface PlayerStat {
   id: string;
@@ -36,6 +38,8 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const [playerName, setPlayerName] = useState('');
   const [forbidden, setForbidden] = useState(false);
   const [joiningRole, setJoiningRole] = useState<string | null>(null);
+  const [changes, setChanges] = useState<Record<string, any>>({});
+  const [targetPlayerId, setTargetPlayerId] = useState<string>('');
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -120,6 +124,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
         setStats(data.stats || []);
         setPlayerName(data.playerName || '');
         setIsEditor(data.isEditor || false);
+        setTargetPlayerId(data.targetPlayerId || '');
 
         // Group by category
         const grouped: GroupedStats = {};
@@ -134,6 +139,19 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
           grouped[stat.categoryCode].stats.push(stat);
         });
         setGroupedStats(grouped);
+
+        // Load changes from last review
+        if (data.targetPlayerId) {
+          const changesRes = await fetch(`/api/players/${data.targetPlayerId}/changes`);
+          if (changesRes.ok) {
+            const changesData = await changesRes.json();
+            const changesMap: Record<string, any> = {};
+            changesData.forEach((change: any) => {
+              changesMap[change.code] = change;
+            });
+            setChanges(changesMap);
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to load stats:', error);
@@ -300,31 +318,49 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
               <h3 className="text-2xl font-bold text-white mb-6">{category.label}</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                {category.stats.map((stat) => (
-                  <div
-                    key={stat.statId}
-                    className={`rounded-xl p-4 border transition ${
-                      isEditor
-                        ? 'bg-neutral-800/50 border-neutral-700 hover:border-neutral-600'
-                        : 'bg-neutral-800/30 border-neutral-700'
-                    }`}
-                  >
-                    <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
-                      {stat.code}
-                    </p>
-                    <p className="text-xs font-medium mb-4 line-clamp-2 h-8 text-white">
-                      {stat.label}
-                    </p>
+                {category.stats.map((stat) => {
+                  const change = changes[stat.code];
+                  const diff = change && change.lastReviewValue !== undefined && change.lastReviewValue !== null
+                    ? stat.value - change.lastReviewValue
+                    : null;
 
-                    {/* Value Display */}
-                    <div className="mb-4">
-                      <p className="text-3xl font-bold mb-2" style={{ color: 'var(--accent-cyan)' }}>
-                        {stat.value}
+                  return (
+                    <div
+                      key={stat.statId}
+                      className={`rounded-xl p-4 border transition ${
+                        isEditor
+                          ? 'bg-neutral-800/50 border-neutral-700 hover:border-neutral-600'
+                          : 'bg-neutral-800/30 border-neutral-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                          {stat.code}
+                        </p>
+                        <StatDescriptionModal
+                          statCode={stat.code}
+                          statLabel={stat.label}
+                          description={STAT_DESCRIPTIONS[stat.code] || 'No description available'}
+                        />
+                      </div>
+                      <p className="text-xs font-medium mb-4 line-clamp-2 h-8 text-white">
+                        {stat.label}
                       </p>
-                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        / 10
-                      </p>
-                    </div>
+
+                      {/* Value Display */}
+                      <div className="mb-4">
+                        <p className="text-3xl font-bold mb-2" style={{ color: 'var(--accent-cyan)' }}>
+                          {stat.value}
+                        </p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          / 10
+                        </p>
+                        {diff !== null && (
+                          <p className="text-xs mt-2 font-medium" style={{ color: diff > 0 ? 'var(--accent-green)' : diff < 0 ? 'var(--accent-red)' : 'var(--text-secondary)' }}>
+                            {diff > 0 ? '+' : ''}{diff} (was {change.lastReviewValue})
+                          </p>
+                        )}
+                      </div>
 
                     {/* Edit Controls - Only for Editor */}
                     {isEditor && (
@@ -357,8 +393,9 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                         />
                       </div>
                     )}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

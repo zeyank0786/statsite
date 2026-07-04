@@ -71,6 +71,7 @@ export async function GET(
     return NextResponse.json({
       stats,
       playerName: player?.username || 'Unknown',
+      targetPlayerId: reviewSession.targetPlayerId,
       isEditor,
       isSubject,
     });

@@ -4,6 +4,8 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import StatDescriptionModal from '@/components/StatDescriptionModal';
+import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 
 interface Stat {
   id: string;
@@ -55,6 +57,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [newName, setNewName] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [selectedComparison, setSelectedComparison] = useState<string>('');
+  const [changes, setChanges] = useState<Record<string, any>>({});
 
   const currentPlayerId = (sessionData?.user as any)?.playerId;
   const isOwnProfile = currentPlayerId === playerId;
@@ -72,12 +75,17 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
 
   const loadPlayerData = async () => {
     try {
-      const res = await fetch(`/api/players/${playerId}`);
-      if (!res.ok) {
+      const [profileRes, changesRes] = await Promise.all([
+        fetch(`/api/players/${playerId}`),
+        fetch(`/api/players/${playerId}/changes`),
+      ]);
+
+      if (!profileRes.ok) {
         router.push('/players');
         return;
       }
-      const data = await res.json();
+
+      const data = await profileRes.json();
       setPlayerName(data.player.username);
       setEmail(data.player.email || 'No email set');
       setCreatedAt(data.player.createdAt);
@@ -87,6 +95,15 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
       setRecentReviews(data.recentReviews || []);
       setOtherPlayers(data.otherPlayers || []);
       setNewName(data.player.username);
+
+      if (changesRes.ok) {
+        const changesData = await changesRes.json();
+        const changesMap: Record<string, any> = {};
+        changesData.forEach((change: any) => {
+          changesMap[change.code] = change;
+        });
+        setChanges(changesMap);
+      }
     } catch (error) {
       console.error('Failed to load player data:', error);
     } finally {
@@ -234,31 +251,50 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                      {category.stats.map((stat) => (
-                        <div key={stat.id} className="rounded-xl p-4 border bg-neutral-800/30 border-neutral-700">
-                          <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
-                            {stat.code}
-                          </p>
-                          <p className="text-xs font-medium mb-4 line-clamp-2 h-8 text-white">
-                            {stat.label}
-                          </p>
-                          <div className="mb-4">
-                            <p className="text-3xl font-bold mb-2" style={{ color: catColor }}>
-                              {stat.value}
+                      {category.stats.map((stat) => {
+                        const change = changes[stat.code];
+                        const diff = change && change.lastReviewValue !== undefined && change.lastReviewValue !== null
+                          ? stat.value - change.lastReviewValue
+                          : null;
+
+                        return (
+                          <div key={stat.id} className="rounded-xl p-4 border bg-neutral-800/30 border-neutral-700">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                                {stat.code}
+                              </p>
+                              <StatDescriptionModal
+                                statCode={stat.code}
+                                statLabel={stat.label}
+                                description={STAT_DESCRIPTIONS[stat.code] || 'No description available'}
+                              />
+                            </div>
+                            <p className="text-xs font-medium mb-4 line-clamp-2 h-8 text-white">
+                              {stat.label}
                             </p>
-                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>/ 10</p>
+                            <div className="mb-4">
+                              <p className="text-3xl font-bold mb-2" style={{ color: catColor }}>
+                                {stat.value}
+                              </p>
+                              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>/ 10</p>
+                              {diff !== null && (
+                                <p className="text-xs mt-2 font-medium" style={{ color: diff > 0 ? 'var(--accent-green)' : diff < 0 ? 'var(--accent-red)' : 'var(--text-secondary)' }}>
+                                  {diff > 0 ? '+' : ''}{diff} (was {change.lastReviewValue})
+                                </p>
+                              )}
+                            </div>
+                            <div className="h-1 bg-neutral-700 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{
+                                  width: `${(stat.value / 10) * 100}%`,
+                                  backgroundColor: catColor
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div className="h-1 bg-neutral-700 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-300"
-                              style={{
-                                width: `${(stat.value / 10) * 100}%`,
-                                backgroundColor: catColor
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
