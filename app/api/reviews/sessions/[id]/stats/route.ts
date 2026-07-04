@@ -146,10 +146,10 @@ export async function PUT(
     const previousValue = existingValue?.value || 0;
 
     if (existingValue) {
-      statValueId = existingValue.id;
+      statValueId = String(existingValue.id);
       await query(
         'UPDATE StatValue SET value = ?, updatedAt = ? WHERE id = ?',
-        [value, now, existingValue.id]
+        [value, now, statValueId]
       );
     } else {
       statValueId = uuid();
