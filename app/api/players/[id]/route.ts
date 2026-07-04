@@ -52,19 +52,20 @@ export async function GET(
     }
 
     const statMap: Record<string, any> = {};
-    for (const row of stats) {
-      if (!statMap[row.categoryCode]) {
-        statMap[row.categoryCode] = {
-          code: row.categoryCode,
-          label: row.categoryLabel,
+    for (const row of stats as any[]) {
+      const categoryCode = String(row.categoryCode);
+      if (!statMap[categoryCode]) {
+        statMap[categoryCode] = {
+          code: categoryCode,
+          label: String(row.categoryLabel),
           stats: [],
         };
       }
-      statMap[row.categoryCode].stats.push({
-        id: row.statId,
-        code: row.code,
-        label: row.label,
-        value: row.value,
+      statMap[categoryCode].stats.push({
+        id: String(row.statId),
+        code: String(row.code),
+        label: String(row.label),
+        value: Number(row.value),
       });
     }
 
