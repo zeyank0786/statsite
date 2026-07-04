@@ -180,13 +180,13 @@ export default function ClaimProfilePage() {
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 card-shadow space-y-5">
             <p style={{ color: 'var(--text-secondary)' }}>
-              This will create 4 test players (Player 1-4) with the following credentials:
+              This will create 4 test players with the following credentials:
             </p>
             <div className="bg-neutral-800 rounded-lg p-4 space-y-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              <p>🎮 <strong>Player 1</strong> - player1@test.com / password1</p>
-              <p>🎮 <strong>Player 2</strong> - player2@test.com / password2</p>
-              <p>🎮 <strong>Player 3</strong> - player3@test.com / password3</p>
-              <p>🎮 <strong>Player 4</strong> - player4@test.com / password4</p>
+              <p>🎮 <strong>Alex</strong> - player1@test.com / password1</p>
+              <p>🎮 <strong>Jordan</strong> - player2@test.com / password2</p>
+              <p>🎮 <strong>Casey</strong> - player3@test.com / password3</p>
+              <p>🎮 <strong>Taylor</strong> - player4@test.com / password4</p>
             </div>
 
             {error && (

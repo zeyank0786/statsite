@@ -137,12 +137,13 @@ async function seedDatabase() {
     }
 
     console.log('👥 Creating players...');
+    const playerNames = ['Alex', 'Jordan', 'Casey', 'Taylor'];
     const players: string[] = [];
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 0; i < 4; i++) {
       const playerId = uuid();
       await query(
         'INSERT INTO Player (id, username) VALUES (?, ?)',
-        [playerId, `Player ${i}`]
+        [playerId, playerNames[i]]
       );
       players.push(playerId);
     }

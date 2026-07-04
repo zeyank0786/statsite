@@ -115,14 +115,14 @@ export default function SignIn() {
               Quick Login
             </p>
             <div className="grid grid-cols-2 gap-2">
-              {[1, 2, 3, 4].map((n) => (
+              {['Alex', 'Jordan', 'Casey', 'Taylor'].map((name, idx) => (
                 <button
-                  key={n}
-                  onClick={() => quickLogin(n)}
+                  key={name}
+                  onClick={() => quickLogin(idx + 1)}
                   className="px-3 py-2 bg-neutral-800 border border-neutral-700 hover:border-neutral-600 text-white text-sm font-medium rounded-lg transition flex items-center justify-center gap-2"
                 >
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ['var(--accent-cyan)', 'var(--accent-purple)', 'var(--accent-pink)', 'var(--accent-green)'][n-1] }} />
-                  Player {n}
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ['var(--accent-cyan)', 'var(--accent-purple)', 'var(--accent-pink)', 'var(--accent-green)'][idx] }} />
+                  {name}
                 </button>
               ))}
             </div>
