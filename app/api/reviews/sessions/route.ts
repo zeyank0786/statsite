@@ -73,7 +73,7 @@ export async function POST(request: Request) {
         `INSERT INTO ReviewCycle (id, label, status, createdAt) VALUES (?, ?, ?, ?)`,
         [cycleId, 'Collaborative Reviews', 'in_progress', new Date().toISOString()]
       );
-      cycle = { id: cycleId };
+      cycle = { id: cycleId } as any;
     }
 
     const existing = await queryOne(
