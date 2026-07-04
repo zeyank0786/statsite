@@ -1,24 +1,15 @@
 import { createClient } from '@libsql/client';
 
-const getDatabaseUrl = () => {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error('DATABASE_URL environment variable is not set');
-  }
-  return url;
-};
-
 let db: ReturnType<typeof createClient> | null = null;
 
 export function getDb() {
   if (!db) {
-    const url = getDatabaseUrl();
-    db = createClient({
-      url,
-      ...(url.startsWith('libsql://') && process.env.DATABASE_URL?.includes('authToken=')
-        ? { authToken: url.split('authToken=')[1] }
-        : {}),
-    });
+    const url = process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+
+    db = createClient({ url });
   }
   return db;
 }
