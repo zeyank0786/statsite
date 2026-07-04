@@ -3,7 +3,6 @@ import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { v4 as uuid } from 'uuid';
-import { use } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await use(params);
+    const { id } = await params;
     const authOptions = await getAuthOptions();
     const session = await getServerSession(authOptions);
 
