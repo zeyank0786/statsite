@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  playerId  String?    @unique
+  player    Player?    @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  avatarUrl String?
+  user      User?
+
+  statValues        StatValue[]
+  suggestions       Suggestion[]
+  votes             Vote[]
+  comments          Comment[]
+  commentsAuthored  Comment[]      @relation("CommentAuthor")
+  evidence          Evidence[]
+  reviewSessions    ReviewSession[]
+  editingSessions   ReviewSession[] @relation("ReviewEditor")
+  reviewParticipants ReviewParticipant[] @relation("ReviewParticipant")
+  historyEdits      StatHistory[]  @relation("ChangedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id    String @id @default(cuid())
+  code  String @unique
+  label String
+  emoji String
+
+  stats Stat[]
+
+  createdAt DateTime @default(now())
+}
+
+model Stat {
+  id         String @id @default(cuid())
+  code       String @unique
+  label      String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  statValues       StatValue[]
+  suggestions      Suggestion[]
+  sessionStats     ReviewSessionStat[]
+
+  createdAt DateTime @default(now())
+}
+
+model StatValue {
+  id        String @id @default(cuid())
+  statId    String
+  stat      Stat   @relation(fields: [statId], references: [id], onDelete: Cascade)
+  playerId  String
+  player    Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  value     Int     @default(0)
+  notes     String?
+
+  history   StatHistory[]
+  evidence  Evidence[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([statId, playerId])
+}
+
+model StatHistory {
+  id         String @id @default(cuid())
+  statValueId String
+  statValue  StatValue @relation(fields: [statValueId], references: [id], onDelete: Cascade)
+
+  oldValue   Int
+  newValue   Int
+  reason     String?
+  changedById String
+  changedBy  Player  @relation("ChangedBy", fields: [changedById], references: [id])
+  source     String  // "admin_edit" | "suggestion" | "review_cycle"
+
+  createdAt DateTime @default(now())
+}
+
+model Suggestion {
+  id                String @id @default(cuid())
+  playerId          String
+  player            Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  statId            String
+  stat              Stat   @relation(fields: [statId], references: [id], onDelete: Cascade)
+
+  delta             Int
+  suggestedNewValue Int
+  reason            String
+  suggestedById      String
+  status            String  // "pending" | "approved" | "rejected"
+
+  votes Vote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vote {
+  id           String @id @default(cuid())
+  suggestionId String
+  suggestion   Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  userId       String
+  user         Player     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  choice       String  // "yes" | "no"
+
+  createdAt DateTime @default(now())
+
+  @@unique([suggestionId, userId])
+}
+
+model Comment {
+  id       String @id @default(cuid())
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   Player @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  body     String
+
+  createdAt DateTime @default(now())
+
+  @@index([playerId])
+}
+
+model Evidence {
+  id        String @id @default(cuid())
+  statValueId String
+  statValue StatValue @relation(fields: [statValueId], references: [id], onDelete: Cascade)
+
+  url         String
+  description String?
+  addedById   String
+  addedBy     Player  @relation(fields: [addedById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model ReviewCycle {
+  id        String @id @default(cuid())
+  label     String
+  status    String  // "draft" | "in_progress" | "ready_to_present" | "revealed"
+
+  sessions  ReviewSession[]
+
+  createdAt DateTime @default(now())
+  revealedAt DateTime?
+}
+
+model ReviewSession {
+  id            String @id @default(cuid())
+  cycleId       String
+  cycle         ReviewCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  targetPlayerId String
+  targetPlayer  Player      @relation(fields: [targetPlayerId], references: [id], onDelete: Cascade)
+
+  editorId String?
+  editor   Player? @relation("ReviewEditor", fields: [editorId], references: [id], onDelete: SetNull)
+
+  status        String  // "pending" | "in_progress" | "submitted"
+  lastEditedById String?
+  submittedAt   DateTime?
+
+  stats        ReviewSessionStat[]
+  participants ReviewParticipant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cycleId, targetPlayerId])
+}
+
+model ReviewParticipant {
+  id        String @id @default(cuid())
+  sessionId String
+  session   ReviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  playerId String
+  player   Player   @relation("ReviewParticipant", fields: [playerId], references: [id], onDelete: Cascade)
+
+  role String  // "editor" | "reviewer"
+
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, playerId])
+}
+
+model ReviewSessionStat {
+  id        String @id @default(cuid())
+  sessionId String
+  session   ReviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  statId    String
+  stat      Stat   @relation(fields: [statId], references: [id], onDelete: Cascade)
+
+  oldValue      Int
+  proposedValue Int?
+  note          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

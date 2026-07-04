@@ -1,0 +1,373 @@
+'use client';
+
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState, use } from 'react';
+import Link from 'next/link';
+
+interface PlayerStat {
+  id: string;
+  statId: string;
+  code: string;
+  label: string;
+  categoryCode: string;
+  categoryLabel: string;
+  value: number;
+}
+
+interface GroupedStats {
+  [categoryCode: string]: {
+    label: string;
+    code: string;
+    stats: PlayerStat[];
+  };
+}
+
+export default function ReviewSessionPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: sessionId } = use(params);
+  const { status, data: session } = useSession();
+  const router = useRouter();
+  const [stats, setStats] = useState<PlayerStat[]>([]);
+  const [groupedStats, setGroupedStats] = useState<GroupedStats>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [isEditor, setIsEditor] = useState(false);
+  const [playerName, setPlayerName] = useState('');
+  const [forbidden, setForbidden] = useState(false);
+  const [joiningRole, setJoiningRole] = useState<string | null>(null);
+
+  const currentPlayerId = (session?.user as any)?.playerId;
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin');
+      return;
+    }
+
+    if (status === 'authenticated') {
+      loadStats();
+      const eventSource = connectToStream();
+
+      // Poll for participant changes (in case user joined from reviews list)
+      const pollInterval = setInterval(() => {
+        loadStats();
+      }, 2000);
+
+      return () => {
+        eventSource.close();
+        clearInterval(pollInterval);
+      };
+    }
+  }, [status, router, sessionId]);
+
+  const connectToStream = () => {
+    const eventSource = new EventSource(`/api/reviews/sessions/${sessionId}/stream`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'stat_updated') {
+          // Update the stat in local state
+          setStats((prevStats) =>
+            prevStats.map((s) =>
+              s.statId === data.statId ? { ...s, value: data.value } : s
+            )
+          );
+
+          // Update grouped stats too
+          setGroupedStats((prevGrouped) => {
+            const updated = { ...prevGrouped };
+            Object.keys(updated).forEach((catCode) => {
+              updated[catCode].stats = updated[catCode].stats.map((s) =>
+                s.statId === data.statId ? { ...s, value: data.value } : s
+              );
+            });
+            return updated;
+          });
+        }
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return eventSource;
+  };
+
+  const loadStats = async () => {
+    try {
+      const res = await fetch(`/api/reviews/sessions/${sessionId}/stats`);
+      if (res.ok) {
+        const data = await res.json();
+
+        // Prevent the subject player from viewing/participating in their own review
+        if (data.isSubject) {
+          setForbidden(true);
+          return;
+        }
+
+        setStats(data.stats || []);
+        setPlayerName(data.playerName || '');
+        setIsEditor(data.isEditor || false);
+
+        // Group by category
+        const grouped: GroupedStats = {};
+        (data.stats || []).forEach((stat: PlayerStat) => {
+          if (!grouped[stat.categoryCode]) {
+            grouped[stat.categoryCode] = {
+              label: stat.categoryLabel,
+              code: stat.categoryCode,
+              stats: [],
+            };
+          }
+          grouped[stat.categoryCode].stats.push(stat);
+        });
+        setGroupedStats(grouped);
+      }
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJoinAs = async (role: 'editor' | 'reviewer') => {
+    setJoiningRole(role);
+    try {
+      const res = await fetch(`/api/reviews/sessions/${sessionId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      });
+
+      if (res.ok) {
+        // Reload stats to update editor status
+        loadStats();
+      } else {
+        const data = await res.json();
+        console.error('Failed to join:', data.error);
+      }
+    } catch (error) {
+      console.error('Failed to join session:', error);
+    } finally {
+      setJoiningRole(null);
+    }
+  };
+
+  const handleEditStat = async (statId: string, newValue: number) => {
+    if (!isEditor) return;
+    if (newValue < 0 || newValue > 10) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/reviews/sessions/${sessionId}/stats`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statId, value: newValue }),
+      });
+
+      if (res.ok) {
+        // Update local state
+        setStats(stats.map(s => s.statId === statId ? { ...s, value: newValue } : s));
+      }
+    } catch (error) {
+      console.error('Failed to save stat:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAndClose = async () => {
+    setClosing(true);
+    try {
+      const res = await fetch(`/api/reviews/sessions/${sessionId}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (res.ok) {
+        // Redirect back to reviews
+        router.push('/reviews');
+      }
+    } catch (error) {
+      console.error('Failed to close session:', error);
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  if (forbidden) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🚫</div>
+          <h1 className="text-3xl font-bold text-white mb-2">Access Denied</h1>
+          <p style={{ color: 'var(--text-secondary)' }} className="mb-6">
+            You cannot participate in a review session for your own stats.
+          </p>
+          <Link
+            href="/reviews"
+            className="inline-block px-6 py-3 rounded-lg font-semibold text-white"
+            style={{ backgroundColor: 'var(--accent-cyan)' }}
+          >
+            Back to Reviews
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p style={{ color: 'var(--text-secondary)' }}>Loading session...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="border-b border-neutral-800 bg-black/50 backdrop-blur sticky top-0 z-40">
+        <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-pink))' }} />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <Link href="/reviews" className="text-sm font-medium mb-4 block" style={{ color: 'var(--accent-cyan)' }}>
+            ← Back to Reviews
+          </Link>
+          <div className="flex items-center justify-between gap-6">
+            <div>
+              <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
+                Reviewing {playerName}
+              </h1>
+              <p style={{ color: 'var(--text-secondary)' }}>
+                {isEditor ? '📝 You are the editor' : '👁️ You are viewing (read-only)'}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              {!isEditor && (
+                <>
+                  <button
+                    onClick={() => handleJoinAs('editor')}
+                    disabled={joiningRole !== null}
+                    className="px-4 py-2 rounded-lg font-semibold text-white transition bg-blue-900/30 hover:bg-blue-900/50 border border-blue-800 disabled:opacity-50"
+                  >
+                    {joiningRole === 'editor' ? '⏳' : '✏️ Editor'}
+                  </button>
+                  <button
+                    onClick={() => handleJoinAs('reviewer')}
+                    disabled={joiningRole !== null}
+                    className="px-4 py-2 rounded-lg font-semibold text-white transition bg-green-900/30 hover:bg-green-900/50 border border-green-800 disabled:opacity-50"
+                  >
+                    {joiningRole === 'reviewer' ? '⏳' : '👁️ Reviewer'}
+                  </button>
+                </>
+              )}
+              {isEditor && (
+                <div className="px-4 py-2 rounded-lg" style={{ backgroundColor: 'rgba(0, 255, 255, 0.1)', borderColor: 'var(--accent-cyan)', borderWidth: '1px' }}>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--accent-cyan)' }}>
+                    Editor
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="space-y-10">
+          {Object.values(groupedStats).map((category) => (
+            <div key={category.code} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 card-shadow">
+              <h3 className="text-2xl font-bold text-white mb-6">{category.label}</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {category.stats.map((stat) => (
+                  <div
+                    key={stat.statId}
+                    className={`rounded-xl p-4 border transition ${
+                      isEditor
+                        ? 'bg-neutral-800/50 border-neutral-700 hover:border-neutral-600'
+                        : 'bg-neutral-800/30 border-neutral-700'
+                    }`}
+                  >
+                    <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                      {stat.code}
+                    </p>
+                    <p className="text-xs font-medium mb-4 line-clamp-2 h-8 text-white">
+                      {stat.label}
+                    </p>
+
+                    {/* Value Display */}
+                    <div className="mb-4">
+                      <p className="text-3xl font-bold mb-2" style={{ color: 'var(--accent-cyan)' }}>
+                        {stat.value}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        / 10
+                      </p>
+                    </div>
+
+                    {/* Edit Controls - Only for Editor */}
+                    {isEditor && (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditStat(stat.statId, Math.max(0, stat.value - 1))}
+                            disabled={saving || stat.value === 0}
+                            className="flex-1 py-1 px-2 rounded text-xs font-bold transition bg-red-900/30 text-red-400 hover:bg-red-900/50 disabled:opacity-50"
+                          >
+                            −
+                          </button>
+                          <button
+                            onClick={() => handleEditStat(stat.statId, Math.min(10, stat.value + 1))}
+                            disabled={saving || stat.value === 10}
+                            className="flex-1 py-1 px-2 rounded text-xs font-bold transition bg-green-900/30 text-green-400 hover:bg-green-900/50 disabled:opacity-50"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          value={stat.value}
+                          onChange={(e) => handleEditStat(stat.statId, parseInt(e.target.value))}
+                          disabled={saving}
+                          className="w-full h-1 rounded cursor-pointer"
+                          style={{ accentColor: 'var(--accent-cyan)' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Save and Close Button - Only for Editor */}
+          {isEditor && (
+            <div className="flex justify-end pt-8 border-t border-neutral-800">
+              <button
+                onClick={handleSaveAndClose}
+                disabled={closing}
+                className="px-8 py-3 rounded-lg font-semibold text-white transition text-lg"
+                style={{
+                  backgroundColor: 'var(--accent-cyan)',
+                  opacity: closing ? 0.5 : 1,
+                  cursor: closing ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {closing ? '⏳ Saving...' : '✓ Save Changes & Close'}
+              </button>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
