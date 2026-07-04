@@ -24,9 +24,9 @@ interface GroupedStats {
 }
 
 export default function ReviewSessionPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: sessionId } = use(params);
   const { status, data: session } = useSession();
   const router = useRouter();
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [stats, setStats] = useState<PlayerStat[]>([]);
   const [groupedStats, setGroupedStats] = useState<GroupedStats>({});
   const [loading, setLoading] = useState(true);
@@ -40,12 +40,18 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const currentPlayerId = (session?.user as any)?.playerId;
 
   useEffect(() => {
+    if (params) {
+      params.then((p) => setSessionId(p.id));
+    }
+  }, [params]);
+
+  useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
       return;
     }
 
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && sessionId) {
       loadStats();
       const eventSource = connectToStream();
 
@@ -200,6 +206,14 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
       setClosing(false);
     }
   };
+
+  if (!sessionId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+      </div>
+    );
+  }
 
   if (forbidden) {
     return (
