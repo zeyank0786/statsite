@@ -36,11 +36,6 @@ export default function SignIn() {
     }
   };
 
-  const quickLogin = (player: number) => {
-    setEmail(`player${player}@test.com`);
-    setPassword(`password${player}`);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
@@ -108,25 +103,6 @@ export default function SignIn() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
-
-          {/* Quick Login Buttons */}
-          <div className="mt-6 pt-6 border-t border-neutral-700">
-            <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-              Quick Login
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {['Alex', 'Jordan', 'Casey', 'Taylor'].map((name, idx) => (
-                <button
-                  key={name}
-                  onClick={() => quickLogin(idx + 1)}
-                  className="px-3 py-2 bg-neutral-800 border border-neutral-700 hover:border-neutral-600 text-white text-sm font-medium rounded-lg transition flex items-center justify-center gap-2"
-                >
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ['var(--accent-cyan)', 'var(--accent-purple)', 'var(--accent-pink)', 'var(--accent-green)'][idx] }} />
-                  {name}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Stats Grid with color accents */}
