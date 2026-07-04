@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Stat value not found' }, { status: 404 });
     }
 
-    const delta = suggestedNewValue - current.value;
+    const delta = suggestedNewValue - Number(current.value);
 
     const suggestionId = uuid();
     await query(
