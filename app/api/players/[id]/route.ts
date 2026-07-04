@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { queryOne, queryAll, query } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
-import { use } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await use(params);
+    const { id } = await params;
 
     const player = await queryOne(
       'SELECT p.id, p.username, p.createdAt, u.email FROM Player p LEFT JOIN User u ON p.id = u.playerId WHERE p.id = ?',
@@ -131,7 +130,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await use(params);
+    const { id } = await params;
     const { username } = await request.json();
 
     if (!username || username.trim().length === 0) {
