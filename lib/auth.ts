@@ -1,19 +1,7 @@
 import { compare } from 'bcryptjs';
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { PrismaClient } from '@prisma/client';
-
-let prisma: PrismaClient;
-
-if (process.env.NODE_ENV === 'production') {
-  prisma = new PrismaClient();
-} else {
-  const globalForPrisma = global as unknown as { prisma: PrismaClient };
-  if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = new PrismaClient();
-  }
-  prisma = globalForPrisma.prisma;
-}
+import { queryOne } from './db';
 
 export async function getAuthOptions(): Promise<NextAuthOptions> {
   return {
@@ -30,25 +18,25 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               throw new Error('Missing email or password');
             }
 
-            const user = await prisma.user.findUnique({
-              where: { email: credentials.email },
-              include: { player: true },
-            });
+            const user = await queryOne(
+              'SELECT u.id, u.email, u.password, u.playerId, p.username FROM User u LEFT JOIN Player p ON u.playerId = p.id WHERE u.email = ?',
+              [credentials.email]
+            );
 
             if (!user) {
               throw new Error('No user found with that email');
             }
 
-            const passwordMatch = await compare(credentials.password, user.password);
+            const passwordMatch = await compare(credentials.password, String(user.password));
             if (!passwordMatch) {
               throw new Error('Invalid password');
             }
 
             return {
-              id: user.id,
-              email: user.email,
-              playerId: user.playerId,
-              playerUsername: user.username,
+              id: String(user.id),
+              email: String(user.email),
+              playerId: user.playerId ? String(user.playerId) : null,
+              playerUsername: user.username ? String(user.username) : null,
             };
           } catch (error: any) {
             console.error('Auth error:', error.message);
