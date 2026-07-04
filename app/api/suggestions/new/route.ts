@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   try {
@@ -32,17 +31,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const stat = await prisma.stat.findUnique({
-      where: { code: statCode },
-    });
+    const stat = await queryOne(
+      'SELECT id FROM Stat WHERE code = ?',
+      [statCode]
+    );
 
     if (!stat) {
       return NextResponse.json({ error: 'Stat not found' }, { status: 404 });
     }
 
-    const current = await prisma.statValue.findUnique({
-      where: { statId_playerId: { statId: stat.id, playerId } },
-    });
+    const current = await queryOne(
+      'SELECT value FROM StatValue WHERE statId = ? AND playerId = ?',
+      [stat.id, playerId]
+    );
 
     if (!current) {
       return NextResponse.json({ error: 'Stat value not found' }, { status: 404 });
@@ -50,20 +51,15 @@ export async function POST(request: Request) {
 
     const delta = suggestedNewValue - current.value;
 
-    const suggestion = await prisma.suggestion.create({
-      data: {
-        playerId,
-        statId: stat.id,
-        delta,
-        suggestedNewValue,
-        reason,
-        suggestedById: suggesterId,
-        status: 'pending',
-      },
-    });
+    const suggestionId = uuid();
+    await query(
+      `INSERT INTO Suggestion (id, playerId, statId, delta, suggestedNewValue, reason, suggestedById, status, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [suggestionId, playerId, stat.id, delta, suggestedNewValue, reason, suggesterId, 'pending', new Date().toISOString()]
+    );
 
     return NextResponse.json({
-      id: suggestion.id,
+      id: suggestionId,
       message: 'Suggestion created successfully'
     });
   } catch (error: any) {

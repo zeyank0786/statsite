@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import { queryAll } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
-
-const prisma = new PrismaClient();
 
 export async function GET() {
   try {
@@ -13,24 +11,21 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     const currentPlayerId = (session?.user as any)?.playerId;
 
-    console.log('CYCLES GET - Auth:', { authenticated: !!session, currentPlayerId });
-
-    const sessions = await prisma.$queryRaw`
-      SELECT
+    const sessions = await queryAll(
+      `SELECT
         rs.id,
-        rs."targetPlayerId",
-        p.username as "playerName",
+        rs.targetPlayerId,
+        p.username as playerName,
         rs.status,
-        rs."createdAt",
-        COALESCE(rp.role, NULL) as "currentUserRole"
-      FROM "ReviewSession" rs
-      JOIN "Player" p ON rs."targetPlayerId" = p.id
-      LEFT JOIN "ReviewParticipant" rp ON rs.id = rp."sessionId" AND rp."playerId" = ${currentPlayerId || ''}
+        rs.createdAt,
+        COALESCE(rp.role, NULL) as currentUserRole
+      FROM ReviewSession rs
+      JOIN Player p ON rs.targetPlayerId = p.id
+      LEFT JOIN ReviewParticipant rp ON rs.id = rp.sessionId AND rp.playerId = ?
       WHERE rs.status IN ('pending', 'in_progress')
-      ORDER BY rs."createdAt" DESC
-    ` as any[];
-
-    console.log('CYCLES RESULT:', { count: sessions.length, sessions: JSON.stringify(sessions).substring(0, 200) });
+      ORDER BY rs.createdAt DESC`,
+      [currentPlayerId || null]
+    );
 
     return NextResponse.json(sessions);
   } catch (error: any) {

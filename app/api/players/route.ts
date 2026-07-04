@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { queryAll } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-const prisma = new PrismaClient();
-
 export async function GET() {
   try {
-    const players = await prisma.player.findMany({
-      select: { id: true, username: true },
-      orderBy: { username: 'asc' },
-    });
+    const players = await queryAll(
+      'SELECT id, username FROM Player ORDER BY username ASC'
+    );
 
     return NextResponse.json(players);
   } catch (error: any) {

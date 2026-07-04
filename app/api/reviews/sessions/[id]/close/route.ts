@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { use } from 'react';
 
 export const dynamic = 'force-dynamic';
-
-const prisma = new PrismaClient();
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id } = await use(params);
     const authOptions = await getAuthOptions();
     const session = await getServerSession(authOptions);
 
@@ -29,9 +28,10 @@ export async function POST(
       );
     }
 
-    const reviewSession = await prisma.reviewSession.findUnique({
-      where: { id },
-    });
+    const reviewSession = await queryOne(
+      'SELECT id, targetPlayerId FROM ReviewSession WHERE id = ?',
+      [id]
+    );
 
     if (!reviewSession) {
       return NextResponse.json(
@@ -47,9 +47,7 @@ export async function POST(
       );
     }
 
-    await prisma.reviewSession.delete({
-      where: { id },
-    });
+    await query('DELETE FROM ReviewSession WHERE id = ?', [id]);
 
     return NextResponse.json({
       success: true,

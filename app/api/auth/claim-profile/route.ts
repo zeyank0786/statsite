@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { queryOne, query } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   try {
@@ -24,44 +23,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if player exists
-    const player = await prisma.player.findUnique({
-      where: { id: playerId },
-    });
+    const player = await queryOne('SELECT id FROM Player WHERE id = ?', [playerId]);
 
     if (!player) {
       return NextResponse.json({ error: 'Player not found' }, { status: 404 });
     }
 
-    // Check if email already exists
-    const existingEmail = await prisma.user.findUnique({
-      where: { email },
-    });
+    const existingEmail = await queryOne('SELECT id FROM User WHERE email = ?', [email]);
 
     if (existingEmail) {
       return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
     }
 
-    // Check if player already has a user account
-    const existingUser = await prisma.user.findUnique({
-      where: { playerId },
-    });
+    const existingUser = await queryOne('SELECT id FROM User WHERE playerId = ?', [playerId]);
 
     if (existingUser) {
       return NextResponse.json({ error: 'This player profile is already claimed' }, { status: 409 });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user account
-    await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        playerId,
-      },
-    });
+    await query(
+      'INSERT INTO User (id, email, password, playerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
+      [uuid(), email, hashedPassword, playerId, new Date().toISOString(), new Date().toISOString()]
+    );
 
     return NextResponse.json({
       success: true,

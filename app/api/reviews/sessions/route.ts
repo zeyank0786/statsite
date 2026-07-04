@@ -1,25 +1,24 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { queryAll, queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
 
-const prisma = new PrismaClient();
-
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const sessions = await prisma.$queryRaw`
-      SELECT
+    const sessions = await queryAll(
+      `SELECT
         rs.id,
-        p.username as "playerName",
+        p.username as playerName,
         rs.status,
-        rs."createdAt"
-      FROM "ReviewSession" rs
-      JOIN "Player" p ON rs."targetPlayerId" = p.id
+        rs.createdAt
+      FROM ReviewSession rs
+      JOIN Player p ON rs.targetPlayerId = p.id
       WHERE rs.status IN ('pending', 'in_progress')
-      ORDER BY rs."createdAt" DESC
-    `;
+      ORDER BY rs.createdAt DESC`
+    );
 
     return NextResponse.json(sessions);
   } catch (error: any) {
@@ -64,26 +63,23 @@ export async function POST(request: Request) {
       );
     }
 
-    let cycle = await prisma.reviewCycle.findFirst({
-      where: { label: 'Collaborative Reviews' },
-    });
+    let cycle = await queryOne(
+      `SELECT id FROM ReviewCycle WHERE label = 'Collaborative Reviews'`
+    );
 
     if (!cycle) {
-      cycle = await prisma.reviewCycle.create({
-        data: {
-          label: 'Collaborative Reviews',
-          status: 'in_progress',
-        },
-      });
+      const cycleId = uuid();
+      await query(
+        `INSERT INTO ReviewCycle (id, label, status, createdAt) VALUES (?, ?, ?, ?)`,
+        [cycleId, 'Collaborative Reviews', 'in_progress', new Date().toISOString()]
+      );
+      cycle = { id: cycleId };
     }
 
-    const existing = await prisma.reviewSession.findFirst({
-      where: {
-        cycleId: cycle.id,
-        targetPlayerId: playerId,
-        status: { in: ['pending', 'in_progress'] },
-      },
-    });
+    const existing = await queryOne(
+      `SELECT id FROM ReviewSession WHERE cycleId = ? AND targetPlayerId = ? AND status IN ('pending', 'in_progress')`,
+      [cycle.id, playerId]
+    );
 
     if (existing) {
       return NextResponse.json({
@@ -94,16 +90,14 @@ export async function POST(request: Request) {
       });
     }
 
-    const newSession = await prisma.reviewSession.create({
-      data: {
-        cycleId: cycle.id,
-        targetPlayerId: playerId,
-        status: 'in_progress',
-      },
-    });
+    const newSessionId = uuid();
+    await query(
+      `INSERT INTO ReviewSession (id, cycleId, targetPlayerId, status, createdAt) VALUES (?, ?, ?, ?, ?)`,
+      [newSessionId, cycle.id, playerId, 'in_progress', new Date().toISOString()]
+    );
 
     return NextResponse.json({
-      id: newSession.id,
+      id: newSessionId,
       targetPlayerId: playerId,
       status: 'in_progress',
       message: 'Review session created',

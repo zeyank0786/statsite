@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { v4 as uuid } from 'uuid';
+import { use } from 'react';
 
 export const dynamic = 'force-dynamic';
-
-const prisma = new PrismaClient();
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id } = await use(params);
     const authOptions = await getAuthOptions();
     const session = await getServerSession(authOptions);
 
@@ -30,32 +30,32 @@ export async function POST(
       );
     }
 
-    const suggestion = await prisma.suggestion.findUnique({
-      where: { id },
-    });
+    const suggestion = await queryOne(
+      'SELECT id FROM Suggestion WHERE id = ?',
+      [id]
+    );
 
     if (!suggestion) {
       return NextResponse.json({ error: 'Suggestion not found' }, { status: 404 });
     }
 
-    const existing = await prisma.vote.findUnique({
-      where: { suggestionId_userId: { suggestionId: id, userId: playerId } },
-    });
+    const existing = await queryOne(
+      'SELECT id FROM Vote WHERE suggestionId = ? AND userId = ?',
+      [id, playerId]
+    );
 
     if (existing) {
       return NextResponse.json({ error: 'You already voted on this suggestion' }, { status: 400 });
     }
 
-    const voteRecord = await prisma.vote.create({
-      data: {
-        suggestionId: id,
-        userId: playerId,
-        choice: vote,
-      },
-    });
+    const voteId = uuid();
+    await query(
+      'INSERT INTO Vote (id, suggestionId, userId, choice) VALUES (?, ?, ?, ?)',
+      [voteId, id, playerId, vote]
+    );
 
     return NextResponse.json({
-      id: voteRecord.id,
+      id: voteId,
       message: 'Vote recorded successfully'
     });
   } catch (error: any) {

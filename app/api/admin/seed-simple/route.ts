@@ -1,11 +1,10 @@
 import { hash } from 'bcryptjs';
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { query, queryAll } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
 
-const prisma = new PrismaClient();
 const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD || 'defaultPassword123!';
 
 const STAT_MAP: Record<string, string> = {
@@ -101,58 +100,53 @@ async function seedDatabase() {
   try {
     console.log('🌱 Seeding database...');
 
-    // Delete existing data
     console.log('🗑️ Clearing old data...');
-    await prisma.statHistory.deleteMany({});
-    await prisma.evidence.deleteMany({});
-    await prisma.vote.deleteMany({});
-    await prisma.suggestion.deleteMany({});
-    await prisma.comment.deleteMany({});
-    await prisma.reviewParticipant.deleteMany({});
-    await prisma.reviewSession.deleteMany({});
-    await prisma.reviewCycle.deleteMany({});
-    await prisma.statValue.deleteMany({});
-    await prisma.stat.deleteMany({});
-    await prisma.category.deleteMany({});
-    await prisma.user.deleteMany({});
-    await prisma.player.deleteMany({});
+    await query('DELETE FROM StatHistory');
+    await query('DELETE FROM Vote');
+    await query('DELETE FROM Suggestion');
+    await query('DELETE FROM ReviewParticipant');
+    await query('DELETE FROM ReviewSession');
+    await query('DELETE FROM ReviewCycle');
+    await query('DELETE FROM StatValue');
+    await query('DELETE FROM Stat');
+    await query('DELETE FROM Category');
+    await query('DELETE FROM User');
+    await query('DELETE FROM Player');
 
-    // Create categories
     console.log('📂 Creating categories...');
-    const categories: Record<string, any> = {};
+    const categories: Record<string, string> = {};
     for (const [code, cat] of Object.entries(CATEGORIES)) {
-      const category = await prisma.category.create({
-        data: { code, label: cat.label, emoji: cat.emoji },
-      });
-      categories[code] = category;
+      const catId = uuid();
+      await query(
+        'INSERT INTO Category (id, code, label, emoji) VALUES (?, ?, ?, ?)',
+        [catId, code, cat.label, cat.emoji]
+      );
+      categories[code] = catId;
     }
 
-    // Create stats
     console.log('📊 Creating stats...');
-    const stats: Record<string, any> = {};
+    const stats: Record<string, string> = {};
     for (const [statCode, statLabel] of Object.entries(STAT_MAP)) {
       const categoryCode = statCode.split('-')[0];
-      const stat = await prisma.stat.create({
-        data: {
-          code: statCode,
-          label: statLabel,
-          categoryId: categories[categoryCode].id,
-        },
-      });
-      stats[statCode] = stat;
+      const statId = uuid();
+      await query(
+        'INSERT INTO Stat (id, code, label, categoryId) VALUES (?, ?, ?, ?)',
+        [statId, statCode, statLabel, categories[categoryCode]]
+      );
+      stats[statCode] = statId;
     }
 
-    // Create players
     console.log('👥 Creating players...');
-    const players: any[] = [];
+    const players: string[] = [];
     for (let i = 1; i <= 4; i++) {
-      const player = await prisma.player.create({
-        data: { username: `Player ${i}` },
-      });
-      players.push(player);
+      const playerId = uuid();
+      await query(
+        'INSERT INTO Player (id, username) VALUES (?, ?)',
+        [playerId, `Player ${i}`]
+      );
+      players.push(playerId);
     }
 
-    // Create users
     console.log('🔐 Creating users...');
     const hashedPasswords = await Promise.all([
       hash('password1', 10),
@@ -162,27 +156,22 @@ async function seedDatabase() {
     ]);
 
     for (let i = 0; i < 4; i++) {
-      await prisma.user.create({
-        data: {
-          email: `player${i + 1}@test.com`,
-          password: hashedPasswords[i],
-          playerId: players[i].id,
-        },
-      });
+      const now = new Date().toISOString();
+      await query(
+        'INSERT INTO User (id, email, password, playerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
+        [uuid(), `player${i + 1}@test.com`, hashedPasswords[i], players[i], now, now]
+      );
     }
 
-    // Create stat values for each player
     console.log('📈 Creating stat values...');
-    for (const player of players) {
-      for (const [statCode, stat] of Object.entries(stats)) {
+    for (const playerId of players) {
+      for (const [, statId] of Object.entries(stats)) {
         const initialValue = Math.floor(Math.random() * 4) + 4;
-        await prisma.statValue.create({
-          data: {
-            statId: stat.id,
-            playerId: player.id,
-            value: initialValue,
-          },
-        });
+        const now = new Date().toISOString();
+        await query(
+          'INSERT INTO StatValue (id, statId, playerId, value, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
+          [uuid(), statId, playerId, initialValue, now, now]
+        );
       }
     }
 
