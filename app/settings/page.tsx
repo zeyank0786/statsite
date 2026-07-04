@@ -16,6 +16,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -120,14 +123,24 @@ export default function SettingsPage() {
               <label className="block text-sm font-semibold mb-2 text-white">
                 Current Password
               </label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                disabled={saving}
-                placeholder="••••••"
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50"
-              />
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  disabled={saving}
+                  placeholder="••••••"
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50 pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  disabled={saving}
+                  className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {showCurrentPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
               <p style={{ color: 'var(--text-secondary)' }} className="text-sm mt-1">
                 Required to confirm any changes
               </p>
@@ -138,14 +151,24 @@ export default function SettingsPage() {
               <label className="block text-sm font-semibold mb-2 text-white">
                 New Password (optional)
               </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                disabled={saving}
-                placeholder="••••••"
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50"
-              />
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={saving}
+                  placeholder="••••••"
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50 pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  disabled={saving}
+                  className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {showNewPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
             </div>
 
             {/* Confirm Password */}
@@ -154,14 +177,24 @@ export default function SettingsPage() {
                 <label className="block text-sm font-semibold mb-2 text-white">
                   Confirm New Password
                 </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={saving}
-                  placeholder="••••••"
-                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={saving}
+                    placeholder="••••••"
+                    className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    disabled={saving}
+                    className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-300 disabled:opacity-50"
+                  >
+                    {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                  </button>
+                </div>
               </div>
             )}
 

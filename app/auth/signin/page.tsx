@@ -10,6 +10,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('password1');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,13 +74,23 @@ export default function SignIn() {
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
                 Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-600 rounded-xl focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600 transition"
-                disabled={loading}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-600 rounded-xl focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600 transition pr-12"
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading}
+                  className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {showPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
             </div>
 
             {error && (

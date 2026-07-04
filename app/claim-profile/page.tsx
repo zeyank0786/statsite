@@ -23,6 +23,8 @@ export default function ClaimProfilePage() {
   const [claiming, setClaiming] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [showSeedButton, setShowSeedButton] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     initializePage();
@@ -273,14 +275,24 @@ export default function ClaimProfilePage() {
               <label className="block text-sm font-semibold mb-2 text-white">
                 Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={claiming}
-                placeholder="••••••"
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={claiming}
+                  placeholder="••••••"
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50 pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={claiming}
+                  className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {showPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
             </div>
 
             {/* Confirm Password */}
@@ -288,14 +300,24 @@ export default function ClaimProfilePage() {
               <label className="block text-sm font-semibold mb-2 text-white">
                 Confirm Password
               </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={claiming}
-                placeholder="••••••"
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50"
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={claiming}
+                  placeholder="••••••"
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 disabled:opacity-50 pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  disabled={claiming}
+                  className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
             </div>
 
             {/* Error Message */}
