@@ -21,10 +21,63 @@ export default function ClaimProfilePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [claiming, setClaiming] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [showSeedButton, setShowSeedButton] = useState(false);
 
   useEffect(() => {
-    loadAvailablePlayers();
+    initializePage();
   }, []);
+
+  const initializePage = async () => {
+    try {
+      // Try to load players
+      const res = await fetch('/api/players');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.length === 0) {
+          // No players found, show seed button
+          setShowSeedButton(true);
+          setLoading(false);
+        } else {
+          setPlayers(data);
+          setLoading(false);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load players:', err);
+      setLoading(false);
+    }
+  };
+
+  const seedDatabase = async () => {
+    setSeeding(true);
+    setError('');
+    try {
+      const password = prompt('Enter admin password to seed database:');
+      if (!password) return;
+
+      const res = await fetch('/api/admin/seed-simple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+
+      if (res.ok) {
+        setSuccess('✓ Database seeded! Loading players...');
+        setShowSeedButton(false);
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to seed database');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to seed database');
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const loadAvailablePlayers = async () => {
     try {
@@ -106,6 +159,60 @@ export default function ClaimProfilePage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
         <p style={{ color: 'var(--text-secondary)' }}>Loading players...</p>
+      </div>
+    );
+  }
+
+  if (showSeedButton) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
+              No Players Found
+            </h1>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              Initialize the database with test players
+            </p>
+          </div>
+
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 card-shadow space-y-5">
+            <p style={{ color: 'var(--text-secondary)' }}>
+              This will create 4 test players (Player 1-4) with the following credentials:
+            </p>
+            <div className="bg-neutral-800 rounded-lg p-4 space-y-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <p>🎮 <strong>Player 1</strong> - player1@test.com / password1</p>
+              <p>🎮 <strong>Player 2</strong> - player2@test.com / password2</p>
+              <p>🎮 <strong>Player 3</strong> - player3@test.com / password3</p>
+              <p>🎮 <strong>Player 4</strong> - player4@test.com / password4</p>
+            </div>
+
+            {error && (
+              <div className="bg-red-900/30 border border-red-800 text-red-400 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-900/30 border border-green-800 text-green-400 px-4 py-3 rounded-lg text-sm">
+                {success}
+              </div>
+            )}
+
+            <button
+              onClick={seedDatabase}
+              disabled={seeding}
+              className="w-full py-3 rounded-lg font-semibold text-white transition text-lg"
+              style={{
+                backgroundColor: 'var(--accent-cyan)',
+                opacity: seeding ? 0.5 : 1,
+                cursor: seeding ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {seeding ? '⏳ Seeding Database...' : '🌱 Initialize Database'}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
