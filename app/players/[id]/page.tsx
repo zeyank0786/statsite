@@ -78,7 +78,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
 
     const sorted = [...stats];
     if (sortBy === 'name') {
-      const nameSorted = sorted.sort((a, b) => a.label.localeCompare(b.label));
+      const nameSorted = sorted.sort((a, b) => a.code.localeCompare(b.code));
       return sortAscending ? nameSorted : nameSorted.reverse();
     } else if (sortBy === 'total') {
       return sorted.sort((a, b) => b.value - a.value);

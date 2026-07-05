@@ -68,7 +68,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
     const sorted = [...categoryStats];
     switch (sortBy) {
       case 'name':
-        const nameSorted = sorted.sort((a, b) => a.label.localeCompare(b.label));
+        const nameSorted = sorted.sort((a, b) => a.code.localeCompare(b.code));
         return sortAscending ? nameSorted : nameSorted.reverse();
       case 'total':
         return sorted.sort((a, b) => b.value - a.value);
