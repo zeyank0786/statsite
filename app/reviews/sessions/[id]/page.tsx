@@ -30,6 +30,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [stats, setStats] = useState<PlayerStat[]>([]);
+  const [originalStats, setOriginalStats] = useState<Record<string, number>>({});
   const [groupedStats, setGroupedStats] = useState<GroupedStats>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -133,6 +134,13 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
         setIsEditor(data.isEditor || false);
         setTargetPlayerId(data.targetPlayerId || '');
 
+        // Store original values for reverting if needed
+        const originals: Record<string, number> = {};
+        (data.stats || []).forEach((stat: PlayerStat) => {
+          originals[stat.statId] = stat.value;
+        });
+        setOriginalStats(originals);
+
         // Group by category
         const grouped: GroupedStats = {};
         (data.stats || []).forEach((stat: PlayerStat) => {
@@ -190,32 +198,49 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const handleEditStat = async (statId: string, newValue: number) => {
+  const handleEditStat = (statId: string, newValue: number) => {
     if (!isEditor) return;
     if (newValue < 0 || newValue > 10) return;
 
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/reviews/sessions/${sessionId}/stats`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ statId, value: newValue }),
-      });
+    // Update local state only - don't save to database yet
+    setStats(stats.map(s => s.statId === statId ? { ...s, value: newValue } : s));
 
-      if (res.ok) {
-        // Update local state
-        setStats(stats.map(s => s.statId === statId ? { ...s, value: newValue } : s));
-      }
-    } catch (error) {
-      console.error('Failed to save stat:', error);
-    } finally {
-      setSaving(false);
-    }
+    // Update grouped stats too
+    setGroupedStats((prevGrouped) => {
+      const updated = { ...prevGrouped };
+      Object.keys(updated).forEach((catCode) => {
+        updated[catCode].stats = updated[catCode].stats.map((s) =>
+          s.statId === statId ? { ...s, value: newValue } : s
+        );
+      });
+      return updated;
+    });
   };
 
   const handleSaveAndClose = async () => {
     setClosing(true);
     try {
+      // Batch update all changed stats
+      const statUpdates = stats
+        .filter(s => s.value !== originalStats[s.statId])
+        .map(s => ({
+          statId: s.statId,
+          value: s.value,
+        }));
+
+      if (statUpdates.length > 0) {
+        const updateRes = await fetch(`/api/reviews/sessions/${sessionId}/stats/batch`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates: statUpdates }),
+        });
+
+        if (!updateRes.ok) {
+          throw new Error('Failed to update stats');
+        }
+      }
+
+      // Now close the session
       const res = await fetch(`/api/reviews/sessions/${sessionId}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -226,7 +251,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
         router.push('/reviews');
       }
     } catch (error) {
-      console.error('Failed to close session:', error);
+      console.error('Failed to save and close session:', error);
     } finally {
       setClosing(false);
     }
@@ -403,14 +428,14 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleEditStat(stat.statId, Math.max(0, stat.value - 1))}
-                            disabled={saving || stat.value === 0}
+                            disabled={closing || stat.value === 0}
                             className="flex-1 py-1 px-2 rounded text-xs font-bold transition bg-red-900/30 text-red-400 hover:bg-red-900/50 disabled:opacity-50"
                           >
                             −
                           </button>
                           <button
                             onClick={() => handleEditStat(stat.statId, Math.min(10, stat.value + 1))}
-                            disabled={saving || stat.value === 10}
+                            disabled={closing || stat.value === 10}
                             className="flex-1 py-1 px-2 rounded text-xs font-bold transition bg-green-900/30 text-green-400 hover:bg-green-900/50 disabled:opacity-50"
                           >
                             +
@@ -422,7 +447,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                           max="10"
                           value={stat.value}
                           onChange={(e) => handleEditStat(stat.statId, parseInt(e.target.value))}
-                          disabled={saving}
+                          disabled={closing}
                           className="w-full h-1 rounded cursor-pointer"
                           style={{ accentColor: 'var(--accent-cyan)' }}
                         />
