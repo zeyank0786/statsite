@@ -460,8 +460,8 @@ export default function Dashboard() {
               <div className="relative z-10 flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--accent-pink)' }}>Featured</p>
-                  <h4 className="font-bold text-lg text-white">Quarterly Reviews</h4>
-                  <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Team consensus sessions coming soon</p>
+                  <h4 className="font-bold text-lg text-white">Stats Voting Sessions</h4>
+                  <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Real-time collaborative stat reviews with your team</p>
                 </div>
                 <div className="text-4xl">📋</div>
               </div>
