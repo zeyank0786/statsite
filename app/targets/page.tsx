@@ -345,7 +345,7 @@ export default function TargetsPage() {
           </div>
 
           {/* Selected Targets Display */}
-          {selectedTargets.length > 0 && (
+          {selectedTargets.length > 0 && Object.keys(playerStats).length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               {selectedTargets.map((target, idx) => {
                 const currentValue = playerStats[target.code] ?? 0;
