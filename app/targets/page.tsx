@@ -161,6 +161,7 @@ export default function TargetsPage() {
           });
         }
         console.log('Loaded current user stats:', statsMap);
+        console.log('playerStats keys:', Object.keys(statsMap));
         setPlayerStats(statsMap);
       } else {
         console.error('Failed to fetch current user stats:', statsRes.status);
@@ -271,6 +272,55 @@ export default function TargetsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Team Targets Section */}
+        <section className="mb-16">
+          <h2 className="text-3xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Team Targets</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {targetsByPlayer.map(([playerName, targets]) => {
+              const playerId = targets.length > 0 ? targets[0].playerId : null;
+              const playerStatValues = playerId ? (allPlayersStats[playerId] || {}) : {};
+
+              return (
+                <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
+                  <h3 className="text-lg font-bold text-white mb-4">{playerName}</h3>
+                  <div className="space-y-2">
+                    {targets.length > 0 ? (
+                      targets.map((target) => {
+                        const playerCurrentValue = playerStatValues[target.statCode] ?? 0;
+                        return (
+                          <div
+                            key={target.id}
+                            className="bg-neutral-800/50 rounded-lg px-3 py-2 border border-neutral-700 group cursor-help"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-medium text-white">{target.statLabel}</p>
+                                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                                  {target.statCode}
+                                </p>
+                                <p className={`text-xs mt-2 font-semibold ${getValueColor(playerCurrentValue)}`}>Current: {playerCurrentValue}/10</p>
+                              </div>
+                              <StatDescriptionModal
+                                statCode={target.statCode}
+                                statLabel={target.statLabel}
+                                description={STAT_DESCRIPTIONS[target.statCode] || 'No description available'}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>
+                        No targets yet
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         {/* Your Targets Section */}
         <div className="mb-16">
           <div className="flex items-center justify-between mb-8">
@@ -404,55 +454,6 @@ export default function TargetsPage() {
             </div>
           </div>
         </div>
-
-        {/* Team Targets Section */}
-        <section>
-          <h2 className="text-3xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Team Targets</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {targetsByPlayer.map(([playerName, targets]) => {
-              const playerId = targets.length > 0 ? targets[0].playerId : null;
-              const playerStatValues = playerId ? (allPlayersStats[playerId] || {}) : {};
-
-              return (
-                <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
-                  <h3 className="text-lg font-bold text-white mb-4">{playerName}</h3>
-                  <div className="space-y-2">
-                    {targets.length > 0 ? (
-                      targets.map((target) => {
-                        const playerCurrentValue = playerStatValues[target.statCode] ?? 0;
-                        return (
-                          <div
-                            key={target.id}
-                            className="bg-neutral-800/50 rounded-lg px-3 py-2 border border-neutral-700 group cursor-help"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="text-sm font-medium text-white">{target.statLabel}</p>
-                                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                                  {target.statCode}
-                                </p>
-                                <p className={`text-xs mt-2 font-semibold ${getValueColor(playerCurrentValue)}`}>Current: {playerCurrentValue}/10</p>
-                              </div>
-                              <StatDescriptionModal
-                                statCode={target.statCode}
-                                statLabel={target.statLabel}
-                                description={STAT_DESCRIPTIONS[target.statCode] || 'No description available'}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>
-                        No targets yet
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
       </main>
     </div>
   );
