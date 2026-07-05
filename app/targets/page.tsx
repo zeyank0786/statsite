@@ -401,7 +401,7 @@ export default function TargetsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {targetsByPlayer.map(([playerName, targets]) => {
               const playerId = targets.length > 0 ? targets[0].playerId : null;
-              const playerStatValues = playerId ? allPlayersStats[playerId] : {};
+              const playerStatValues = playerId ? (allPlayersStats[playerId] || {}) : {};
 
               return (
                 <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
