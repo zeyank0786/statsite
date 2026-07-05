@@ -133,17 +133,14 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
         setIsEditor(data.isEditor || false);
         setTargetPlayerId(data.targetPlayerId || '');
 
-        // Create snapshot of pre-review state if this is the first load
-        if (!sessionId || data.isFirstLoad) {
-          try {
-            fetch(`/api/reviews/sessions/${sessionId}/snapshot`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ stats: data.stats || [] }),
-            }).catch(err => console.error('Failed to create snapshot:', err));
-          } catch (error) {
-            console.error('Failed to create snapshot:', error);
-          }
+        // Create snapshot of pre-review state (only once per session)
+        const snapshotRes = await fetch(`/api/reviews/sessions/${sessionId}/snapshot`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stats: data.stats || [] }),
+        });
+        if (!snapshotRes.ok) {
+          console.error('Failed to create snapshot:', await snapshotRes.text());
         }
 
         // Group by category
