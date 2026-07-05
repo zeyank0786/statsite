@@ -27,6 +27,8 @@ export async function POST(
       );
     }
 
+    const { action = 'confirm' } = await request.json();
+
     const reviewSession = await queryOne(
       'SELECT id, targetPlayerId FROM ReviewSession WHERE id = ?',
       [id]
@@ -46,11 +48,50 @@ export async function POST(
       );
     }
 
+    // If action is 'revert', restore from snapshot
+    if (action === 'revert') {
+      const snapshot = await queryOne(
+        'SELECT statSnapshots FROM ReviewSessionSnapshot WHERE sessionId = ?',
+        [id]
+      );
+
+      if (snapshot) {
+        const statSnapshots = JSON.parse(snapshot.statSnapshots as string);
+        const now = new Date().toISOString();
+
+        // Restore each stat to its snapshot value
+        for (const snap of statSnapshots) {
+          const existingValue = await queryOne(
+            'SELECT id, value FROM StatValue WHERE statId = ? AND playerId = ?',
+            [snap.statId, reviewSession.targetPlayerId]
+          );
+
+          if (existingValue) {
+            const oldValue = existingValue.value;
+            await query(
+              'UPDATE StatValue SET value = ?, updatedAt = ? WHERE id = ?',
+              [snap.value, now, existingValue.id]
+            );
+
+            // Record the revert in history
+            const { v4: uuid } = await import('uuid');
+            await query(
+              'INSERT INTO StatHistory (id, statValueId, oldValue, newValue, reason, changedById, source, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [uuid(), existingValue.id, oldValue, snap.value, 'Review session reverted', currentPlayerId, 'review_revert', now]
+            );
+          }
+        }
+      }
+    }
+
+    // Delete snapshot and session
+    await query('DELETE FROM ReviewSessionSnapshot WHERE sessionId = ?', [id]);
     await query('DELETE FROM ReviewSession WHERE id = ?', [id]);
 
     return NextResponse.json({
       success: true,
       message: 'Review session closed',
+      action,
     });
   } catch (error: any) {
     console.error('Error closing review session:', error);
