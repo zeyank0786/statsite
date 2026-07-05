@@ -40,8 +40,15 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const [joiningRole, setJoiningRole] = useState<string | null>(null);
   const [changes, setChanges] = useState<Record<string, any>>({});
   const [targetPlayerId, setTargetPlayerId] = useState<string>('');
+  const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
 
   const currentPlayerId = (session?.user as any)?.playerId;
+
+  const getValueColor = (value: number) => {
+    if (value <= 3) return 'var(--accent-red)';
+    if (value <= 7) return 'var(--accent-orange)';
+    return 'var(--accent-green)';
+  };
 
   useEffect(() => {
     if (params) {
@@ -312,10 +319,35 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="mb-6 flex justify-end">
+          <button
+            onClick={() => setColorCodeEnabled(!colorCodeEnabled)}
+            className="px-4 py-2 rounded-lg font-semibold text-white transition text-sm"
+            style={{
+              backgroundColor: colorCodeEnabled ? 'var(--accent-cyan)' : 'var(--accent-purple)',
+            }}
+          >
+            {colorCodeEnabled ? '🎨 Color Coding: On' : '⚫ Color Coding: Off'}
+          </button>
+        </div>
         <div className="space-y-10">
-          {Object.values(groupedStats).map((category) => (
+          {Object.values(groupedStats).map((category) => {
+            const categoryTotal = category.stats.reduce((sum: number, s: any) => sum + s.value, 0);
+            const categoryColor = 'var(--accent-cyan)';
+
+            return (
             <div key={category.code} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 card-shadow">
-              <h3 className="text-2xl font-bold text-white mb-6">{category.label}</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-white">{category.label}</h3>
+                <div className="text-right">
+                  <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    Category Total
+                  </p>
+                  <p className="text-2xl font-bold" style={{ color: categoryColor }}>
+                    {categoryTotal}/{category.stats.length * 10}
+                  </p>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {category.stats.map((stat) => {
@@ -324,14 +356,17 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                     ? stat.value - change.lastReviewValue
                     : null;
 
+                  const statValueColor = colorCodeEnabled ? getValueColor(stat.value) : 'var(--accent-cyan)';
+
                   return (
                     <div
                       key={stat.statId}
                       className={`rounded-xl p-4 border transition ${
                         isEditor
-                          ? 'bg-neutral-800/50 border-neutral-700 hover:border-neutral-600'
-                          : 'bg-neutral-800/30 border-neutral-700'
-                      }`}
+                          ? 'bg-neutral-800/50 hover:border-neutral-600'
+                          : 'bg-neutral-800/30'
+                      } ${colorCodeEnabled ? 'border-2' : 'border'}`}
+                      style={colorCodeEnabled ? { borderColor: statValueColor } : { borderColor: 'var(--neutral-700)' }}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-xs uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>
@@ -349,7 +384,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
 
                       {/* Value Display */}
                       <div className="mb-4">
-                        <p className="text-3xl font-bold mb-2" style={{ color: 'var(--accent-cyan)' }}>
+                        <p className="text-3xl font-bold mb-2" style={{ color: statValueColor }}>
                           {stat.value}
                         </p>
                         <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -398,7 +433,8 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {/* Save and Close Button - Only for Editor */}
           {isEditor && (

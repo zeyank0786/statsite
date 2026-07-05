@@ -58,6 +58,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [savingName, setSavingName] = useState(false);
   const [selectedComparison, setSelectedComparison] = useState<string>('');
   const [changes, setChanges] = useState<Record<string, any>>({});
+  const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
 
   const currentPlayerId = (sessionData?.user as any)?.playerId;
   const isOwnProfile = currentPlayerId === playerId;
@@ -109,6 +110,12 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
     } finally {
       setLoading(false);
     }
+  };
+
+  const getValueColor = (value: number) => {
+    if (value <= 3) return 'var(--accent-red)';
+    if (value <= 7) return 'var(--accent-orange)';
+    return 'var(--accent-green)';
   };
 
   const handleSaveName = async () => {
@@ -227,7 +234,18 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
         <div className="space-y-12">
           {/* Stats Section */}
           <section>
-            <h2 className="text-3xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Stats</h2>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold" style={{ color: 'var(--foreground)' }}>Stats</h2>
+              <button
+                onClick={() => setColorCodeEnabled(!colorCodeEnabled)}
+                className="px-4 py-2 rounded-lg font-semibold text-white transition text-sm"
+                style={{
+                  backgroundColor: colorCodeEnabled ? 'var(--accent-cyan)' : 'var(--accent-purple)',
+                }}
+              >
+                {colorCodeEnabled ? '🎨 Color Coding: On' : '⚫ Color Coding: Off'}
+              </button>
+            </div>
             <div className="space-y-8">
               {categories.map((category) => {
                 const colors: Record<string, string> = {
@@ -243,11 +261,21 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
 
                 return (
                   <div key={category.code} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 card-shadow">
-                    <div className="flex items-center gap-3 mb-8">
-                      <div className="w-1 h-8 rounded-full" style={{ backgroundColor: catColor }} />
-                      <h3 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>
-                        {category.label}
-                      </h3>
+                    <div className="flex items-center justify-between mb-8">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1 h-8 rounded-full" style={{ backgroundColor: catColor }} />
+                        <h3 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>
+                          {category.label}
+                        </h3>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+                          Category Total
+                        </p>
+                        <p className="text-2xl font-bold" style={{ color: catColor }}>
+                          {category.stats.reduce((sum: number, s: any) => sum + s.value, 0)}/{category.stats.length * 10}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -256,9 +284,10 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                         const diff = change && change.lastReviewValue !== undefined && change.lastReviewValue !== null
                           ? stat.value - change.lastReviewValue
                           : null;
+                        const statValueColor = colorCodeEnabled ? getValueColor(stat.value) : catColor;
 
                         return (
-                          <div key={stat.id} className="rounded-xl p-4 border bg-neutral-800/30 border-neutral-700">
+                          <div key={stat.id} className={`rounded-xl p-4 border transition ${colorCodeEnabled ? 'bg-neutral-800/30' : 'bg-neutral-800/30'} border-neutral-700`} style={colorCodeEnabled ? { borderColor: statValueColor, borderWidth: '2px' } : {}}>
                             <div className="flex items-center justify-between mb-2">
                               <p className="text-xs uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>
                                 {stat.code}
@@ -273,7 +302,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                               {stat.label}
                             </p>
                             <div className="mb-4">
-                              <p className="text-3xl font-bold mb-2" style={{ color: catColor }}>
+                              <p className="text-3xl font-bold mb-2" style={{ color: statValueColor }}>
                                 {stat.value}
                               </p>
                               <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>/ 10</p>
