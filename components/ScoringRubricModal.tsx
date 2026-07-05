@@ -31,34 +31,42 @@ export default function ScoringRubricModal() {
 
             <div className="space-y-6">
               <div className="border-l-4 border-red-500 pl-4">
-                <h3 className="text-lg font-bold text-red-400 mb-2">1-3: Weak</h3>
+                <h3 className="text-lg font-bold text-red-400 mb-2">1-4: Below Average</h3>
                 <p className="text-neutral-300 text-sm">
-                  Significant improvement needed. The person struggles in this area and should prioritize development. Performance is below expectations.
+                  Below the average human on the planet. Significant room for improvement. These areas would benefit from focused development and practice.
+                </p>
+              </div>
+
+              <div className="border-l-4 border-yellow-500 pl-4">
+                <h3 className="text-lg font-bold text-yellow-300 mb-2">5: Average</h3>
+                <p className="text-neutral-300 text-sm">
+                  At the level of an average human globally. Demonstrates baseline competence in this area. Matches typical human capability without standout strength or weakness.
                 </p>
               </div>
 
               <div className="border-l-4 border-orange-500 pl-4">
-                <h3 className="text-lg font-bold text-orange-400 mb-2">4-7: Medium</h3>
+                <h3 className="text-lg font-bold text-orange-400 mb-2">6-7: Above Average</h3>
                 <p className="text-neutral-300 text-sm">
-                  Solid foundation with room for growth. The person demonstrates competence but isn't exceptional. Continued development would be beneficial.
+                  Above the average human. Shows notable skill and capability beyond baseline. This person has developed expertise or natural aptitude in this area.
                 </p>
               </div>
 
               <div className="border-l-4 border-green-500 pl-4">
-                <h3 className="text-lg font-bold text-green-400 mb-2">8-10: Strong</h3>
+                <h3 className="text-lg font-bold text-green-400 mb-2">8-10: Exceptional</h3>
                 <p className="text-neutral-300 text-sm">
-                  Excellent performance. The person demonstrates mastery or near-mastery in this area. Exceeds expectations and serves as a strength to leverage.
+                  Exceptional performance well above the average human. Demonstrates mastery, exceptional skill, or rare talent. A clear strength that sets this person apart.
                 </p>
               </div>
             </div>
 
             <div className="mt-8 pt-6 border-t border-neutral-800">
-              <h3 className="text-sm font-semibold text-neutral-400 mb-3">Tips for reviewing:</h3>
+              <h3 className="text-sm font-semibold text-neutral-400 mb-3">Calibration tips:</h3>
               <ul className="text-sm text-neutral-300 space-y-2">
-                <li>• Be specific when possible - reference examples</li>
-                <li>• Focus on observable behaviors, not personal traits</li>
-                <li>• Consider both current state and growth potential</li>
-                <li>• Add notes to provide context for your ratings</li>
+                <li>• Use 5/10 as your anchor - baseline human capability globally</li>
+                <li>• Be specific when possible - reference concrete examples</li>
+                <li>• Focus on observable capabilities, not innate traits</li>
+                <li>• Consider relative to peer group, not just absolute skill</li>
+                <li>• Add notes to provide context and justification for ratings</li>
               </ul>
             </div>
 
