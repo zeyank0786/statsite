@@ -403,7 +403,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                                 className="h-full rounded-full transition-all duration-300"
                                 style={{
                                   width: `${(stat.value / 10) * 100}%`,
-                                  backgroundColor: catColor
+                                  backgroundColor: colorCodeEnabled ? statValueColor : catColor
                                 }}
                               />
                             </div>
