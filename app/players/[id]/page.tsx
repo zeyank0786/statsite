@@ -60,6 +60,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [changes, setChanges] = useState<Record<string, any>>({});
   const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
+  const [sortAscending, setSortAscending] = useState(true);
 
   const categoryOrder = ['mtl', 'phy', 'kno', 'strs', 'stra', 'ski', 'enr'];
 
@@ -77,7 +78,8 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
 
     const sorted = [...stats];
     if (sortBy === 'name') {
-      return sorted.sort((a, b) => a.label.localeCompare(b.label));
+      const nameSorted = sorted.sort((a, b) => a.label.localeCompare(b.label));
+      return sortAscending ? nameSorted : nameSorted.reverse();
     } else if (sortBy === 'total') {
       return sorted.sort((a, b) => b.value - a.value);
     }
@@ -275,19 +277,30 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                   >
                     Default
                   </button>
-                  <button
-                    onClick={() => setSortBy('name')}
-                    className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                      sortBy === 'name'
-                        ? 'text-white'
-                        : 'text-neutral-400 hover:text-neutral-300'
-                    }`}
-                    style={{
-                      backgroundColor: sortBy === 'name' ? 'var(--accent-cyan)' : 'transparent',
-                    }}
-                  >
-                    Name
-                  </button>
+                  <div className="flex gap-1 items-center">
+                    <button
+                      onClick={() => setSortBy('name')}
+                      className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                        sortBy === 'name'
+                          ? 'text-white'
+                          : 'text-neutral-400 hover:text-neutral-300'
+                      }`}
+                      style={{
+                        backgroundColor: sortBy === 'name' ? 'var(--accent-cyan)' : 'transparent',
+                      }}
+                    >
+                      Name
+                    </button>
+                    {sortBy === 'name' && (
+                      <button
+                        onClick={() => setSortAscending(!sortAscending)}
+                        className="px-2 py-2 rounded-lg font-medium text-sm text-white transition"
+                        style={{ backgroundColor: 'var(--accent-cyan)' }}
+                      >
+                        {sortAscending ? '↑ A-Z' : '↓ Z-A'}
+                      </button>
+                    )}
+                  </div>
                   <button
                     onClick={() => setSortBy('total')}
                     className={`px-3 py-2 rounded-lg font-medium text-sm transition ${

@@ -44,6 +44,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const [targetPlayerId, setTargetPlayerId] = useState<string>('');
   const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
+  const [sortAscending, setSortAscending] = useState(true);
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -67,7 +68,8 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
     const sorted = [...categoryStats];
     switch (sortBy) {
       case 'name':
-        return sorted.sort((a, b) => a.label.localeCompare(b.label));
+        const nameSorted = sorted.sort((a, b) => a.label.localeCompare(b.label));
+        return sortAscending ? nameSorted : nameSorted.reverse();
       case 'total':
         return sorted.sort((a, b) => b.value - a.value);
       case 'default':
@@ -369,7 +371,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-8 flex justify-between items-center gap-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button
               onClick={() => setSortBy('default')}
               className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
@@ -381,17 +383,28 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
             >
               Default
             </button>
-            <button
-              onClick={() => setSortBy('name')}
-              className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
-                sortBy === 'name'
-                  ? 'text-white'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-              style={sortBy === 'name' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
-            >
-              Name
-            </button>
+            <div className="flex gap-1 items-center">
+              <button
+                onClick={() => setSortBy('name')}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                  sortBy === 'name'
+                    ? 'text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+                style={sortBy === 'name' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+              >
+                Name
+              </button>
+              {sortBy === 'name' && (
+                <button
+                  onClick={() => setSortAscending(!sortAscending)}
+                  className="px-3 py-2 rounded-lg font-semibold text-sm text-white transition"
+                  style={{ backgroundColor: 'var(--accent-cyan)' }}
+                >
+                  {sortAscending ? '↑ A-Z' : '↓ Z-A'}
+                </button>
+              )}
+            </div>
             <button
               onClick={() => setSortBy('total')}
               className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
