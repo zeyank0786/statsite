@@ -421,6 +421,19 @@ export default function Dashboard() {
                 <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Recent changes</p>
               </div>
             </Link>
+
+            <Link
+              href="/targets"
+              className="block bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-2xl p-6 transition card-shadow overflow-hidden relative group"
+            >
+              <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: 'var(--accent-green)' }} />
+              <div className="absolute -top-16 -right-16 w-32 h-32 rounded-full opacity-10 group-hover:opacity-20 transition" style={{ backgroundColor: 'var(--accent-green)' }} />
+              <div className="relative z-10">
+                <div className="text-2xl mb-2">🎯</div>
+                <h4 className="font-semibold text-white">Set Targets</h4>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Focus on 3 stats</p>
+              </div>
+            </Link>
           </div>
 
           {/* Right Column: Stats & Info */}

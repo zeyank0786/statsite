@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
+import StatDescriptionModal from '@/components/StatDescriptionModal';
 
 interface Target {
   id: string;
@@ -195,98 +196,159 @@ export default function TargetsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Selection Panel */}
-          <div className="lg:col-span-2">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 card-shadow">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-white mb-4">Your Targets</h2>
-                <p style={{ color: 'var(--text-secondary)' }} className="text-sm mb-4">
-                  Selected {selectedTargets.length} of 3
-                </p>
-                <input
-                  type="text"
-                  placeholder="Search stats..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
-                />
-              </div>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredStats.map((stat) => {
-                  const isSelected = selectedTargets.find((t) => t.code === stat.code);
-                  return (
-                    <button
-                      key={stat.code}
-                      onClick={() => handleSelectTarget(stat)}
-                      disabled={!isSelected && selectedTargets.length >= 3}
-                      className={`w-full text-left px-4 py-3 rounded-lg border transition ${
-                        isSelected
-                          ? 'bg-cyan-900/30 border-cyan-700 text-white'
-                          : selectedTargets.length >= 3
-                          ? 'bg-neutral-800/30 border-neutral-700 text-neutral-500 cursor-not-allowed'
-                          : 'bg-neutral-800/30 border-neutral-700 text-white hover:border-neutral-600'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{stat.label}</p>
-                          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{stat.code}</p>
-                        </div>
-                        {isSelected && <span>✓</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="w-full mt-6 py-3 rounded-lg font-semibold text-white transition"
-                style={{
-                  backgroundColor: 'var(--accent-cyan)',
-                  opacity: saving ? 0.5 : 1,
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {saving ? '⏳ Saving...' : '✓ Save Targets'}
-              </button>
+        {/* Your Targets Section */}
+        <div className="mb-16">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-3xl font-bold" style={{ color: 'var(--foreground)' }}>Your Targets</h2>
+              <p style={{ color: 'var(--text-secondary)' }} className="text-sm mt-2">
+                Focus on {selectedTargets.length} of 3 stats
+              </p>
             </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-6 py-3 rounded-lg font-semibold text-white transition"
+              style={{
+                backgroundColor: 'var(--accent-cyan)',
+                opacity: saving ? 0.5 : 1,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {saving ? '⏳ Saving...' : '✓ Save'}
+            </button>
           </div>
 
-          {/* Team Targets */}
-          <div>
-            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 card-shadow">
-              <h2 className="text-2xl font-bold text-white mb-6">Team Targets</h2>
-              <div className="space-y-6">
-                {targetsByPlayer.map(([playerName, targets]) => (
-                  <div key={playerName}>
-                    <p className="text-sm font-semibold text-white mb-2">{playerName}</p>
-                    <div className="space-y-1">
-                      {targets.length > 0 ? (
-                        targets.map((target) => (
-                          <div
-                            key={target.id}
-                            className="text-xs bg-neutral-800/50 rounded px-3 py-2 border border-neutral-700"
-                            style={{ color: 'var(--text-secondary)' }}
-                          >
-                            {target.statLabel}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          No targets set
-                        </p>
-                      )}
+          {/* Selected Targets Display */}
+          {selectedTargets.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              {selectedTargets.map((target, idx) => (
+                <div
+                  key={target.code}
+                  className="bg-gradient-to-br from-cyan-900/20 to-cyan-900/5 border border-cyan-700/50 rounded-2xl p-6 card-shadow"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--accent-cyan)' }}>
+                        Target {idx + 1}
+                      </p>
+                      <h3 className="text-lg font-bold text-white">{target.label}</h3>
                     </div>
+                    <button
+                      onClick={() => handleSelectTarget(target)}
+                      className="text-cyan-400 hover:text-red-400 transition"
+                    >
+                      ✕
+                    </button>
                   </div>
-                ))}
-              </div>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{target.code}</p>
+                </div>
+              ))}
+              {[...Array(3 - selectedTargets.length)].map((_, idx) => (
+                <div
+                  key={`empty-${idx}`}
+                  className="bg-neutral-800/30 border border-dashed border-neutral-700 rounded-2xl p-6 flex items-center justify-center"
+                >
+                  <p style={{ color: 'var(--text-secondary)' }} className="text-sm">
+                    Empty slot
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Search and Stats Grid */}
+          <div>
+            <input
+              type="text"
+              placeholder="Search by stat name or code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 mb-6"
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredStats.map((stat) => {
+                const isSelected = selectedTargets.find((t) => t.code === stat.code);
+                const isDisabled = !isSelected && selectedTargets.length >= 3;
+
+                return (
+                  <button
+                    key={stat.code}
+                    onClick={() => handleSelectTarget(stat)}
+                    disabled={isDisabled}
+                    className={`text-left px-4 py-3 rounded-xl border transition ${
+                      isSelected
+                        ? 'bg-cyan-900/30 border-cyan-700 text-white'
+                        : isDisabled
+                        ? 'bg-neutral-800/20 border-neutral-700 text-neutral-600 cursor-not-allowed'
+                        : 'bg-neutral-800/50 border-neutral-700 text-white hover:border-neutral-600 hover:bg-neutral-800'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{stat.label}</p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                          {stat.code}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        <StatDescriptionModal
+                          statCode={stat.code}
+                          statLabel={stat.label}
+                          description={STAT_DESCRIPTIONS[stat.code] || 'No description available'}
+                        />
+                        {isSelected && (
+                          <span className="text-cyan-400 font-bold">✓</span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
+
+        {/* Team Targets Section */}
+        <section>
+          <h2 className="text-3xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Team Targets</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {targetsByPlayer.map(([playerName, targets]) => (
+              <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
+                <h3 className="text-lg font-bold text-white mb-4">{playerName}</h3>
+                <div className="space-y-2">
+                  {targets.length > 0 ? (
+                    targets.map((target) => (
+                      <div
+                        key={target.id}
+                        className="bg-neutral-800/50 rounded-lg px-3 py-2 border border-neutral-700 group cursor-help"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-white">{target.statLabel}</p>
+                            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                              {target.statCode}
+                            </p>
+                          </div>
+                          <StatDescriptionModal
+                            statCode={target.statCode}
+                            statLabel={target.statLabel}
+                            description={STAT_DESCRIPTIONS[target.statCode] || 'No description available'}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>
+                      No targets yet
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   );
