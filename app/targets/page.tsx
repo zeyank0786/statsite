@@ -299,6 +299,7 @@ export default function TargetsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               {selectedTargets.map((target, idx) => {
                 const currentValue = playerStats[target.code] ?? 0;
+                console.log(`Target ${target.code}: playerStats[${target.code}] =`, playerStats[target.code], 'currentValue =', currentValue);
                 return (
                   <div
                     key={target.code}
