@@ -59,7 +59,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [selectedComparison, setSelectedComparison] = useState<string>('');
   const [changes, setChanges] = useState<Record<string, any>>({});
   const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
-  const [sortBy, setSortBy] = useState<'default' | 'name' | 'total' | 'average'>('default');
+  const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
 
   const categoryOrder = ['mtl', 'phy', 'kno', 'strs', 'stra', 'ski', 'enr'];
 
@@ -79,8 +79,6 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
     if (sortBy === 'name') {
       return sorted.sort((a, b) => a.label.localeCompare(b.label));
     } else if (sortBy === 'total') {
-      return sorted.sort((a, b) => b.value - a.value);
-    } else if (sortBy === 'average') {
       return sorted.sort((a, b) => b.value - a.value);
     }
     return sorted;
@@ -302,19 +300,6 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                     }}
                   >
                     Total
-                  </button>
-                  <button
-                    onClick={() => setSortBy('average')}
-                    className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                      sortBy === 'average'
-                        ? 'text-white'
-                        : 'text-neutral-400 hover:text-neutral-300'
-                    }`}
-                    style={{
-                      backgroundColor: sortBy === 'average' ? 'var(--accent-cyan)' : 'transparent',
-                    }}
-                  >
-                    Average
                   </button>
                 </div>
                 <button

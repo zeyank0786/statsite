@@ -63,24 +63,44 @@ export default function Dashboard() {
       {/* Header with gradient accent */}
       <header className="border-b border-neutral-800 sticky top-0 z-50 bg-black/80 backdrop-blur">
         <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple), var(--accent-pink))' }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>Stats Dashboard</h1>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{session.user?.playerUsername}</p>
-          </div>
-          <div className="flex gap-2">
-            <Link
-              href="/settings"
-              className="px-4 py-2 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-lg transition text-white text-sm font-medium"
-            >
-              ⚙️ Settings
-            </Link>
-            <button
-              onClick={() => signOut()}
-              className="px-4 py-2 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 rounded-lg transition text-white text-sm font-medium"
-            >
-              Sign Out
-            </button>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center mb-3">
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>
+              {session.user?.playerUsername}
+            </h1>
+            <div className="flex gap-3 items-center">
+              <Link
+                href="/players"
+                className="px-3 py-2 text-sm font-medium transition rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+              >
+                👥 Players
+              </Link>
+              <Link
+                href="/reviews"
+                className="px-3 py-2 text-sm font-medium transition rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+              >
+                📋 Reviews
+              </Link>
+              <Link
+                href="/history"
+                className="px-3 py-2 text-sm font-medium transition rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+              >
+                📈 History
+              </Link>
+              <div className="w-px h-6" style={{ backgroundColor: 'var(--neutral-700)' }} />
+              <Link
+                href="/settings"
+                className="px-3 py-2 text-sm font-medium transition rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+              >
+                ⚙️ Settings
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="px-3 py-2 text-sm font-medium transition rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-900/10"
+              >
+                🚪 Sign Out
+              </button>
+            </div>
           </div>
         </div>
       </header>
