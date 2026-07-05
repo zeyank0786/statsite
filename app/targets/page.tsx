@@ -109,6 +109,7 @@ export default function TargetsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hideMaxed, setHideMaxed] = useState(false);
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -188,10 +189,25 @@ export default function TargetsPage() {
     }
   };
 
-  const filteredStats = ALL_STATS.filter((stat) =>
-    stat.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    stat.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const getValueColor = (value: number): string => {
+    if (value >= 8) return 'text-green-400';
+    if (value >= 4) return 'text-orange-400';
+    return 'text-red-400';
+  };
+
+  const filteredStats = ALL_STATS.filter((stat) => {
+    const matchesSearch = stat.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      stat.code.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (hideMaxed) {
+      const currentValue = playerStats[stat.code] ?? 0;
+      return currentValue < 10;
+    }
+
+    return true;
+  });
 
   const targetsByPlayer = Array.from(
     new Map(allTargets.map((t) => [t.username, allTargets.filter((x) => x.username === t.username)])).entries()
@@ -267,7 +283,7 @@ export default function TargetsPage() {
                       </button>
                     </div>
                     <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>{target.code}</p>
-                    <div className="text-sm font-semibold text-white">Current: {currentValue}/10</div>
+                    <div className={`text-sm font-semibold ${getValueColor(currentValue)}`}>Current: {currentValue}/10</div>
                   </div>
                 );
               })}
@@ -286,13 +302,26 @@ export default function TargetsPage() {
 
           {/* Search and Stats Grid */}
           <div>
-            <input
-              type="text"
-              placeholder="Search by stat name or code..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 mb-6"
-            />
+            <div className="flex gap-3 mb-6">
+              <input
+                type="text"
+                placeholder="Search by stat name or code..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
+              />
+              <button
+                onClick={() => setHideMaxed(!hideMaxed)}
+                className={`px-4 py-3 rounded-xl font-medium transition whitespace-nowrap ${
+                  hideMaxed
+                    ? 'bg-accent-cyan text-black'
+                    : 'bg-neutral-800 border border-neutral-700 text-white hover:border-neutral-600'
+                }`}
+                style={hideMaxed ? { backgroundColor: 'var(--accent-cyan)', color: 'black' } : {}}
+              >
+                {hideMaxed ? '✓ Hide 10/10s' : 'Hide 10/10s'}
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredStats.map((stat) => {
@@ -319,7 +348,7 @@ export default function TargetsPage() {
                         <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                           {stat.code}
                         </p>
-                        <p className="text-xs mt-2 font-semibold text-cyan-400">Current: {currentValue}/10</p>
+                        <p className={`text-xs mt-2 font-semibold ${getValueColor(currentValue)}`}>Current: {currentValue}/10</p>
                       </div>
                       <div className="flex items-center gap-2 ml-2">
                         <StatDescriptionModal
@@ -359,7 +388,7 @@ export default function TargetsPage() {
                             <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                               {target.statCode}
                             </p>
-                            <p className="text-xs mt-2 font-semibold text-cyan-400">Current: {playerStats[target.statCode] ?? 0}/10</p>
+                            <p className={`text-xs mt-2 font-semibold ${getValueColor(playerStats[target.statCode] ?? 0)}`}>Current: {playerStats[target.statCode] ?? 0}/10</p>
                           </div>
                           <StatDescriptionModal
                             statCode={target.statCode}
