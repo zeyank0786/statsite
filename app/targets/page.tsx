@@ -110,7 +110,10 @@ export default function TargetsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [hideMaxed, setHideMaxed] = useState(false);
+  const [hideMaxed, setHideMaxed] = useState(true);
+  const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
+  const [sortAscending, setSortAscending] = useState(true);
+  const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -140,8 +143,6 @@ export default function TargetsPage() {
           code: t.statCode,
           label: t.statLabel,
         }));
-        console.log('User targets from API:', userTargets);
-        console.log('Selected targets set to:', selected);
         setSelectedTargets(selected);
       }
 
@@ -160,8 +161,6 @@ export default function TargetsPage() {
             }
           });
         }
-        console.log('Loaded current user stats:', statsMap);
-        console.log('playerStats keys:', Object.keys(statsMap));
         setPlayerStats(statsMap);
       } else {
         console.error('Failed to fetch current user stats:', statsRes.status);
@@ -232,6 +231,26 @@ export default function TargetsPage() {
     return 'text-red-400';
   };
 
+  const getSortedStats = (stats: typeof ALL_STATS) => {
+    const sorted = [...stats];
+    switch (sortBy) {
+      case 'name':
+        const nameSorted = sorted.sort((a, b) => a.code.localeCompare(b.code));
+        return sortAscending ? nameSorted : nameSorted.reverse();
+      case 'total':
+        return sorted.sort((a, b) => (playerStats[b.code] ?? 0) - (playerStats[a.code] ?? 0));
+      case 'default':
+      default:
+        return sorted.sort((a, b) => a.code.localeCompare(b.code));
+    }
+  };
+
+  const getColorCategory = (value: number): 'green' | 'yellow' | 'red' => {
+    if (value >= 8) return 'green';
+    if (value >= 4) return 'yellow';
+    return 'red';
+  };
+
   const filteredStats = ALL_STATS.filter((stat) => {
     const matchesSearch = stat.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
       stat.code.toLowerCase().includes(searchQuery.toLowerCase());
@@ -240,11 +259,18 @@ export default function TargetsPage() {
 
     if (hideMaxed) {
       const currentValue = playerStats[stat.code] ?? 0;
-      return currentValue < 10;
+      if (currentValue >= 10) return false;
+    }
+
+    if (colorFilter !== 'all') {
+      const currentValue = playerStats[stat.code] ?? 0;
+      if (getColorCategory(currentValue) !== colorFilter) return false;
     }
 
     return true;
   });
+
+  const sortedFilteredStats = getSortedStats(filteredStats);
 
   const targetsByPlayer = Array.from(
     new Map(allTargets.map((t) => [t.username, allTargets.filter((x) => x.username === t.username)])).entries()
@@ -278,14 +304,8 @@ export default function TargetsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {targetsByPlayer.map(([playerName, targets]) => {
               const playerId = targets.length > 0 ? targets[0].playerId : null;
-              const playerStatValues = playerId ? (allPlayersStats[playerId] || {}) : {};
-              console.log(`Team Targets for ${playerName} (playerId: ${playerId}):`, {
-                playerId,
-                playerStatValues,
-                allPlayersStatsKeys: Object.keys(allPlayersStats),
-                currentPlayerId,
-                isCurrentUser: playerId === currentPlayerId
-              });
+              const isCurrentUser = playerId === currentPlayerId;
+              const playerStatValues = isCurrentUser ? playerStats : (playerId ? (allPlayersStats[playerId] || {}) : {});
 
               return (
                 <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
@@ -294,7 +314,6 @@ export default function TargetsPage() {
                     {targets.length > 0 ? (
                       targets.map((target) => {
                         const playerCurrentValue = playerStatValues[target.statCode] ?? 0;
-                        console.log(`  ${target.statCode}: playerStatValues[${target.statCode}] = ${playerStatValues[target.statCode]}, using ${playerCurrentValue}`);
                         return (
                           <div
                             key={target.id}
@@ -357,7 +376,6 @@ export default function TargetsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               {selectedTargets.map((target, idx) => {
                 const currentValue = playerStats[target.code] ?? 0;
-                console.log(`Target ${target.code}: playerStats[${target.code}] =`, playerStats[target.code], 'currentValue =', currentValue);
                 return (
                   <div
                     key={target.code}
@@ -397,17 +415,103 @@ export default function TargetsPage() {
 
           {/* Search and Stats Grid */}
           <div>
-            <div className="flex gap-3 mb-6">
+            <div className="flex gap-3 mb-6 flex-wrap items-center">
               <input
                 type="text"
                 placeholder="Search by stat name or code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
+                className="flex-1 px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 min-w-64"
               />
+              <div className="flex gap-2 items-center">
+                <button
+                  onClick={() => setSortBy('default')}
+                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                    sortBy === 'default'
+                      ? 'text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  style={sortBy === 'default' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+                >
+                  Default
+                </button>
+                <div className="flex gap-1 items-center">
+                  <button
+                    onClick={() => setSortBy('name')}
+                    className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                      sortBy === 'name'
+                        ? 'text-white'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                    style={sortBy === 'name' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+                  >
+                    Name
+                  </button>
+                  {sortBy === 'name' && (
+                    <button
+                      onClick={() => setSortAscending(!sortAscending)}
+                      className="px-2 py-2 rounded-lg font-medium text-sm text-white transition"
+                      style={{ backgroundColor: 'var(--accent-cyan)' }}
+                    >
+                      {sortAscending ? '↑ A-Z' : '↓ Z-A'}
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSortBy('total')}
+                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                    sortBy === 'total'
+                      ? 'text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  style={sortBy === 'total' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+                >
+                  Total
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setColorFilter('all')}
+                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                    colorFilter === 'all'
+                      ? 'text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  style={colorFilter === 'all' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setColorFilter('green')}
+                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                    colorFilter === 'green' ? 'text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                  style={colorFilter === 'green' ? { backgroundColor: 'var(--accent-green)' } : {}}
+                >
+                  🟢 Strong
+                </button>
+                <button
+                  onClick={() => setColorFilter('yellow')}
+                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                    colorFilter === 'yellow' ? 'text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                  style={colorFilter === 'yellow' ? { backgroundColor: 'var(--accent-orange)' } : {}}
+                >
+                  🟡 Medium
+                </button>
+                <button
+                  onClick={() => setColorFilter('red')}
+                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                    colorFilter === 'red' ? 'text-white' : 'text-gray-400 hover:text-white'
+                  }`}
+                  style={colorFilter === 'red' ? { backgroundColor: 'var(--accent-red)' } : {}}
+                >
+                  🔴 Weak
+                </button>
+              </div>
               <button
                 onClick={() => setHideMaxed(!hideMaxed)}
-                className={`px-4 py-3 rounded-xl font-medium transition whitespace-nowrap ${
+                className={`px-4 py-2 rounded-xl font-medium transition whitespace-nowrap ${
                   hideMaxed
                     ? 'bg-accent-cyan text-black'
                     : 'bg-neutral-800 border border-neutral-700 text-white hover:border-neutral-600'
@@ -419,13 +523,10 @@ export default function TargetsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredStats.map((stat) => {
+              {sortedFilteredStats.map((stat) => {
                 const isSelected = selectedTargets.find((t) => t.code === stat.code);
                 const isDisabled = !isSelected && selectedTargets.length >= 3;
                 const currentValue = playerStats[stat.code] ?? 0;
-                if (stat.code === 'enr-a' || stat.code === 'phy-e' || stat.code === 'phy-g') {
-                  console.log(`Grid: ${stat.code} = playerStats[${stat.code}] = ${playerStats[stat.code]}`);
-                }
 
                 return (
                   <button
