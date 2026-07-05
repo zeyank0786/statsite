@@ -49,6 +49,8 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const [notes, setNotes] = useState<Record<string, any[]>>({});
   const [noteInput, setNoteInput] = useState<Record<string, string>>({});
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState<string>('');
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -242,6 +244,39 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      const res = await fetch(`/api/reviews/sessions/${sessionId}/notes`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId }),
+      });
+      if (res.ok) {
+        await loadNotes();
+      }
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+    }
+  };
+
+  const handleEditNote = async (noteId: string) => {
+    if (!editingContent.trim()) return;
+    try {
+      const res = await fetch(`/api/reviews/sessions/${sessionId}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId, content: editingContent }),
+      });
+      if (res.ok) {
+        setEditingNoteId(null);
+        setEditingContent('');
+        await loadNotes();
+      }
+    } catch (error) {
+      console.error('Failed to edit note:', error);
+    }
+  };
+
   const handleAddNote = async (statId: string) => {
     const content = noteInput[statId]?.trim();
     if (!content || !sessionId) return;
@@ -322,7 +357,6 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const handleSaveAndClose = async () => {
     setClosing(true);
     try {
-      // Close the session (stats are already saved in real-time)
       const res = await fetch(`/api/reviews/sessions/${sessionId}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -330,11 +364,15 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
       });
 
       if (res.ok) {
-        // Redirect back to reviews
         router.push('/reviews');
+      } else {
+        const errorData = await res.json();
+        console.error('Failed to close session:', res.status, errorData);
+        alert(`Error closing session: ${errorData.error}`);
       }
     } catch (error) {
       console.error('Failed to close session:', error);
+      alert(`Error: ${error}`);
     } finally {
       setClosing(false);
     }
@@ -616,33 +654,68 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                           {notes[stat.statId].map((note: any) => (
                             <div
                               key={note.id}
-                              className="bg-neutral-700/30 rounded px-2 py-1 text-xs border-l-2"
+                              className="bg-neutral-700/30 rounded px-2 py-2 text-xs border-l-2"
                               style={{ borderColor: 'var(--accent-purple)' }}
                             >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <p className="font-medium text-neutral-300">{note.reviewerName}</p>
-                                  <p className="text-neutral-400 mt-1">{note.content}</p>
+                              {editingNoteId === note.id ? (
+                                <div className="space-y-1">
+                                  <textarea
+                                    value={editingContent}
+                                    onChange={(e) => setEditingContent(e.target.value)}
+                                    className="w-full px-2 py-1 rounded text-xs bg-neutral-600 border border-neutral-500 text-white resize-none"
+                                    rows={2}
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleEditNote(note.id)}
+                                      disabled={!editingContent.trim()}
+                                      className="flex-1 py-1 px-2 rounded text-xs font-medium transition bg-green-900/30 text-green-400 hover:bg-green-900/50 disabled:opacity-50"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setEditingNoteId(null);
+                                        setEditingContent('');
+                                      }}
+                                      className="flex-1 py-1 px-2 rounded text-xs font-medium transition bg-neutral-700 text-neutral-300 hover:bg-neutral-600"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex items-start justify-between gap-2 mb-1">
+                                    <p className="font-medium text-neutral-300">{note.reviewerName}</p>
+                                    {currentPlayerId === note.reviewerId && (
+                                      <div className="flex gap-1">
+                                        <button
+                                          onClick={() => {
+                                            setEditingNoteId(note.id);
+                                            setEditingContent(note.content);
+                                          }}
+                                          className="text-neutral-500 hover:text-blue-400 transition text-xs"
+                                          title="Edit note"
+                                        >
+                                          ✏️
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteNote(note.id)}
+                                          className="text-neutral-500 hover:text-red-400 transition text-xs"
+                                          title="Delete note"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className="text-neutral-400">{note.content}</p>
                                   <p className="text-neutral-500 text-[10px] mt-1">
                                     {new Date(note.createdAt).toLocaleDateString()} {new Date(note.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </p>
-                                </div>
-                                {currentPlayerId === note.reviewerId && (
-                                  <button
-                                    onClick={() => {
-                                      fetch(`/api/reviews/sessions/${sessionId}/notes`, {
-                                        method: 'DELETE',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ noteId: note.id }),
-                                      }).then(() => loadNotes());
-                                    }}
-                                    className="text-neutral-500 hover:text-red-400 transition flex-shrink-0 mt-0.5"
-                                    title="Delete note"
-                                  >
-                                    ✕
-                                  </button>
-                                )}
-                              </div>
+                                </>
+                              )}
                             </div>
                           ))}
                         </div>

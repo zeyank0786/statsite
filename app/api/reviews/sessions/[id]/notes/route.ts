@@ -85,6 +85,60 @@ export async function POST(
   }
 }
 
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const authOptions = await getAuthOptions();
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { noteId, content } = body;
+    const reviewerId = (session.user as any)?.playerId;
+
+    if (!noteId || !content) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Check if the user owns this note
+    const note = await queryAll(
+      `SELECT reviewerId FROM StatNote WHERE id = ? AND sessionId = ?`,
+      [noteId, id]
+    );
+
+    if (note.length === 0) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
+    if (note[0].reviewerId !== reviewerId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const now = new Date().toISOString();
+    await query(
+      `UPDATE StatNote SET content = ?, updatedAt = ? WHERE id = ?`,
+      [content, now, noteId]
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating note:', error);
+    return NextResponse.json(
+      { error: 'Failed to update note', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
