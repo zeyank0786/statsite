@@ -62,6 +62,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
   const [sortAscending, setSortAscending] = useState(true);
   const [notes, setNotes] = useState<Record<string, any[]>>({});
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
 
   const categoryOrder = ['mtl', 'phy', 'kno', 'strs', 'stra', 'ski', 'enr'];
 
@@ -180,6 +181,36 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
       console.error('Failed to save name:', error);
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string, sessionId: string) => {
+    if (!confirm('Delete this note? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/reviews/sessions/${sessionId}/notes`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId }),
+      });
+
+      if (res.ok) {
+        setNotes((prev) => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach((statId) => {
+            updated[statId] = updated[statId].filter((n: any) => n.id !== noteId);
+          });
+          return updated;
+        });
+        setDeletingNoteId(null);
+      } else {
+        const error = await res.json();
+        console.error('Failed to delete note:', error);
+      }
+    } catch (error) {
+      console.error('Failed to delete note:', error);
     }
   };
 
@@ -429,11 +460,25 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                                       className="bg-neutral-700/20 rounded px-2 py-1 text-[11px] border-l-2"
                                       style={{ borderColor: 'var(--accent-purple)' }}
                                     >
-                                      <p className="font-medium text-neutral-300">{note.reviewerName}</p>
-                                      <p className="text-neutral-400 line-clamp-2">{note.content}</p>
-                                      <p className="text-neutral-500 text-[9px] mt-0.5">
-                                        {new Date(note.createdAt).toLocaleDateString()}
-                                      </p>
+                                      <div className="flex items-start justify-between gap-1">
+                                        <div className="flex-1">
+                                          <p className="font-medium text-neutral-300">{note.reviewerName}</p>
+                                          <p className="text-neutral-400 line-clamp-2">{note.content}</p>
+                                          <p className="text-neutral-500 text-[9px] mt-0.5">
+                                            {new Date(note.createdAt).toLocaleDateString()}
+                                          </p>
+                                        </div>
+                                        {currentPlayerId === note.reviewerId && (
+                                          <button
+                                            onClick={() => handleDeleteNote(note.id, note.sessionId)}
+                                            disabled={deletingNoteId === note.id}
+                                            className="text-neutral-500 hover:text-red-400 transition text-xs flex-shrink-0"
+                                            title="Delete note"
+                                          >
+                                            ✕
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
                                   ))}
                                   {notes[stat.id].length > 2 && (

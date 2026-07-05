@@ -92,7 +92,8 @@ export async function POST(
       }
     }
 
-    // Delete snapshot and session
+    // Delete notes, snapshot and session (in order to respect foreign keys)
+    await query('DELETE FROM StatNote WHERE sessionId = ?', [id]);
     await query('DELETE FROM ReviewSessionSnapshot WHERE sessionId = ?', [id]);
     await query('DELETE FROM ReviewSession WHERE id = ?', [id]);
 

@@ -245,6 +245,16 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   };
 
   const handleDeleteNote = async (noteId: string) => {
+    if (!confirm('Delete this note? This action cannot be undone.')) {
+      return;
+    }
+
+    if (!sessionId) {
+      console.error('Session ID not available');
+      alert('Error: Session ID not available');
+      return;
+    }
+
     try {
       const res = await fetch(`/api/reviews/sessions/${sessionId}/notes`, {
         method: 'DELETE',
@@ -253,14 +263,29 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
       });
       if (res.ok) {
         await loadNotes();
+      } else {
+        const error = await res.json();
+        console.error('Failed to delete note:', error);
+        alert(`Error deleting note: ${error.error}`);
       }
     } catch (error) {
       console.error('Failed to delete note:', error);
+      alert(`Error: ${error}`);
     }
   };
 
   const handleEditNote = async (noteId: string) => {
-    if (!editingContent.trim()) return;
+    if (!editingContent.trim()) {
+      alert('Note content cannot be empty');
+      return;
+    }
+
+    if (!sessionId) {
+      console.error('Session ID not available');
+      alert('Error: Session ID not available');
+      return;
+    }
+
     try {
       const res = await fetch(`/api/reviews/sessions/${sessionId}/notes`, {
         method: 'PUT',
@@ -271,9 +296,14 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
         setEditingNoteId(null);
         setEditingContent('');
         await loadNotes();
+      } else {
+        const error = await res.json();
+        console.error('Failed to edit note:', error);
+        alert(`Error editing note: ${error.error}`);
       }
     } catch (error) {
       console.error('Failed to edit note:', error);
+      alert(`Error: ${error}`);
     }
   };
 
