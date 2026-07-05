@@ -149,12 +149,19 @@ export default function TargetsPage() {
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         const statsMap: Record<string, number> = {};
-        statsData.categories.forEach((category: any) => {
-          category.stats.forEach((stat: any) => {
-            statsMap[stat.code] = stat.value;
+        if (statsData.categories) {
+          statsData.categories.forEach((category: any) => {
+            if (category.stats) {
+              category.stats.forEach((stat: any) => {
+                statsMap[stat.code] = stat.value;
+              });
+            }
           });
-        });
+        }
+        console.log('Loaded current user stats:', statsMap);
         setPlayerStats(statsMap);
+      } else {
+        console.error('Failed to fetch current user stats:', statsRes.status);
       }
 
       // Fetch stats for all other players with targets
