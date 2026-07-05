@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import StatDescriptionModal from '@/components/StatDescriptionModal';
+import ScoringRubricModal from '@/components/ScoringRubricModal';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 
 interface PlayerStat {
@@ -45,6 +46,9 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
   const [sortAscending, setSortAscending] = useState(true);
+  const [notes, setNotes] = useState<Record<string, any[]>>({});
+  const [noteInput, setNoteInput] = useState<Record<string, string>>({});
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -197,11 +201,64 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
             setChanges(changesMap);
           }
         }
+
+        // Load notes for this session
+        const notesRes = await fetch(`/api/reviews/sessions/${sessionId}/notes`);
+        if (notesRes.ok) {
+          const notesData = await notesRes.json();
+          const notesMap: Record<string, any[]> = {};
+          notesData.forEach((note: any) => {
+            if (!notesMap[note.statId]) {
+              notesMap[note.statId] = [];
+            }
+            notesMap[note.statId].push(note);
+          });
+          setNotes(notesMap);
+        }
       }
     } catch (error) {
       console.error('Failed to load stats:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadNotes = async () => {
+    try {
+      const notesRes = await fetch(`/api/reviews/sessions/${sessionId}/notes`);
+      if (notesRes.ok) {
+        const notesData = await notesRes.json();
+        const notesMap: Record<string, any[]> = {};
+        notesData.forEach((note: any) => {
+          if (!notesMap[note.statId]) {
+            notesMap[note.statId] = [];
+          }
+          notesMap[note.statId].push(note);
+        });
+        setNotes(notesMap);
+      }
+    } catch (error) {
+      console.error('Failed to load notes:', error);
+    }
+  };
+
+  const handleAddNote = async (statId: string) => {
+    const content = noteInput[statId]?.trim();
+    if (!content || !sessionId) return;
+
+    try {
+      const res = await fetch(`/api/reviews/sessions/${sessionId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statId, content }),
+      });
+
+      if (res.ok) {
+        setNoteInput({ ...noteInput, [statId]: '' });
+        await loadNotes();
+      }
+    } catch (error) {
+      console.error('Failed to save note:', error);
     }
   };
 
@@ -417,15 +474,18 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
               Total
             </button>
           </div>
-          <button
-            onClick={() => setColorCodeEnabled(!colorCodeEnabled)}
-            className="px-4 py-2 rounded-lg font-semibold text-white transition text-sm"
-            style={{
-              backgroundColor: colorCodeEnabled ? 'var(--accent-cyan)' : 'var(--accent-purple)',
-            }}
-          >
-            {colorCodeEnabled ? '🎨 Color Coding: On' : '⚫ Color Coding: Off'}
-          </button>
+          <div className="flex gap-2">
+            <ScoringRubricModal />
+            <button
+              onClick={() => setColorCodeEnabled(!colorCodeEnabled)}
+              className="px-4 py-2 rounded-lg font-semibold text-white transition text-sm"
+              style={{
+                backgroundColor: colorCodeEnabled ? 'var(--accent-cyan)' : 'var(--accent-purple)',
+              }}
+            >
+              {colorCodeEnabled ? '🎨 Color Coding: On' : '⚫ Color Coding: Off'}
+            </button>
+          </div>
         </div>
         <div className="space-y-10">
           {Object.values(getOrderedCategories()).map((category) => {
@@ -496,7 +556,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
 
                     {/* Edit Controls - Only for Editor */}
                     {isEditor && (
-                      <div className="space-y-2">
+                      <div className="space-y-2 mb-4">
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleEditStat(stat.statId, Math.max(0, stat.value - 1))}
@@ -525,6 +585,71 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                         />
                       </div>
                     )}
+
+                    {/* Notes Section */}
+                    <div className="border-t border-neutral-700 pt-3 mt-3">
+                      <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        Notes
+                      </p>
+
+                      {/* Note Input */}
+                      <div className="mb-3">
+                        <textarea
+                          value={noteInput[stat.statId] || ''}
+                          onChange={(e) => setNoteInput({ ...noteInput, [stat.statId]: e.target.value })}
+                          placeholder="Add a note..."
+                          className="w-full px-2 py-1 rounded text-xs bg-neutral-700 border border-neutral-600 text-white placeholder-neutral-500 resize-none"
+                          rows={2}
+                        />
+                        <button
+                          onClick={() => handleAddNote(stat.statId)}
+                          disabled={!noteInput[stat.statId]?.trim()}
+                          className="mt-1 w-full py-1 px-2 rounded text-xs font-medium transition bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 disabled:opacity-50"
+                        >
+                          Add Note
+                        </button>
+                      </div>
+
+                      {/* Notes Display */}
+                      {notes[stat.statId] && notes[stat.statId].length > 0 ? (
+                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                          {notes[stat.statId].map((note: any) => (
+                            <div
+                              key={note.id}
+                              className="bg-neutral-700/30 rounded px-2 py-1 text-xs border-l-2"
+                              style={{ borderColor: 'var(--accent-purple)' }}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <p className="font-medium text-neutral-300">{note.reviewerName}</p>
+                                  <p className="text-neutral-400 mt-1">{note.content}</p>
+                                  <p className="text-neutral-500 text-[10px] mt-1">
+                                    {new Date(note.createdAt).toLocaleDateString()} {new Date(note.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                </div>
+                                {currentPlayerId === note.reviewerId && (
+                                  <button
+                                    onClick={() => {
+                                      fetch(`/api/reviews/sessions/${sessionId}/notes`, {
+                                        method: 'DELETE',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ noteId: note.id }),
+                                      }).then(() => loadNotes());
+                                    }}
+                                    className="text-neutral-500 hover:text-red-400 transition flex-shrink-0 mt-0.5"
+                                    title="Delete note"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-neutral-500">No notes yet</p>
+                      )}
+                    </div>
                     </div>
                   );
                 })}
