@@ -20,7 +20,7 @@ export async function GET(
     }
 
     const notes = await queryAll(
-      `SELECT sn.id, sn.statId, sn.content, sn.createdAt, sn.updatedAt, p.username as reviewerName
+      `SELECT sn.id, sn.statId, sn.reviewerId, sn.content, sn.createdAt, sn.updatedAt, p.username as reviewerName
        FROM StatNote sn
        JOIN Player p ON sn.reviewerId = p.id
        WHERE sn.sessionId = ?
