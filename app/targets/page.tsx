@@ -415,6 +415,9 @@ export default function TargetsPage() {
                 const isSelected = selectedTargets.find((t) => t.code === stat.code);
                 const isDisabled = !isSelected && selectedTargets.length >= 3;
                 const currentValue = playerStats[stat.code] ?? 0;
+                if (stat.code === 'enr-a' || stat.code === 'phy-e' || stat.code === 'phy-g') {
+                  console.log(`Grid: ${stat.code} = playerStats[${stat.code}] = ${playerStats[stat.code]}`);
+                }
 
                 return (
                   <button
