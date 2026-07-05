@@ -63,31 +63,27 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
 
   const categoryOrder = ['mtl', 'phy', 'kno', 'strs', 'stra', 'ski', 'enr'];
 
-  const getSortedCategories = () => {
-    const sorted = [...categories].sort((a, b) => {
+  const getOrderedCategories = () => {
+    return [...categories].sort((a, b) => {
       const aIndex = categoryOrder.indexOf(a.code);
       const bIndex = categoryOrder.indexOf(b.code);
       if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
       return 0;
     });
+  };
 
-    if (sortBy === 'default') return sorted;
+  const getSortedStats = (stats: any[]) => {
+    if (sortBy === 'default') return stats;
 
-    return sorted.sort((a, b) => {
-      const aTotal = a.stats.reduce((sum: number, s: any) => sum + s.value, 0);
-      const bTotal = b.stats.reduce((sum: number, s: any) => sum + s.value, 0);
-      const aAvg = aTotal / a.stats.length;
-      const bAvg = bTotal / b.stats.length;
-
-      if (sortBy === 'name') {
-        return a.label.localeCompare(b.label);
-      } else if (sortBy === 'total') {
-        return bTotal - aTotal;
-      } else if (sortBy === 'average') {
-        return bAvg - aAvg;
-      }
-      return 0;
-    });
+    const sorted = [...stats];
+    if (sortBy === 'name') {
+      return sorted.sort((a, b) => a.label.localeCompare(b.label));
+    } else if (sortBy === 'total') {
+      return sorted.sort((a, b) => b.value - a.value);
+    } else if (sortBy === 'average') {
+      return sorted.sort((a, b) => b.value - a.value);
+    }
+    return sorted;
   };
 
   const currentPlayerId = (sessionData?.user as any)?.playerId;
@@ -333,7 +329,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
               </div>
             </div>
             <div className="space-y-8">
-              {getSortedCategories().map((category) => {
+              {getOrderedCategories().map((category) => {
                 const colors: Record<string, string> = {
                   'mtl': 'var(--accent-cyan)',
                   'phy': 'var(--accent-pink)',
@@ -365,7 +361,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                      {category.stats.map((stat) => {
+                      {getSortedStats(category.stats).map((stat) => {
                         const change = changes[stat.code];
                         const diff = change && change.lastReviewValue !== undefined && change.lastReviewValue !== null
                           ? stat.value - change.lastReviewValue
