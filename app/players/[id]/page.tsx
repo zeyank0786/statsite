@@ -61,6 +61,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
   const [sortAscending, setSortAscending] = useState(true);
+  const [notes, setNotes] = useState<Record<string, any[]>>({});
 
   const categoryOrder = ['mtl', 'phy', 'kno', 'strs', 'stra', 'ski', 'enr'];
 
@@ -102,9 +103,10 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
 
   const loadPlayerData = async () => {
     try {
-      const [profileRes, changesRes] = await Promise.all([
+      const [profileRes, changesRes, notesRes] = await Promise.all([
         fetch(`/api/players/${playerId}`),
         fetch(`/api/players/${playerId}/changes`),
+        fetch(`/api/players/${playerId}/notes`),
       ]);
 
       if (!profileRes.ok) {
@@ -130,6 +132,18 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
           changesMap[change.code] = change;
         });
         setChanges(changesMap);
+      }
+
+      if (notesRes.ok) {
+        const notesData = await notesRes.json();
+        const notesMap: Record<string, any[]> = {};
+        notesData.forEach((note: any) => {
+          if (!notesMap[note.statId]) {
+            notesMap[note.statId] = [];
+          }
+          notesMap[note.statId].push(note);
+        });
+        setNotes(notesMap);
       }
     } catch (error) {
       console.error('Failed to load player data:', error);
@@ -401,6 +415,35 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                                 }}
                               />
                             </div>
+
+                            {/* Notes Section */}
+                            {notes[stat.id] && notes[stat.id].length > 0 && (
+                              <div className="border-t border-neutral-700 pt-2 mt-4">
+                                <p className="text-[10px] uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                                  Review Notes
+                                </p>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                  {notes[stat.id].slice(0, 2).map((note: any) => (
+                                    <div
+                                      key={note.id}
+                                      className="bg-neutral-700/20 rounded px-2 py-1 text-[11px] border-l-2"
+                                      style={{ borderColor: 'var(--accent-purple)' }}
+                                    >
+                                      <p className="font-medium text-neutral-300">{note.reviewerName}</p>
+                                      <p className="text-neutral-400 line-clamp-2">{note.content}</p>
+                                      <p className="text-neutral-500 text-[9px] mt-0.5">
+                                        {new Date(note.createdAt).toLocaleDateString()}
+                                      </p>
+                                    </div>
+                                  ))}
+                                  {notes[stat.id].length > 2 && (
+                                    <p className="text-[10px] text-neutral-500 italic">
+                                      +{notes[stat.id].length - 2} more
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
