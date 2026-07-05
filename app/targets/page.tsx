@@ -106,6 +106,7 @@ export default function TargetsPage() {
   const [selectedTargets, setSelectedTargets] = useState<Stat[]>([]);
   const [allTargets, setAllTargets] = useState<Target[]>([]);
   const [playerStats, setPlayerStats] = useState<Record<string, number>>({});
+  const [allPlayersStats, setAllPlayersStats] = useState<Record<string, Record<string, number>>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -126,13 +127,11 @@ export default function TargetsPage() {
 
   const loadTargets = async () => {
     try {
-      const [targetsRes, statsRes] = await Promise.all([
-        fetch('/api/targets'),
-        fetch(`/api/players/${currentPlayerId}`),
-      ]);
+      const targetsRes = await fetch('/api/targets');
+      let data: Target[] = [];
 
       if (targetsRes.ok) {
-        const data = await targetsRes.json();
+        data = await targetsRes.json();
         setAllTargets(data);
 
         // Get user's own targets
@@ -145,6 +144,8 @@ export default function TargetsPage() {
         );
       }
 
+      // Fetch current user's stats
+      const statsRes = await fetch(`/api/players/${currentPlayerId}`);
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         const statsMap: Record<string, number> = {};
@@ -155,6 +156,32 @@ export default function TargetsPage() {
         });
         setPlayerStats(statsMap);
       }
+
+      // Fetch stats for all other players with targets
+      const otherPlayerIds = [...new Set(data.filter((t) => t.playerId !== currentPlayerId).map((t) => t.playerId))];
+      const allPlayersStatsMap: Record<string, Record<string, number>> = {};
+
+      await Promise.all(
+        otherPlayerIds.map(async (playerId) => {
+          try {
+            const res = await fetch(`/api/players/${playerId}`);
+            if (res.ok) {
+              const statsData = await res.json();
+              const statsMap: Record<string, number> = {};
+              statsData.categories.forEach((category: any) => {
+                category.stats.forEach((stat: any) => {
+                  statsMap[stat.code] = stat.value;
+                });
+              });
+              allPlayersStatsMap[playerId] = statsMap;
+            }
+          } catch (error) {
+            console.error(`Failed to load stats for player ${playerId}:`, error);
+          }
+        })
+      );
+
+      setAllPlayersStats(allPlayersStatsMap);
     } catch (error) {
       console.error('Failed to load targets:', error);
     } finally {
@@ -372,40 +399,48 @@ export default function TargetsPage() {
         <section>
           <h2 className="text-3xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Team Targets</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {targetsByPlayer.map(([playerName, targets]) => (
-              <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
-                <h3 className="text-lg font-bold text-white mb-4">{playerName}</h3>
-                <div className="space-y-2">
-                  {targets.length > 0 ? (
-                    targets.map((target) => (
-                      <div
-                        key={target.id}
-                        className="bg-neutral-800/50 rounded-lg px-3 py-2 border border-neutral-700 group cursor-help"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-medium text-white">{target.statLabel}</p>
-                            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                              {target.statCode}
-                            </p>
-                            <p className={`text-xs mt-2 font-semibold ${getValueColor(playerStats[target.statCode] ?? 0)}`}>Current: {playerStats[target.statCode] ?? 0}/10</p>
+            {targetsByPlayer.map(([playerName, targets]) => {
+              const playerId = targets.length > 0 ? targets[0].playerId : null;
+              const playerStatValues = playerId ? allPlayersStats[playerId] : {};
+
+              return (
+                <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
+                  <h3 className="text-lg font-bold text-white mb-4">{playerName}</h3>
+                  <div className="space-y-2">
+                    {targets.length > 0 ? (
+                      targets.map((target) => {
+                        const playerCurrentValue = playerStatValues[target.statCode] ?? 0;
+                        return (
+                          <div
+                            key={target.id}
+                            className="bg-neutral-800/50 rounded-lg px-3 py-2 border border-neutral-700 group cursor-help"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-medium text-white">{target.statLabel}</p>
+                                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                                  {target.statCode}
+                                </p>
+                                <p className={`text-xs mt-2 font-semibold ${getValueColor(playerCurrentValue)}`}>Current: {playerCurrentValue}/10</p>
+                              </div>
+                              <StatDescriptionModal
+                                statCode={target.statCode}
+                                statLabel={target.statLabel}
+                                description={STAT_DESCRIPTIONS[target.statCode] || 'No description available'}
+                              />
+                            </div>
                           </div>
-                          <StatDescriptionModal
-                            statCode={target.statCode}
-                            statLabel={target.statLabel}
-                            description={STAT_DESCRIPTIONS[target.statCode] || 'No description available'}
-                          />
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>
-                      No targets yet
-                    </p>
-                  )}
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>
+                        No targets yet
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </main>
