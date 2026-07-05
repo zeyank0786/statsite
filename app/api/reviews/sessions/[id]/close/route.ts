@@ -92,8 +92,8 @@ export async function POST(
       }
     }
 
-    // Delete notes, snapshot and session (in order to respect foreign keys)
-    await query('DELETE FROM StatNote WHERE sessionId = ?', [id]);
+    // Delete snapshot and session (keep notes for profile history)
+    // Notes persist so they appear on player profiles
     await query('DELETE FROM ReviewSessionSnapshot WHERE sessionId = ?', [id]);
     await query('DELETE FROM ReviewSession WHERE id = ?', [id]);
 
