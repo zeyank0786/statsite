@@ -120,10 +120,10 @@ export default function TargetsPage() {
       return;
     }
 
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && currentPlayerId) {
       loadTargets();
     }
-  }, [status, router]);
+  }, [status, router, currentPlayerId]);
 
   const loadTargets = async () => {
     try {
