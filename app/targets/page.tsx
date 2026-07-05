@@ -279,6 +279,13 @@ export default function TargetsPage() {
             {targetsByPlayer.map(([playerName, targets]) => {
               const playerId = targets.length > 0 ? targets[0].playerId : null;
               const playerStatValues = playerId ? (allPlayersStats[playerId] || {}) : {};
+              console.log(`Team Targets for ${playerName} (playerId: ${playerId}):`, {
+                playerId,
+                playerStatValues,
+                allPlayersStatsKeys: Object.keys(allPlayersStats),
+                currentPlayerId,
+                isCurrentUser: playerId === currentPlayerId
+              });
 
               return (
                 <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
@@ -287,6 +294,7 @@ export default function TargetsPage() {
                     {targets.length > 0 ? (
                       targets.map((target) => {
                         const playerCurrentValue = playerStatValues[target.statCode] ?? 0;
+                        console.log(`  ${target.statCode}: playerStatValues[${target.statCode}] = ${playerStatValues[target.statCode]}, using ${playerCurrentValue}`);
                         return (
                           <div
                             key={target.id}
