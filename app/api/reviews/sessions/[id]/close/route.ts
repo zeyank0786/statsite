@@ -50,13 +50,16 @@ export async function POST(
 
     // If action is 'revert', restore from snapshot
     if (action === 'revert') {
+      console.log(`[REVERT] Attempting to revert session ${id}`);
       const snapshot = await queryOne(
         'SELECT statSnapshots FROM ReviewSessionSnapshot WHERE sessionId = ?',
         [id]
       );
 
+      console.log(`[REVERT] Snapshot found:`, !!snapshot);
       if (snapshot) {
         const statSnapshots = JSON.parse(snapshot.statSnapshots as string);
+        console.log(`[REVERT] Restoring ${statSnapshots.length} stats for player ${reviewSession.targetPlayerId}`);
         const now = new Date().toISOString();
 
         // Restore each stat to its snapshot value
@@ -68,6 +71,7 @@ export async function POST(
 
           if (existingValue) {
             const oldValue = existingValue.value;
+            console.log(`[REVERT] Restoring ${snap.statId}: ${oldValue} -> ${snap.value}`);
             await query(
               'UPDATE StatValue SET value = ?, updatedAt = ? WHERE id = ?',
               [snap.value, now, existingValue.id]
@@ -79,8 +83,12 @@ export async function POST(
               'INSERT INTO StatHistory (id, statValueId, oldValue, newValue, reason, changedById, source, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
               [uuid(), existingValue.id, oldValue, snap.value, 'Review session reverted', currentPlayerId, 'review_revert', now]
             );
+          } else {
+            console.log(`[REVERT] No existing value found for ${snap.statId}`);
           }
         }
+      } else {
+        console.log(`[REVERT] No snapshot found for session ${id}`);
       }
     }
 
