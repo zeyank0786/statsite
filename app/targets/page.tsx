@@ -148,6 +148,7 @@ export default function TargetsPage() {
       const statsRes = await fetch(`/api/players/${currentPlayerId}`);
       if (statsRes.ok) {
         const statsData = await statsRes.json();
+        console.log('API response for current user:', statsData);
         const statsMap: Record<string, number> = {};
         if (statsData.categories) {
           statsData.categories.forEach((category: any) => {
