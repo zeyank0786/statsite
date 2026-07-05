@@ -25,6 +25,8 @@ interface GroupedStats {
   };
 }
 
+const OFFICIAL_CATEGORY_ORDER = ['mtl', 'phy', 'kno', 'strs', 'stra', 'ski', 'enr'];
+
 export default function ReviewSessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { status, data: session } = useSession();
   const router = useRouter();
@@ -41,6 +43,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const [changes, setChanges] = useState<Record<string, any>>({});
   const [targetPlayerId, setTargetPlayerId] = useState<string>('');
   const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
+  const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -48,6 +51,29 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
     if (value <= 3) return 'var(--accent-red)';
     if (value <= 7) return 'var(--accent-orange)';
     return 'var(--accent-green)';
+  };
+
+  const getOrderedCategories = () => {
+    const ordered: GroupedStats = {};
+    OFFICIAL_CATEGORY_ORDER.forEach((catCode) => {
+      if (groupedStats[catCode]) {
+        ordered[catCode] = groupedStats[catCode];
+      }
+    });
+    return ordered;
+  };
+
+  const getSortedStats = (categoryStats: PlayerStat[]) => {
+    const sorted = [...categoryStats];
+    switch (sortBy) {
+      case 'name':
+        return sorted.sort((a, b) => a.label.localeCompare(b.label));
+      case 'total':
+        return sorted.sort((a, b) => b.value - a.value);
+      case 'default':
+      default:
+        return sorted.sort((a, b) => a.code.localeCompare(b.code));
+    }
   };
 
   useEffect(() => {
@@ -342,7 +368,42 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-6 flex justify-end">
+        <div className="mb-8 flex justify-between items-center gap-4">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSortBy('default')}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                sortBy === 'default'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              style={sortBy === 'default' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+            >
+              Default
+            </button>
+            <button
+              onClick={() => setSortBy('name')}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                sortBy === 'name'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              style={sortBy === 'name' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+            >
+              Name
+            </button>
+            <button
+              onClick={() => setSortBy('total')}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                sortBy === 'total'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              style={sortBy === 'total' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+            >
+              Total
+            </button>
+          </div>
           <button
             onClick={() => setColorCodeEnabled(!colorCodeEnabled)}
             className="px-4 py-2 rounded-lg font-semibold text-white transition text-sm"
@@ -354,7 +415,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
           </button>
         </div>
         <div className="space-y-10">
-          {Object.values(groupedStats).map((category) => {
+          {Object.values(getOrderedCategories()).map((category) => {
             const categoryTotal = category.stats.reduce((sum: number, s: any) => sum + s.value, 0);
             const categoryColor = 'var(--accent-cyan)';
 
@@ -373,7 +434,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                {category.stats.map((stat) => {
+                {getSortedStats(category.stats).map((stat) => {
                   const change = changes[stat.code];
                   const diff = change && change.lastReviewValue !== undefined && change.lastReviewValue !== null
                     ? stat.value - change.lastReviewValue
