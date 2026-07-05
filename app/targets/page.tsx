@@ -136,12 +136,13 @@ export default function TargetsPage() {
 
         // Get user's own targets
         const userTargets = data.filter((t: Target) => t.playerId === currentPlayerId);
-        setSelectedTargets(
-          userTargets.map((t: Target) => ({
-            code: t.statCode,
-            label: t.statLabel,
-          }))
-        );
+        const selected = userTargets.map((t: Target) => ({
+          code: t.statCode,
+          label: t.statLabel,
+        }));
+        console.log('User targets from API:', userTargets);
+        console.log('Selected targets set to:', selected);
+        setSelectedTargets(selected);
       }
 
       // Fetch current user's stats
