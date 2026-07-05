@@ -15,6 +15,13 @@ interface Target {
   username: string;
 }
 
+interface PlayerStat {
+  id: string;
+  code: string;
+  label: string;
+  value: number;
+}
+
 interface Stat {
   code: string;
   label: string;
@@ -98,6 +105,7 @@ export default function TargetsPage() {
   const router = useRouter();
   const [selectedTargets, setSelectedTargets] = useState<Stat[]>([]);
   const [allTargets, setAllTargets] = useState<Target[]>([]);
+  const [playerStats, setPlayerStats] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,9 +125,13 @@ export default function TargetsPage() {
 
   const loadTargets = async () => {
     try {
-      const res = await fetch('/api/targets');
-      if (res.ok) {
-        const data = await res.json();
+      const [targetsRes, statsRes] = await Promise.all([
+        fetch('/api/targets'),
+        fetch(`/api/players/${currentPlayerId}`),
+      ]);
+
+      if (targetsRes.ok) {
+        const data = await targetsRes.json();
         setAllTargets(data);
 
         // Get user's own targets
@@ -130,6 +142,17 @@ export default function TargetsPage() {
             label: t.statLabel,
           }))
         );
+      }
+
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        const statsMap: Record<string, number> = {};
+        statsData.categories.forEach((category: any) => {
+          category.stats.forEach((stat: any) => {
+            statsMap[stat.code] = stat.value;
+          });
+        });
+        setPlayerStats(statsMap);
       }
     } catch (error) {
       console.error('Failed to load targets:', error);
@@ -222,28 +245,32 @@ export default function TargetsPage() {
           {/* Selected Targets Display */}
           {selectedTargets.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              {selectedTargets.map((target, idx) => (
-                <div
-                  key={target.code}
-                  className="bg-gradient-to-br from-cyan-900/20 to-cyan-900/5 border border-cyan-700/50 rounded-2xl p-6 card-shadow"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--accent-cyan)' }}>
-                        Target {idx + 1}
-                      </p>
-                      <h3 className="text-lg font-bold text-white">{target.label}</h3>
+              {selectedTargets.map((target, idx) => {
+                const currentValue = playerStats[target.code] ?? 0;
+                return (
+                  <div
+                    key={target.code}
+                    className="bg-gradient-to-br from-cyan-900/20 to-cyan-900/5 border border-cyan-700/50 rounded-2xl p-6 card-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--accent-cyan)' }}>
+                          Target {idx + 1}
+                        </p>
+                        <h3 className="text-lg font-bold text-white">{target.label}</h3>
+                      </div>
+                      <button
+                        onClick={() => handleSelectTarget(target)}
+                        className="text-cyan-400 hover:text-red-400 transition"
+                      >
+                        ✕
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleSelectTarget(target)}
-                      className="text-cyan-400 hover:text-red-400 transition"
-                    >
-                      ✕
-                    </button>
+                    <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>{target.code}</p>
+                    <div className="text-sm font-semibold text-white">Current: {currentValue}/10</div>
                   </div>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{target.code}</p>
-                </div>
-              ))}
+                );
+              })}
               {[...Array(3 - selectedTargets.length)].map((_, idx) => (
                 <div
                   key={`empty-${idx}`}
@@ -271,6 +298,7 @@ export default function TargetsPage() {
               {filteredStats.map((stat) => {
                 const isSelected = selectedTargets.find((t) => t.code === stat.code);
                 const isDisabled = !isSelected && selectedTargets.length >= 3;
+                const currentValue = playerStats[stat.code] ?? 0;
 
                 return (
                   <button
@@ -291,6 +319,7 @@ export default function TargetsPage() {
                         <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                           {stat.code}
                         </p>
+                        <p className="text-xs mt-2 font-semibold text-cyan-400">Current: {currentValue}/10</p>
                       </div>
                       <div className="flex items-center gap-2 ml-2">
                         <StatDescriptionModal
@@ -330,6 +359,7 @@ export default function TargetsPage() {
                             <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                               {target.statCode}
                             </p>
+                            <p className="text-xs mt-2 font-semibold text-cyan-400">Current: {playerStats[target.statCode] ?? 0}/10</p>
                           </div>
                           <StatDescriptionModal
                             statCode={target.statCode}
