@@ -59,6 +59,36 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [selectedComparison, setSelectedComparison] = useState<string>('');
   const [changes, setChanges] = useState<Record<string, any>>({});
   const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
+  const [sortBy, setSortBy] = useState<'default' | 'name' | 'total' | 'average'>('default');
+
+  const categoryOrder = ['mtl', 'phy', 'kno', 'strs', 'stra', 'ski', 'enr'];
+
+  const getSortedCategories = () => {
+    const sorted = [...categories].sort((a, b) => {
+      const aIndex = categoryOrder.indexOf(a.code);
+      const bIndex = categoryOrder.indexOf(b.code);
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      return 0;
+    });
+
+    if (sortBy === 'default') return sorted;
+
+    return sorted.sort((a, b) => {
+      const aTotal = a.stats.reduce((sum: number, s: any) => sum + s.value, 0);
+      const bTotal = b.stats.reduce((sum: number, s: any) => sum + s.value, 0);
+      const aAvg = aTotal / a.stats.length;
+      const bAvg = bTotal / b.stats.length;
+
+      if (sortBy === 'name') {
+        return a.label.localeCompare(b.label);
+      } else if (sortBy === 'total') {
+        return bTotal - aTotal;
+      } else if (sortBy === 'average') {
+        return bAvg - aAvg;
+      }
+      return 0;
+    });
+  };
 
   const currentPlayerId = (sessionData?.user as any)?.playerId;
   const isOwnProfile = currentPlayerId === playerId;
@@ -236,18 +266,74 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
           <section>
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-3xl font-bold" style={{ color: 'var(--foreground)' }}>Stats</h2>
-              <button
-                onClick={() => setColorCodeEnabled(!colorCodeEnabled)}
-                className="px-4 py-2 rounded-lg font-semibold text-white transition text-sm"
-                style={{
-                  backgroundColor: colorCodeEnabled ? 'var(--accent-cyan)' : 'var(--accent-purple)',
-                }}
-              >
-                {colorCodeEnabled ? '🎨 Color Coding: On' : '⚫ Color Coding: Off'}
-              </button>
+              <div className="flex gap-2 items-center">
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setSortBy('default')}
+                    className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                      sortBy === 'default'
+                        ? 'text-white'
+                        : 'text-neutral-400 hover:text-neutral-300'
+                    }`}
+                    style={{
+                      backgroundColor: sortBy === 'default' ? 'var(--accent-cyan)' : 'transparent',
+                    }}
+                  >
+                    Default
+                  </button>
+                  <button
+                    onClick={() => setSortBy('name')}
+                    className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                      sortBy === 'name'
+                        ? 'text-white'
+                        : 'text-neutral-400 hover:text-neutral-300'
+                    }`}
+                    style={{
+                      backgroundColor: sortBy === 'name' ? 'var(--accent-cyan)' : 'transparent',
+                    }}
+                  >
+                    Name
+                  </button>
+                  <button
+                    onClick={() => setSortBy('total')}
+                    className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                      sortBy === 'total'
+                        ? 'text-white'
+                        : 'text-neutral-400 hover:text-neutral-300'
+                    }`}
+                    style={{
+                      backgroundColor: sortBy === 'total' ? 'var(--accent-cyan)' : 'transparent',
+                    }}
+                  >
+                    Total
+                  </button>
+                  <button
+                    onClick={() => setSortBy('average')}
+                    className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
+                      sortBy === 'average'
+                        ? 'text-white'
+                        : 'text-neutral-400 hover:text-neutral-300'
+                    }`}
+                    style={{
+                      backgroundColor: sortBy === 'average' ? 'var(--accent-cyan)' : 'transparent',
+                    }}
+                  >
+                    Average
+                  </button>
+                </div>
+                <button
+                  onClick={() => setColorCodeEnabled(!colorCodeEnabled)}
+                  className="px-4 py-2 rounded-lg font-semibold text-white transition text-sm"
+                  style={{
+                    backgroundColor: colorCodeEnabled ? 'var(--accent-cyan)' : 'var(--accent-purple)',
+                  }}
+                >
+                  {colorCodeEnabled ? '🎨' : '⚫'}
+                </button>
+              </div>
             </div>
             <div className="space-y-8">
-              {categories.map((category) => {
+              {getSortedCategories().map((category) => {
                 const colors: Record<string, string> = {
                   'mtl': 'var(--accent-cyan)',
                   'phy': 'var(--accent-pink)',
