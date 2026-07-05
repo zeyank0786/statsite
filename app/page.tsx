@@ -87,6 +87,12 @@ export default function Dashboard() {
               >
                 📈 History
               </Link>
+              <Link
+                href="/targets"
+                className="px-3 py-2 text-sm font-medium transition rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+              >
+                🎯 Targets
+              </Link>
               <div className="w-px h-6" style={{ backgroundColor: 'var(--neutral-700)' }} />
               <Link
                 href="/settings"
