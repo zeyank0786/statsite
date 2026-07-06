@@ -89,6 +89,7 @@ export default function MessagesPage() {
   const [players, setPlayers] = useState<any[]>([]);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
   const [selectedPlayerForStat, setSelectedPlayerForStat] = useState<string | null>(null);
+  const [selectorStep, setSelectorStep] = useState<'players' | 'stats'>('players');
   const [dismissGuidelines, setDismissGuidelines] = useState(false);
 
   const currentPlayerId = (session?.user as any)?.playerId;
@@ -438,91 +439,88 @@ export default function MessagesPage() {
             </button>
           </div>
 
-          {/* Stat Selector Modal */}
+          {/* Stat Selector Modal - Cleaner Design */}
           {showStatSelector && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 max-w-sm w-full">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-white">Reference Stat</h3>
+                  <h3 className="text-lg font-bold text-white">
+                    {selectorStep === 'players' ? 'Choose Player' : 'Choose Stat'}
+                  </h3>
                   <button
-                    onClick={() => setShowStatSelector(false)}
+                    onClick={() => {
+                      setShowStatSelector(false);
+                      setSelectorStep('players');
+                      setSelectedPlayerForStat(null);
+                    }}
                     className="text-neutral-400 hover:text-white text-2xl leading-none"
                   >
                     ✕
                   </button>
                 </div>
 
-                {/* Player Selection */}
-                <div className="mb-6">
-                  <label className="text-xs uppercase font-semibold mb-3 block" style={{ color: 'var(--text-secondary)' }}>
-                    Player
-                  </label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                {selectorStep === 'players' ? (
+                  // Player Selection
+                  <div className="space-y-2">
                     {players.map((player: any) => (
                       <button
                         key={player.id}
                         onClick={() => {
                           setSelectedPlayerForStat(player.id);
                           loadPlayerStats(player.id);
+                          setSelectorStep('stats');
                         }}
-                        className={`w-full px-4 py-2 rounded-lg text-sm text-left transition font-medium ${
-                          selectedPlayerForStat === player.id
-                            ? 'bg-neutral-700 text-white'
-                            : 'bg-neutral-800/50 text-neutral-300 hover:bg-neutral-700 border border-neutral-700'
-                        }`}
+                        className="w-full px-4 py-3 rounded-lg text-sm text-left transition text-white hover:bg-neutral-800 border border-neutral-700 hover:border-neutral-600"
                       >
                         {player.username}
                       </button>
                     ))}
                   </div>
-                </div>
-
-                {/* Stat Selection */}
-                {selectedPlayerForStat && (
-                  <div className="mb-6">
-                    <label className="text-xs uppercase font-semibold mb-3 block" style={{ color: 'var(--text-secondary)' }}>
-                      Stat
-                    </label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {playerStats.length > 0 ? (
-                        playerStats.map((stat: any) => (
-                          <button
-                            key={stat.statId}
-                            onClick={() => {
-                              setReferencedStatId(stat.statId);
-                              setReferencedPlayerId(selectedPlayerForStat);
-                              setShowStatSelector(false);
-                            }}
-                            className={`w-full px-4 py-2 rounded-lg text-sm text-left transition font-medium ${
-                              referencedStatId === stat.statId
-                                ? 'bg-neutral-700 text-white'
-                                : 'bg-neutral-800/50 text-neutral-300 hover:bg-neutral-700 border border-neutral-700'
-                            }`}
-                          >
-                            <div className="font-semibold text-white">{stat.label}</div>
+                ) : (
+                  // Stat Selection with Values
+                  <div className="space-y-2">
+                    {playerStats.length > 0 ? (
+                      playerStats.map((stat: any) => (
+                        <button
+                          key={stat.statId}
+                          onClick={() => {
+                            setReferencedStatId(stat.statId);
+                            setReferencedPlayerId(selectedPlayerForStat);
+                            setShowStatSelector(false);
+                            setSelectorStep('players');
+                            setSelectedPlayerForStat(null);
+                          }}
+                          className="w-full px-4 py-3 rounded-lg text-sm transition text-white hover:bg-neutral-800 border border-neutral-700 hover:border-neutral-600 flex items-center justify-between"
+                        >
+                          <div className="text-left">
+                            <div className="font-medium">{stat.label}</div>
                             <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                               {stat.code}
                             </div>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="text-center py-4">
-                          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                            Loading stats...
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                          </div>
+                          <div className="font-bold text-lg" style={{ color: 'var(--accent-cyan)' }}>
+                            {stat.value}
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                          Loading stats...
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <button
-                  onClick={() => setShowStatSelector(false)}
-                  className="w-full px-4 py-3 rounded-lg text-sm font-medium text-white transition"
-                  style={{ backgroundColor: 'var(--accent-cyan)' }}
-                >
-                  Close
-                </button>
+                {selectorStep === 'stats' && (
+                  <button
+                    onClick={() => setSelectorStep('players')}
+                    className="w-full mt-4 px-4 py-2 rounded-lg text-sm font-medium text-neutral-300 hover:text-white border border-neutral-700 transition"
+                  >
+                    ← Back
+                  </button>
+                )}
               </div>
             </div>
           )}

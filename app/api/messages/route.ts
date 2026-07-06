@@ -226,7 +226,8 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Delete associated reactions, replies, and mentions
+    // Delete associated data in order to respect foreign keys
+    await query('DELETE FROM MessageRead WHERE messageId = ?', [messageId]);
     await query('DELETE FROM MessageReaction WHERE messageId = ?', [messageId]);
     await query('DELETE FROM MessageReply WHERE messageId = ?', [messageId]);
     await query('DELETE FROM MessageMention WHERE messageId = ?', [messageId]);
