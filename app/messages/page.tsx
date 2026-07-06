@@ -89,6 +89,7 @@ export default function MessagesPage() {
   const [players, setPlayers] = useState<any[]>([]);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
   const [selectedPlayerForStat, setSelectedPlayerForStat] = useState<string | null>(null);
+  const [showGuidelines, setShowGuidelines] = useState(false);
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -344,12 +345,31 @@ export default function MessagesPage() {
             >
               ← Back to Dashboard
             </Link>
+            <button
+              onClick={() => setShowGuidelines(!showGuidelines)}
+              className="px-3 py-2 rounded-lg text-sm font-medium transition text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+            >
+              {showGuidelines ? '▼ Guidelines' : '▶ Guidelines'}
+            </button>
           </div>
+
+          {showGuidelines && (
+            <div className="mb-6 p-4 rounded-lg bg-neutral-800/30 border border-neutral-700">
+              <h3 className="font-semibold text-white mb-2">📋 Message Board Guidelines</h3>
+              <ul className="text-sm space-y-2" style={{ color: 'var(--text-secondary)' }}>
+                <li>✅ <span className="text-white font-medium">Do share:</span> Progress updates, milestone achievements, stat improvements, wins, and important learnings</li>
+                <li>❌ <span className="text-white font-medium">Don't share:</span> Off-topic chat, casual conversation, or non-work related content</li>
+                <li>💡 Use reactions and references to highlight key stats and celebrate progress</li>
+                <li>🎯 Keep messages focused and professional</li>
+              </ul>
+            </div>
+          )}
+
           <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
             Message Board
           </h1>
           <p style={{ color: 'var(--text-secondary)' }}>
-            {messages.length} messages • Connect with your team
+            {messages.length} messages • Share progress and updates
           </p>
         </div>
 
@@ -694,33 +714,28 @@ export default function MessagesPage() {
                 {/* Reactions */}
                 {!editingId && (
                   <div className="px-6 py-3 border-t border-neutral-800 flex flex-wrap gap-2">
-                    {message.reactions.map((reaction) => (
-                      <button
-                        key={reaction.emoji}
-                        onClick={() => handleReaction(message.id, reaction.emoji)}
-                        className="px-2 py-1 rounded-full bg-neutral-800 hover:bg-neutral-700 transition text-xs flex items-center gap-1"
-                      >
-                        {reaction.emoji} {reaction.count}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => handleReaction(message.id, '👍')}
-                      className="px-2 py-1 rounded-full bg-neutral-800 hover:bg-neutral-700 transition text-xs"
-                    >
-                      👍
-                    </button>
-                    <button
-                      onClick={() => handleReaction(message.id, '❤️')}
-                      className="px-2 py-1 rounded-full bg-neutral-800 hover:bg-neutral-700 transition text-xs"
-                    >
-                      ❤️
-                    </button>
-                    <button
-                      onClick={() => handleReaction(message.id, '🎉')}
-                      className="px-2 py-1 rounded-full bg-neutral-800 hover:bg-neutral-700 transition text-xs"
-                    >
-                      🎉
-                    </button>
+                    {(() => {
+                      const reactionMap = new Map<string, number>();
+                      message.reactions.forEach((r: any) => {
+                        reactionMap.set(r.emoji, r.count);
+                      });
+
+                      const defaultEmojis = ['👍', '❤️', '🎉'];
+                      const allEmojis = Array.from(
+                        new Set([...Array.from(reactionMap.keys()), ...defaultEmojis])
+                      );
+
+                      return allEmojis.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReaction(message.id, emoji)}
+                          className="px-3 py-1 rounded-full bg-neutral-800 hover:bg-neutral-700 transition text-xs flex items-center gap-1"
+                        >
+                          {emoji}
+                          {reactionMap.get(emoji) && <span>{reactionMap.get(emoji)}</span>}
+                        </button>
+                      ));
+                    })()}
                   </div>
                 )}
 
