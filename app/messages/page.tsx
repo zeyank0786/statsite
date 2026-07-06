@@ -69,6 +69,20 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+// Get RGBA background color from user color
+function getUserColorBg(userColor: string, opacity: number): string {
+  const colorMap: Record<string, string> = {
+    'var(--accent-cyan)': `rgba(34, 211, 238, ${opacity})`,
+    'var(--accent-pink)': `rgba(236, 72, 153, ${opacity})`,
+    'var(--accent-purple)': `rgba(168, 85, 247, ${opacity})`,
+    'var(--accent-orange)': `rgba(249, 115, 22, ${opacity})`,
+    'var(--accent-green)': `rgba(52, 211, 153, ${opacity})`,
+    'var(--accent-blue)': `rgba(59, 130, 246, ${opacity})`,
+    'var(--accent-red)': `rgba(239, 68, 68, ${opacity})`,
+  };
+  return colorMap[userColor] || `rgba(107, 114, 128, ${opacity})`;
+}
+
 export default function MessagesPage() {
   const { status, data: session } = useSession();
   const router = useRouter();
@@ -162,12 +176,16 @@ export default function MessagesPage() {
       if (res.ok) {
         const data = await res.json();
         console.log('Player data received:', data);
-        // Flatten the stats from categories
+        // Flatten the stats from categories, preserving category info
         const allStats: any[] = [];
         if (data.categories) {
           data.categories.forEach((cat: any) => {
             if (cat.stats) {
-              allStats.push(...cat.stats);
+              allStats.push(...cat.stats.map((stat: any) => ({
+                ...stat,
+                categoryCode: cat.code,
+                categoryLabel: cat.label,
+              })));
             }
           });
         }
@@ -413,7 +431,7 @@ export default function MessagesPage() {
                 Stat Reference
               </p>
               <p className="text-sm font-medium text-white">
-                {playerStats.find((s: any) => s.statId === referencedStatId)?.label || 'Unknown Stat'}
+                {playerStats.find((s: any) => s.id === referencedStatId)?.label || 'Unknown Stat'}
               </p>
               <button
                 onClick={() => {
@@ -492,30 +510,33 @@ export default function MessagesPage() {
                 {selectorStep === 'player' && (
                   <div className="space-y-3">
                     <p className="text-sm font-semibold text-white mb-4">Choose a player:</p>
-                    {players.map((player: any) => (
-                      <button
-                        key={player.id}
-                        onClick={() => {
-                          setSelectedPlayerForStat(player.id);
-                          setSelectedPlayerName(player.username);
-                          loadPlayerStats(player.id);
-                          setSelectorStep('category');
-                        }}
-                        className="w-full px-5 py-3 rounded-lg text-sm transition text-white text-left font-medium border-2 hover:border-opacity-100 border-opacity-50"
-                        style={{
-                          borderColor: 'var(--accent-cyan)',
-                          backgroundColor: 'rgba(34, 211, 238, 0.05)',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'rgba(34, 211, 238, 0.15)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'rgba(34, 211, 238, 0.05)';
-                        }}
-                      >
-                        {player.username}
-                      </button>
-                    ))}
+                    {players.map((player: any) => {
+                      const playerColor = getUserColor(player.id);
+                      return (
+                        <button
+                          key={player.id}
+                          onClick={() => {
+                            setSelectedPlayerForStat(player.id);
+                            setSelectedPlayerName(player.username);
+                            loadPlayerStats(player.id);
+                            setSelectorStep('category');
+                          }}
+                          className="w-full px-5 py-3 rounded-lg text-sm transition text-white text-left font-medium border-2 hover:border-opacity-100 border-opacity-50"
+                          style={{
+                            borderColor: playerColor,
+                            backgroundColor: getUserColorBg(playerColor, 0.05),
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = getUserColorBg(playerColor, 0.15);
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = getUserColorBg(playerColor, 0.05);
+                          }}
+                        >
+                          {player.username}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -568,9 +589,9 @@ export default function MessagesPage() {
                         .filter((s: any) => s.categoryCode === selectedCategory.code)
                         .map((stat: any) => (
                           <button
-                            key={stat.statId}
+                            key={stat.id}
                             onClick={() => {
-                              setReferencedStatId(stat.statId);
+                              setReferencedStatId(stat.id);
                               setReferencedPlayerId(selectedPlayerForStat);
                               setShowStatSelector(false);
                               setSelectorStep('player');
