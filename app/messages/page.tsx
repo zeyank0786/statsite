@@ -89,7 +89,9 @@ export default function MessagesPage() {
   const [players, setPlayers] = useState<any[]>([]);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
   const [selectedPlayerForStat, setSelectedPlayerForStat] = useState<string | null>(null);
-  const [selectorStep, setSelectorStep] = useState<'players' | 'stats'>('players');
+  const [selectorStep, setSelectorStep] = useState<'player' | 'category' | 'stat'>('player');
+  const [selectedCategory, setSelectedCategory] = useState<any | null>(null);
+  const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(null);
   const [dismissGuidelines, setDismissGuidelines] = useState(false);
 
   const currentPlayerId = (session?.user as any)?.playerId;
@@ -373,7 +375,7 @@ export default function MessagesPage() {
 
         {/* Prominent Guidelines Banner */}
         {!dismissGuidelines && (
-          <div className="mb-8 p-5 rounded-xl border-2 bg-gradient-to-r from-neutral-800/50 to-neutral-900/50" style={{ borderColor: 'var(--accent-purple)' }}>
+          <div className="mb-8 p-6 rounded-xl border-2 bg-gradient-to-r from-neutral-800/70 via-neutral-800/50 to-neutral-900/70 card-shadow" style={{ borderColor: 'var(--accent-purple)', boxShadow: '0 0 20px rgba(168, 85, 247, 0.2)' }}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <h3 className="font-bold text-white mb-3 text-lg">📋 Message Board Guidelines</h3>
@@ -394,8 +396,8 @@ export default function MessagesPage() {
           </div>
         )}
 
-        {/* Create Message */}
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 mb-8 card-shadow">
+        {/* Create Message - Enhanced Visual */}
+        <div className="bg-gradient-to-br from-neutral-800/50 to-neutral-900 border-2 rounded-2xl p-8 mb-8 card-shadow" style={{ borderColor: 'var(--accent-cyan)' }}>
           <textarea
             value={messageContent}
             onChange={(e) => setMessageContent(e.target.value)}
@@ -439,84 +441,181 @@ export default function MessagesPage() {
             </button>
           </div>
 
-          {/* Stat Selector Modal - Cleaner Design */}
+          {/* Stat Selector Modal - Three Step Flow */}
           {showStatSelector && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+              <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 border-2 rounded-2xl p-8 max-w-lg w-full max-h-[85vh] overflow-y-auto card-shadow" style={{ borderColor: 'var(--accent-purple)' }}>
+                {/* Header with Close */}
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-white">
-                    {selectorStep === 'players' ? 'Choose Player' : 'Choose Stat'}
-                  </h3>
+                  <h2 className="text-2xl font-bold text-white">Reference Stat</h2>
                   <button
                     onClick={() => {
                       setShowStatSelector(false);
-                      setSelectorStep('players');
+                      setSelectorStep('player');
                       setSelectedPlayerForStat(null);
+                      setSelectedCategory(null);
+                      setSelectedPlayerName(null);
                     }}
-                    className="text-neutral-400 hover:text-white text-2xl leading-none"
+                    className="text-neutral-400 hover:text-white text-3xl leading-none transition"
                   >
                     ✕
                   </button>
                 </div>
 
-                {selectorStep === 'players' ? (
-                  // Player Selection
-                  <div className="space-y-2">
+                {/* Current Selection Path */}
+                <div className="mb-6 pb-4 border-b border-neutral-700">
+                  <div className="flex items-center gap-2 text-sm flex-wrap">
+                    <span className="text-neutral-400">Path:</span>
+                    <span className={selectorStep === 'player' ? 'text-white font-medium' : 'text-neutral-500'}>
+                      {selectedPlayerName || 'Select Player'}
+                    </span>
+                    {selectedPlayerName && (
+                      <>
+                        <span className="text-neutral-600">›</span>
+                        <span className={selectorStep === 'category' ? 'text-white font-medium' : 'text-neutral-500'}>
+                          {selectedCategory?.label || 'Select Category'}
+                        </span>
+                      </>
+                    )}
+                    {selectedCategory && (
+                      <>
+                        <span className="text-neutral-600">›</span>
+                        <span className={selectorStep === 'stat' ? 'text-white font-medium' : 'text-neutral-500'}>
+                          Select Stat
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 1: Player Selection */}
+                {selectorStep === 'player' && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-white mb-4">Choose a player:</p>
                     {players.map((player: any) => (
                       <button
                         key={player.id}
                         onClick={() => {
                           setSelectedPlayerForStat(player.id);
+                          setSelectedPlayerName(player.username);
                           loadPlayerStats(player.id);
-                          setSelectorStep('stats');
+                          setSelectorStep('category');
                         }}
-                        className="w-full px-4 py-3 rounded-lg text-sm text-left transition text-white hover:bg-neutral-800 border border-neutral-700 hover:border-neutral-600"
+                        className="w-full px-5 py-3 rounded-lg text-sm transition text-white text-left font-medium border-2 hover:border-opacity-100 border-opacity-50"
+                        style={{
+                          borderColor: 'var(--accent-cyan)',
+                          backgroundColor: 'rgba(34, 211, 238, 0.05)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(34, 211, 238, 0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(34, 211, 238, 0.05)';
+                        }}
                       >
                         {player.username}
                       </button>
                     ))}
                   </div>
-                ) : (
-                  // Stat Selection with Values
-                  <div className="space-y-2">
+                )}
+
+                {/* Step 2: Category Selection */}
+                {selectorStep === 'category' && selectedPlayerForStat && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-white mb-4">Choose a category:</p>
                     {playerStats.length > 0 ? (
-                      playerStats.map((stat: any) => (
+                      Array.from(
+                        new Map(
+                          playerStats.map((stat: any) => [
+                            stat.categoryCode,
+                            { code: stat.categoryCode, label: stat.categoryLabel },
+                          ])
+                        ).values()
+                      ).map((category: any) => (
                         <button
-                          key={stat.statId}
+                          key={category.code}
                           onClick={() => {
-                            setReferencedStatId(stat.statId);
-                            setReferencedPlayerId(selectedPlayerForStat);
-                            setShowStatSelector(false);
-                            setSelectorStep('players');
-                            setSelectedPlayerForStat(null);
+                            setSelectedCategory(category);
+                            setSelectorStep('stat');
                           }}
-                          className="w-full px-4 py-3 rounded-lg text-sm transition text-white hover:bg-neutral-800 border border-neutral-700 hover:border-neutral-600 flex items-center justify-between"
+                          className="w-full px-5 py-3 rounded-lg text-sm transition text-white text-left font-medium border-2 hover:border-opacity-100 border-opacity-50"
+                          style={{
+                            borderColor: 'var(--accent-purple)',
+                            backgroundColor: 'rgba(168, 85, 247, 0.05)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.05)';
+                          }}
                         >
-                          <div className="text-left">
-                            <div className="font-medium">{stat.label}</div>
-                            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                              {stat.code}
-                            </div>
-                          </div>
-                          <div className="font-bold text-lg" style={{ color: 'var(--accent-cyan)' }}>
-                            {stat.value}
-                          </div>
+                          {category.label}
                         </button>
                       ))
                     ) : (
-                      <div className="text-center py-8">
-                        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          Loading stats...
-                        </p>
-                      </div>
+                      <p className="text-center text-neutral-500">Loading categories...</p>
                     )}
                   </div>
                 )}
 
-                {selectorStep === 'stats' && (
+                {/* Step 3: Stat Selection */}
+                {selectorStep === 'stat' && selectedCategory && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-white mb-4">Choose a stat:</p>
+                    <div className="space-y-2">
+                      {playerStats
+                        .filter((s: any) => s.categoryCode === selectedCategory.code)
+                        .map((stat: any) => (
+                          <button
+                            key={stat.statId}
+                            onClick={() => {
+                              setReferencedStatId(stat.statId);
+                              setReferencedPlayerId(selectedPlayerForStat);
+                              setShowStatSelector(false);
+                              setSelectorStep('player');
+                              setSelectedPlayerForStat(null);
+                              setSelectedCategory(null);
+                              setSelectedPlayerName(null);
+                            }}
+                            className="w-full px-5 py-3 rounded-lg text-sm transition text-white text-left font-medium border-2 hover:border-opacity-100 border-opacity-50 flex items-center justify-between"
+                            style={{
+                              borderColor: 'var(--accent-green)',
+                              backgroundColor: 'rgba(52, 211, 153, 0.05)',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(52, 211, 153, 0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(52, 211, 153, 0.05)';
+                            }}
+                          >
+                            <div>
+                              <div className="font-medium">{stat.label}</div>
+                              <div className="text-xs text-neutral-400">{stat.code}</div>
+                            </div>
+                            <div className="text-2xl font-bold" style={{ color: 'var(--accent-green)' }}>
+                              {stat.value}
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Back Button - Always Available */}
+                {(selectorStep === 'category' || selectorStep === 'stat') && (
                   <button
-                    onClick={() => setSelectorStep('players')}
-                    className="w-full mt-4 px-4 py-2 rounded-lg text-sm font-medium text-neutral-300 hover:text-white border border-neutral-700 transition"
+                    onClick={() => {
+                      if (selectorStep === 'stat') {
+                        setSelectorStep('category');
+                      } else {
+                        setSelectorStep('player');
+                        setSelectedPlayerForStat(null);
+                        setSelectedPlayerName(null);
+                      }
+                    }}
+                    className="w-full mt-6 px-4 py-2 rounded-lg text-sm font-medium text-neutral-300 hover:text-white border border-neutral-700 transition hover:bg-neutral-800"
                   >
                     ← Back
                   </button>
@@ -623,7 +722,7 @@ export default function MessagesPage() {
             getSortedAndFilteredMessages().map((message) => (
               <div
                 key={message.id}
-                className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden card-shadow"
+                className="bg-gradient-to-br from-neutral-800/50 to-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden card-shadow hover:border-neutral-700 transition"
               >
                 {/* Message Header with Avatar */}
                 <div
