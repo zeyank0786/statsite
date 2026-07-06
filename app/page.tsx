@@ -82,17 +82,9 @@ export default function Dashboard() {
         <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple), var(--accent-pink))' }} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center mb-3">
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>
-                {session.user?.playerUsername}
-              </h1>
-              <Link
-                href={`/players/${(session.user as any)?.playerId}`}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition text-neutral-300 hover:text-white border border-neutral-700 hover:border-neutral-600 hover:bg-neutral-800/50"
-              >
-                View My Stats
-              </Link>
-            </div>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>
+              {session.user?.playerUsername}
+            </h1>
             <div className="flex gap-3 items-center">
               <Link
                 href="/players"
@@ -327,6 +319,26 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
+
+                  {/* View Full Profile Button */}
+                  <Link
+                    href={`/players/${(session.user as any)?.playerId}`}
+                    className="mt-8 w-full py-3 px-4 rounded-xl font-semibold text-white transition text-center block border-2"
+                    style={{
+                      backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                      borderColor: 'var(--accent-purple)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.3)';
+                      e.currentTarget.style.borderColor = 'var(--accent-purple)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.2)';
+                      e.currentTarget.style.borderColor = 'var(--accent-purple)';
+                    }}
+                  >
+                    View Full Profile →
+                  </Link>
                 </div>
                 </div>
               </div>

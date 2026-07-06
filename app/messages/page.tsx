@@ -138,18 +138,27 @@ export default function MessagesPage() {
       const res = await fetch('/api/players');
       if (res.ok) {
         const data = await res.json();
-        setPlayers(data.players || []);
+        console.log('Players loaded:', data);
+        const playersList = Array.isArray(data) ? data : (data.players || []);
+        setPlayers(playersList);
+      } else {
+        console.error('Failed to load players, status:', res.status);
+        const errorText = await res.text();
+        console.error('Error response:', errorText);
       }
     } catch (error) {
       console.error('Failed to load players:', error);
+      setPlayers([]);
     }
   };
 
   const loadPlayerStats = async (playerId: string) => {
     try {
+      console.log('Loading stats for player:', playerId);
       const res = await fetch(`/api/players/${playerId}`);
       if (res.ok) {
         const data = await res.json();
+        console.log('Player data received:', data);
         // Flatten the stats from categories
         const allStats: any[] = [];
         if (data.categories) {
@@ -159,7 +168,13 @@ export default function MessagesPage() {
             }
           });
         }
+        console.log('Flattened stats:', allStats);
         setPlayerStats(allStats);
+      } else {
+        console.error('Failed to load player stats, status:', res.status);
+        const errorText = await res.text();
+        console.error('Error response:', errorText);
+        setPlayerStats([]);
       }
     } catch (error) {
       console.error('Failed to load player stats:', error);
