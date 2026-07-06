@@ -425,26 +425,48 @@ export default function MessagesPage() {
           />
 
           {/* Stat Reference Display */}
-          {referencedStatId && referencedPlayerId && (
-            <div className="mb-4 p-3 rounded-lg bg-neutral-800/50 border border-neutral-700">
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                Stat Reference
-              </p>
-              <p className="text-sm font-medium text-white">
-                {playerStats.find((s: any) => s.id === referencedStatId)?.label || 'Unknown Stat'}
-              </p>
-              <button
-                onClick={() => {
-                  setReferencedStatId(null);
-                  setReferencedPlayerId(null);
-                  setSelectedPlayerForStat(null);
-                }}
-                className="text-xs text-neutral-400 hover:text-red-400 transition mt-2"
-              >
-                Remove reference
-              </button>
-            </div>
-          )}
+          {referencedStatId && referencedPlayerId && (() => {
+            const stat = playerStats.find((s: any) => s.id === referencedStatId);
+            const player = players.find((p: any) => p.id === referencedPlayerId);
+            return (
+              <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-neutral-800/60 to-neutral-800/30 border border-neutral-700 border-l-4" style={{ borderLeftColor: 'var(--accent-green)' }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--accent-green)' }}>
+                      📌 STAT REFERENCE
+                    </p>
+                    <div className="space-y-1">
+                      <p className="text-sm text-white font-medium">
+                        {player?.username || 'Unknown Player'}
+                      </p>
+                      <p className="text-sm text-white">
+                        {stat?.label || 'Unknown Stat'}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-xs px-2 py-1 rounded bg-neutral-700 text-neutral-300">
+                          {stat?.code?.toUpperCase() || 'N/A'}
+                        </span>
+                        <span className="text-2xl font-bold" style={{ color: 'var(--accent-green)' }}>
+                          {stat?.value || 0}/10
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setReferencedStatId(null);
+                      setReferencedPlayerId(null);
+                      setSelectedPlayerForStat(null);
+                    }}
+                    className="flex-shrink-0 text-neutral-400 hover:text-red-400 transition font-medium text-sm"
+                    title="Remove reference"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="flex justify-between items-center gap-2 mb-4">
             <button
