@@ -16,6 +16,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const currentPlayerId = (session.user as any)?.playerId;
+
     const messages = await queryAll(
       `SELECT m.id, m.content, m.createdAt, m.updatedAt,
               p.id as authorId, p.username as authorName
@@ -28,7 +30,7 @@ export async function GET(request: Request) {
     const messagesWithData = await Promise.all(
       messages.map(async (message: any) => {
         const replies = await queryAll(
-          `SELECT mr.id, mr.content, mr.createdAt,
+          `SELECT mr.id, mr.content, mr.createdAt, mr.updatedAt,
                   p.id as authorId, p.username as authorName
            FROM MessageReply mr
            JOIN Player p ON mr.authorId = p.id
@@ -52,7 +54,11 @@ export async function GET(request: Request) {
 
         return {
           ...message,
-          replies,
+          isAuthor: message.authorId === currentPlayerId,
+          replies: replies.map((r: any) => ({
+            ...r,
+            isAuthor: r.authorId === currentPlayerId,
+          })),
           reactions,
           mentions,
         };
@@ -120,6 +126,111 @@ export async function POST(request: Request) {
     console.error('Error creating message:', error);
     return NextResponse.json(
       { error: 'Failed to create message', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT to edit a message
+export async function PUT(request: Request) {
+  try {
+    const authOptions = await getAuthOptions();
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { messageId, content } = body;
+    const authorId = (session.user as any)?.playerId;
+
+    if (!messageId || !content?.trim()) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Verify the message exists and user is the author
+    const message = await queryOne(
+      'SELECT authorId FROM Message WHERE id = ?',
+      [messageId]
+    );
+
+    if (!message) {
+      return NextResponse.json({ error: 'Message not found' }, { status: 404 });
+    }
+
+    if (message.authorId !== authorId) {
+      return NextResponse.json(
+        { error: 'You can only edit your own messages' },
+        { status: 403 }
+      );
+    }
+
+    const now = new Date().toISOString();
+    await query(
+      'UPDATE Message SET content = ?, updatedAt = ? WHERE id = ?',
+      [content, now, messageId]
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error editing message:', error);
+    return NextResponse.json(
+      { error: 'Failed to edit message', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE a message
+export async function DELETE(request: Request) {
+  try {
+    const authOptions = await getAuthOptions();
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { messageId } = body;
+    const authorId = (session.user as any)?.playerId;
+
+    if (!messageId) {
+      return NextResponse.json({ error: 'Missing messageId' }, { status: 400 });
+    }
+
+    // Verify the message exists and user is the author
+    const message = await queryOne(
+      'SELECT authorId FROM Message WHERE id = ?',
+      [messageId]
+    );
+
+    if (!message) {
+      return NextResponse.json({ error: 'Message not found' }, { status: 404 });
+    }
+
+    if (message.authorId !== authorId) {
+      return NextResponse.json(
+        { error: 'You can only delete your own messages' },
+        { status: 403 }
+      );
+    }
+
+    // Delete associated reactions, replies, and mentions
+    await query('DELETE FROM MessageReaction WHERE messageId = ?', [messageId]);
+    await query('DELETE FROM MessageReply WHERE messageId = ?', [messageId]);
+    await query('DELETE FROM MessageMention WHERE messageId = ?', [messageId]);
+    await query('DELETE FROM Message WHERE id = ?', [messageId]);
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting message:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete message', details: error.message },
       { status: 500 }
     );
   }
