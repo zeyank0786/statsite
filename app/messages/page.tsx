@@ -89,7 +89,7 @@ export default function MessagesPage() {
   const [players, setPlayers] = useState<any[]>([]);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
   const [selectedPlayerForStat, setSelectedPlayerForStat] = useState<string | null>(null);
-  const [showGuidelines, setShowGuidelines] = useState(false);
+  const [dismissGuidelines, setDismissGuidelines] = useState(false);
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -147,7 +147,7 @@ export default function MessagesPage() {
 
   const loadPlayerStats = async (playerId: string) => {
     try {
-      const res = await fetch(`/api/players/${playerId}/stats`);
+      const res = await fetch(`/api/players/${playerId}`);
       if (res.ok) {
         const data = await res.json();
         // Flatten the stats from categories
@@ -163,6 +163,7 @@ export default function MessagesPage() {
       }
     } catch (error) {
       console.error('Failed to load player stats:', error);
+      setPlayerStats([]);
     }
   };
 
@@ -337,41 +338,45 @@ export default function MessagesPage() {
   return (
     <div className="min-h-screen">
       <main className="max-w-3xl mx-auto px-4 py-12">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <Link
-              href="/"
-              className="px-3 py-2 rounded-lg text-sm font-medium transition text-neutral-400 hover:text-white hover:bg-neutral-800/50"
-            >
-              ← Back to Dashboard
-            </Link>
-            <button
-              onClick={() => setShowGuidelines(!showGuidelines)}
-              className="px-3 py-2 rounded-lg text-sm font-medium transition text-neutral-400 hover:text-white hover:bg-neutral-800/50"
-            >
-              {showGuidelines ? '▼ Guidelines' : '▶ Guidelines'}
-            </button>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
+              Message Board
+            </h1>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              {messages.length} messages • Share progress and updates
+            </p>
           </div>
-
-          {showGuidelines && (
-            <div className="mb-6 p-4 rounded-lg bg-neutral-800/30 border border-neutral-700">
-              <h3 className="font-semibold text-white mb-2">📋 Message Board Guidelines</h3>
-              <ul className="text-sm space-y-2" style={{ color: 'var(--text-secondary)' }}>
-                <li>✅ <span className="text-white font-medium">Do share:</span> Progress updates, milestone achievements, stat improvements, wins, and important learnings</li>
-                <li>❌ <span className="text-white font-medium">Don't share:</span> Off-topic chat, casual conversation, or non-work related content</li>
-                <li>💡 Use reactions and references to highlight key stats and celebrate progress</li>
-                <li>🎯 Keep messages focused and professional</li>
-              </ul>
-            </div>
-          )}
-
-          <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
-            Message Board
-          </h1>
-          <p style={{ color: 'var(--text-secondary)' }}>
-            {messages.length} messages • Share progress and updates
-          </p>
+          <Link
+            href="/"
+            className="px-3 py-2 rounded-lg text-sm font-medium transition text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+          >
+            ← Back
+          </Link>
         </div>
+
+        {/* Prominent Guidelines Banner */}
+        {!dismissGuidelines && (
+          <div className="mb-8 p-5 rounded-xl border-2 bg-gradient-to-r from-neutral-800/50 to-neutral-900/50" style={{ borderColor: 'var(--accent-purple)' }}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <h3 className="font-bold text-white mb-3 text-lg">📋 Message Board Guidelines</h3>
+                <ul className="text-sm space-y-2" style={{ color: 'var(--text-secondary)' }}>
+                  <li>✅ <span className="text-white font-medium">Do share:</span> Progress updates, milestones, stat improvements, wins</li>
+                  <li>❌ <span className="text-white font-medium">Don't share:</span> Off-topic chat, casual conversation</li>
+                  <li>💡 Use reactions and stat references to celebrate achievements</li>
+                </ul>
+              </div>
+              <button
+                onClick={() => setDismissGuidelines(true)}
+                className="flex-shrink-0 text-2xl text-neutral-400 hover:text-white transition pt-1"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Create Message */}
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 mb-8 card-shadow">
@@ -412,33 +417,32 @@ export default function MessagesPage() {
                 loadPlayers();
                 setSelectedPlayerForStat(currentPlayerId);
               }}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition text-white"
-              style={{ backgroundColor: 'var(--accent-purple)' }}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition text-neutral-300 hover:text-white border border-neutral-700 hover:border-neutral-600 hover:bg-neutral-800/50"
             >
-              📊 Reference Stat
+              Reference Stat
             </button>
           </div>
 
           {/* Stat Selector Modal */}
           {showStatSelector && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 max-w-md w-full">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-white">Reference a Stat</h3>
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 max-w-sm w-full">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-white">Reference Stat</h3>
                   <button
                     onClick={() => setShowStatSelector(false)}
-                    className="text-neutral-400 hover:text-white text-xl"
+                    className="text-neutral-400 hover:text-white text-2xl leading-none"
                   >
                     ✕
                   </button>
                 </div>
 
                 {/* Player Selection */}
-                <div className="mb-4">
-                  <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
-                    Select Player
-                  </p>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                <div className="mb-6">
+                  <label className="text-xs uppercase font-semibold mb-3 block" style={{ color: 'var(--text-secondary)' }}>
+                    Player
+                  </label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
                     {players.map((player: any) => (
                       <button
                         key={player.id}
@@ -446,10 +450,10 @@ export default function MessagesPage() {
                           setSelectedPlayerForStat(player.id);
                           loadPlayerStats(player.id);
                         }}
-                        className={`w-full px-3 py-2 rounded text-sm text-left transition ${
+                        className={`w-full px-4 py-2 rounded-lg text-sm text-left transition font-medium ${
                           selectedPlayerForStat === player.id
                             ? 'bg-neutral-700 text-white'
-                            : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                            : 'bg-neutral-800/50 text-neutral-300 hover:bg-neutral-700 border border-neutral-700'
                         }`}
                       >
                         {player.username}
@@ -460,11 +464,11 @@ export default function MessagesPage() {
 
                 {/* Stat Selection */}
                 {selectedPlayerForStat && (
-                  <div className="mb-4">
-                    <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
-                      Select Stat
-                    </p>
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                  <div className="mb-6">
+                    <label className="text-xs uppercase font-semibold mb-3 block" style={{ color: 'var(--text-secondary)' }}>
+                      Stat
+                    </label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
                       {playerStats.length > 0 ? (
                         playerStats.map((stat: any) => (
                           <button
@@ -474,21 +478,24 @@ export default function MessagesPage() {
                               setReferencedPlayerId(selectedPlayerForStat);
                               setShowStatSelector(false);
                             }}
-                            className={`w-full px-3 py-2 rounded text-sm text-left transition ${
+                            className={`w-full px-4 py-2 rounded-lg text-sm text-left transition font-medium ${
                               referencedStatId === stat.statId
                                 ? 'bg-neutral-700 text-white'
-                                : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                                : 'bg-neutral-800/50 text-neutral-300 hover:bg-neutral-700 border border-neutral-700'
                             }`}
                           >
-                            <span className="font-medium">{stat.label}</span>
-                            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                              {' '}
-                              ({stat.code})
-                            </span>
+                            <div className="font-semibold text-white">{stat.label}</div>
+                            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                              {stat.code}
+                            </div>
                           </button>
                         ))
                       ) : (
-                        <p className="text-xs text-neutral-500">Loading stats...</p>
+                        <div className="text-center py-4">
+                          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                            Loading stats...
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -496,10 +503,10 @@ export default function MessagesPage() {
 
                 <button
                   onClick={() => setShowStatSelector(false)}
-                  className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white transition"
+                  className="w-full px-4 py-3 rounded-lg text-sm font-medium text-white transition"
                   style={{ backgroundColor: 'var(--accent-cyan)' }}
                 >
-                  Done
+                  Close
                 </button>
               </div>
             </div>
