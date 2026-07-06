@@ -16,6 +16,12 @@ interface Message {
   replies: Reply[];
   reactions: Reaction[];
   mentions: Mention[];
+  referencedStatId?: string | null;
+  referencedPlayerId?: string | null;
+  statCode?: string;
+  statLabel?: string;
+  statValue?: number | null;
+  referencedPlayerName?: string;
 }
 
 interface Reply {
@@ -77,6 +83,12 @@ export default function MessagesPage() {
   const [editingContent, setEditingContent] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
   const [filterUser, setFilterUser] = useState<string | null>(null);
+  const [referencedStatId, setReferencedStatId] = useState<string | null>(null);
+  const [referencedPlayerId, setReferencedPlayerId] = useState<string | null>(null);
+  const [showStatSelector, setShowStatSelector] = useState(false);
+  const [players, setPlayers] = useState<any[]>([]);
+  const [playerStats, setPlayerStats] = useState<any[]>([]);
+  const [selectedPlayerForStat, setSelectedPlayerForStat] = useState<string | null>(null);
 
   const currentPlayerId = (session?.user as any)?.playerId;
 
@@ -120,6 +132,39 @@ export default function MessagesPage() {
     }
   };
 
+  const loadPlayers = async () => {
+    try {
+      const res = await fetch('/api/players');
+      if (res.ok) {
+        const data = await res.json();
+        setPlayers(data.players || []);
+      }
+    } catch (error) {
+      console.error('Failed to load players:', error);
+    }
+  };
+
+  const loadPlayerStats = async (playerId: string) => {
+    try {
+      const res = await fetch(`/api/players/${playerId}/stats`);
+      if (res.ok) {
+        const data = await res.json();
+        // Flatten the stats from categories
+        const allStats: any[] = [];
+        if (data.categories) {
+          data.categories.forEach((cat: any) => {
+            if (cat.stats) {
+              allStats.push(...cat.stats);
+            }
+          });
+        }
+        setPlayerStats(allStats);
+      }
+    } catch (error) {
+      console.error('Failed to load player stats:', error);
+    }
+  };
+
   const handlePostMessage = async () => {
     if (!messageContent.trim()) {
       alert('Message cannot be empty');
@@ -131,11 +176,19 @@ export default function MessagesPage() {
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: messageContent, mentions: [] }),
+        body: JSON.stringify({
+          content: messageContent,
+          mentions: [],
+          referencedStatId,
+          referencedPlayerId,
+        }),
       });
 
       if (res.ok) {
         setMessageContent('');
+        setReferencedStatId(null);
+        setReferencedPlayerId(null);
+        setSelectedPlayerForStat(null);
         await loadMessages();
       } else {
         const error = await res.json();
@@ -284,6 +337,14 @@ export default function MessagesPage() {
     <div className="min-h-screen">
       <main className="max-w-3xl mx-auto px-4 py-12">
         <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <Link
+              href="/"
+              className="px-3 py-2 rounded-lg text-sm font-medium transition text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+            >
+              ← Back to Dashboard
+            </Link>
+          </div>
           <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
             Message Board
           </h1>
@@ -297,10 +358,133 @@ export default function MessagesPage() {
           <textarea
             value={messageContent}
             onChange={(e) => setMessageContent(e.target.value)}
-            placeholder="Share an update, celebrate a win, or ask for feedback... Use #STAT_CODE to reference stats"
+            placeholder="Share an update, celebrate a win, or ask for feedback..."
             className="w-full px-4 py-3 rounded-lg bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 resize-none focus:outline-none focus:border-neutral-600 mb-4"
             rows={4}
           />
+
+          {/* Stat Reference Display */}
+          {referencedStatId && referencedPlayerId && (
+            <div className="mb-4 p-3 rounded-lg bg-neutral-800/50 border border-neutral-700">
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Stat Reference
+              </p>
+              <p className="text-sm font-medium text-white">
+                {playerStats.find((s: any) => s.statId === referencedStatId)?.label || 'Unknown Stat'}
+              </p>
+              <button
+                onClick={() => {
+                  setReferencedStatId(null);
+                  setReferencedPlayerId(null);
+                  setSelectedPlayerForStat(null);
+                }}
+                className="text-xs text-neutral-400 hover:text-red-400 transition mt-2"
+              >
+                Remove reference
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center gap-2 mb-4">
+            <button
+              onClick={() => {
+                setShowStatSelector(true);
+                loadPlayers();
+                setSelectedPlayerForStat(currentPlayerId);
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition text-white"
+              style={{ backgroundColor: 'var(--accent-purple)' }}
+            >
+              📊 Reference Stat
+            </button>
+          </div>
+
+          {/* Stat Selector Modal */}
+          {showStatSelector && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 max-w-md w-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-white">Reference a Stat</h3>
+                  <button
+                    onClick={() => setShowStatSelector(false)}
+                    className="text-neutral-400 hover:text-white text-xl"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Player Selection */}
+                <div className="mb-4">
+                  <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    Select Player
+                  </p>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {players.map((player: any) => (
+                      <button
+                        key={player.id}
+                        onClick={() => {
+                          setSelectedPlayerForStat(player.id);
+                          loadPlayerStats(player.id);
+                        }}
+                        className={`w-full px-3 py-2 rounded text-sm text-left transition ${
+                          selectedPlayerForStat === player.id
+                            ? 'bg-neutral-700 text-white'
+                            : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                        }`}
+                      >
+                        {player.username}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stat Selection */}
+                {selectedPlayerForStat && (
+                  <div className="mb-4">
+                    <p className="text-xs uppercase font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                      Select Stat
+                    </p>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {playerStats.length > 0 ? (
+                        playerStats.map((stat: any) => (
+                          <button
+                            key={stat.statId}
+                            onClick={() => {
+                              setReferencedStatId(stat.statId);
+                              setReferencedPlayerId(selectedPlayerForStat);
+                              setShowStatSelector(false);
+                            }}
+                            className={`w-full px-3 py-2 rounded text-sm text-left transition ${
+                              referencedStatId === stat.statId
+                                ? 'bg-neutral-700 text-white'
+                                : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                            }`}
+                          >
+                            <span className="font-medium">{stat.label}</span>
+                            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                              {' '}
+                              ({stat.code})
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-xs text-neutral-500">Loading stats...</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowStatSelector(false)}
+                  className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white transition"
+                  style={{ backgroundColor: 'var(--accent-cyan)' }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
             <button
               onClick={() => setMessageContent('')}
@@ -486,9 +670,24 @@ export default function MessagesPage() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-neutral-300 whitespace-pre-wrap break-words">
-                      {message.content}
-                    </p>
+                    <>
+                      <p className="text-neutral-300 whitespace-pre-wrap break-words">
+                        {message.content}
+                      </p>
+
+                      {/* Referenced Stat Display */}
+                      {message.referencedStatId && message.statCode && message.statValue !== null && (
+                        <div className="mt-4 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700">
+                          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                            📊 Stat Reference - {message.referencedPlayerName}
+                          </p>
+                          <p className="text-sm font-medium text-white mt-1">{message.statLabel}</p>
+                          <p className="text-2xl font-bold mt-2" style={{ color: 'var(--accent-cyan)' }}>
+                            {message.statValue}/10
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 

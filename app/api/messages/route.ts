@@ -19,10 +19,16 @@ export async function GET(request: Request) {
     const currentPlayerId = (session.user as any)?.playerId;
 
     const messages = await queryAll(
-      `SELECT m.id, m.content, m.createdAt, m.updatedAt,
-              p.id as authorId, p.username as authorName
+      `SELECT m.id, m.content, m.createdAt, m.updatedAt, m.referencedStatId, m.referencedPlayerId,
+              p.id as authorId, p.username as authorName,
+              s.code as statCode, s.label as statLabel,
+              sv.value as statValue,
+              rp.username as referencedPlayerName
        FROM Message m
        JOIN Player p ON m.authorId = p.id
+       LEFT JOIN Stat s ON m.referencedStatId = s.id
+       LEFT JOIN StatValue sv ON m.referencedStatId = sv.statId AND m.referencedPlayerId = sv.playerId
+       LEFT JOIN Player rp ON m.referencedPlayerId = rp.id
        ORDER BY m.createdAt DESC`
     );
 
@@ -86,7 +92,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { content, mentions } = body;
+    const { content, mentions, referencedStatId, referencedPlayerId } = body;
     const authorId = (session.user as any)?.playerId;
 
     if (!authorId || !content?.trim()) {
@@ -99,11 +105,11 @@ export async function POST(request: Request) {
     const messageId = uuid();
     const now = new Date().toISOString();
 
-    // Create message
+    // Create message with optional stat reference
     await query(
-      `INSERT INTO Message (id, content, authorId, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?)`,
-      [messageId, content, authorId, now, now]
+      `INSERT INTO Message (id, content, authorId, referencedStatId, referencedPlayerId, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [messageId, content, authorId, referencedStatId || null, referencedPlayerId || null, now, now]
     );
 
     // Add mentions if provided
