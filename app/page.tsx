@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState({ strengths: false, develop: false });
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -25,6 +26,10 @@ export default function Dashboard() {
 
     if (status === 'authenticated') {
       loadPlayerStats();
+      loadUnreadCount();
+      // Poll for unread count every 10 seconds
+      const interval = setInterval(loadUnreadCount, 10000);
+      return () => clearInterval(interval);
     }
   }, [status, router]);
 
@@ -43,6 +48,18 @@ export default function Dashboard() {
       console.error('Failed to load player stats:', error);
     } finally {
       setStatsLoading(false);
+    }
+  };
+
+  const loadUnreadCount = async () => {
+    try {
+      const res = await fetch('/api/messages/unread');
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(data.unreadCount);
+      }
+    } catch (error) {
+      console.error('Failed to load unread count:', error);
     }
   };
 
@@ -95,9 +112,14 @@ export default function Dashboard() {
               </Link>
               <Link
                 href="/messages"
-                className="px-3 py-2 text-sm font-medium transition rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+                className="px-3 py-2 text-sm font-medium transition rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800/50 relative"
               >
                 💬 Messages
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </Link>
               <div className="w-px h-6" style={{ backgroundColor: 'var(--neutral-700)' }} />
               <Link

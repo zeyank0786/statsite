@@ -94,6 +94,18 @@ export default function MessagesPage() {
     }
   }, [status, router]);
 
+  // Mark all messages as read when page loads or messages change
+  useEffect(() => {
+    if (messages.length > 0 && currentPlayerId) {
+      const messageIds = messages.map((m) => m.id);
+      fetch('/api/messages/unread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageIds }),
+      }).catch((error) => console.error('Failed to mark messages as read:', error));
+    }
+  }, [messages.length, currentPlayerId]);
+
   const loadMessages = async () => {
     try {
       const res = await fetch('/api/messages');
