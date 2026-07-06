@@ -4,6 +4,9 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import AppShell from '@/components/AppShell';
+import PageHeader from '@/components/PageHeader';
+import { ChevronLeftIcon, MinusIcon, PlusIcon, CheckIcon } from '@/components/icons';
 
 interface Player {
   id: string;
@@ -35,7 +38,6 @@ export default function NewSuggestionPage() {
       router.push('/auth/signin');
       return;
     }
-
     if (status === 'authenticated') {
       loadPlayers();
     }
@@ -45,7 +47,7 @@ export default function NewSuggestionPage() {
     try {
       const res = await fetch('/api/players');
       const result = await res.json();
-      setPlayers(result);
+      setPlayers(Array.isArray(result) ? result : []);
     } catch (error) {
       console.error('Failed to load players:', error);
     }
@@ -73,11 +75,8 @@ export default function NewSuggestionPage() {
     const playerId = e.target.value;
     setSelectedPlayer(playerId);
     setSelectedStat('');
-    if (playerId) {
-      loadStats(playerId);
-    } else {
-      setStats([]);
-    }
+    if (playerId) loadStats(playerId);
+    else setStats([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,27 +90,22 @@ export default function NewSuggestionPage() {
     }
 
     setLoading(true);
-
     try {
-      const stat = stats.find(s => s.code === selectedStat);
+      const stat = stats.find((s) => s.code === selectedStat);
       if (!stat) {
         setError('Stat not found');
         return;
       }
 
-      // Get current value
       const playerRes = await fetch(`/api/players/${selectedPlayer}`);
       const playerData = await playerRes.json();
       let currentValue = 5;
       playerData.categories.forEach((cat: any) => {
         const foundStat = cat.stats.find((s: any) => s.code === selectedStat);
-        if (foundStat) {
-          currentValue = foundStat.value;
-        }
+        if (foundStat) currentValue = foundStat.value;
       });
 
       const suggestedValue = change === 'increase' ? currentValue + amount : currentValue - amount;
-
       if (suggestedValue < 0 || suggestedValue > 10) {
         setError('Suggested value must be between 0 and 10');
         return;
@@ -124,8 +118,8 @@ export default function NewSuggestionPage() {
           playerId: selectedPlayer,
           statCode: selectedStat,
           suggestedNewValue: suggestedValue,
-          reason: reason.trim()
-        })
+          reason: reason.trim(),
+        }),
       });
 
       if (res.ok) {
@@ -134,9 +128,7 @@ export default function NewSuggestionPage() {
         setSelectedStat('');
         setReason('');
         setAmount(1);
-        setTimeout(() => {
-          router.push('/suggestions');
-        }, 2000);
+        setTimeout(() => router.push('/suggestions'), 2000);
       } else {
         const data = await res.json();
         setError(data.error || 'Failed to create suggestion');
@@ -149,174 +141,149 @@ export default function NewSuggestionPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      {/* Header with gradient accent */}
-      <header className="border-b border-neutral-800 bg-black/50 backdrop-blur sticky top-0 z-40">
-        <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, var(--accent-purple), var(--accent-pink))' }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Link href="/suggestions" className="text-sm font-medium mb-4 block" style={{ color: 'var(--accent-cyan)' }}>
-            ← Back to Suggestions
-          </Link>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-4xl font-bold" style={{ color: 'var(--foreground)' }}>💡 New Suggestion</h1>
-            <span className="px-3 py-1 rounded-full text-xs font-bold uppercase bg-orange-900/30 border border-orange-800" style={{ color: 'var(--accent-orange)' }}>
-              WIP
-            </span>
+    <AppShell width="narrow">
+      <Link
+        href="/suggestions"
+        className="inline-flex items-center gap-1 text-sm font-medium mb-5 hover:underline"
+        style={{ color: 'var(--accent-cyan)' }}
+      >
+        <ChevronLeftIcon size={15} />
+        All suggestions
+      </Link>
+
+      <PageHeader
+        title="New Suggestion"
+        subtitle="Propose a stat change for a teammate — the crew decides."
+        eyebrow="Crew Votes"
+        eyebrowColor="var(--accent-purple)"
+      />
+
+      <div className="glass card-shadow p-6 md:p-8 animate-rise">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-semibold text-white mb-2">Player</label>
+            <select value={selectedPlayer} onChange={handlePlayerChange} className="field" required>
+              <option value="">Choose a player...</option>
+              {players.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.username}
+                </option>
+              ))}
+            </select>
           </div>
-          <p style={{ color: 'var(--text-secondary)' }}>Propose a stat change for a teammate</p>
-        </div>
-      </header>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 card-shadow">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-semibold text-white mb-3">
-                Select Player
-              </label>
-              <select
-                value={selectedPlayer}
-                onChange={handlePlayerChange}
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 hover:border-neutral-600 rounded-xl text-white focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600 transition"
-                required
-              >
-                <option value="">Choose a player...</option>
-                {players.map(p => (
-                  <option key={p.id} value={p.id}>{p.username}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-semibold text-white mb-2">Stat</label>
+            <select
+              value={selectedStat}
+              onChange={(e) => setSelectedStat(e.target.value)}
+              className="field"
+              required
+              disabled={!selectedPlayer}
+            >
+              <option value="">Choose a stat...</option>
+              {stats.map((s) => (
+                <option key={s.id} value={s.code}>
+                  {s.label} ({s.code})
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-white mb-3">
-                Select Stat
-              </label>
-              <select
-                value={selectedStat}
-                onChange={(e) => setSelectedStat(e.target.value)}
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 hover:border-neutral-600 rounded-xl text-white focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600 transition"
-                required
-                disabled={!selectedPlayer}
-              >
-                <option value="">Choose a stat...</option>
-                {stats.map(s => (
-                  <option key={s.id} value={s.code}>{s.label} ({s.code})</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-white mb-3">
-                Proposed Change
-              </label>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setChange('decrease')}
-                  className="px-6 py-3 text-white rounded-xl font-semibold transition flex-1"
-                  style={{
-                    backgroundColor: change === 'decrease' ? 'var(--accent-red)' : 'var(--accent-red)',
-                    opacity: change === 'decrease' ? 1 : 0.5
-                  }}
-                >
-                  − Decrease
-                </button>
-                <select
-                  value={amount}
-                  onChange={(e) => setAmount(Number(e.target.value))}
-                  className="flex-1 px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white focus:outline-none focus:border-neutral-600 transition"
-                >
-                  <option value={1}>By 1</option>
-                  <option value={2}>By 2</option>
-                  <option value={3}>By 3</option>
-                  <option value={4}>By 4</option>
-                  <option value={5}>By 5</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setChange('increase')}
-                  className="px-6 py-3 text-white rounded-xl font-semibold transition flex-1"
-                  style={{
-                    backgroundColor: change === 'increase' ? 'var(--accent-green)' : 'var(--accent-green)',
-                    opacity: change === 'increase' ? 1 : 0.5
-                  }}
-                >
-                  + Increase
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-white mb-3">
-                Reason (required)
-              </label>
-              <textarea
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 hover:border-neutral-600 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600 resize-none transition"
-                rows={4}
-                placeholder="Why do you think this change is warranted?"
-                required
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-900/30 border border-red-800 text-red-400 px-4 py-3 rounded-xl text-sm">
-                {error}
-              </div>
-            )}
-
-            {success && (
-              <div className="bg-green-900/30 border border-green-800 text-green-400 px-4 py-3 rounded-xl text-sm">
-                ✓ Suggestion created successfully! Redirecting...
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-4">
+          <div>
+            <label className="block text-sm font-semibold text-white mb-2">Proposed change</label>
+            <div className="flex gap-2.5">
               <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 text-white font-semibold py-3 px-6 rounded-xl transition disabled:opacity-50"
-                style={{ backgroundColor: 'var(--accent-purple)' }}
+                type="button"
+                onClick={() => setChange('decrease')}
+                className={`flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-1.5 border ${
+                  change === 'decrease'
+                    ? 'text-red-300 border-red-500/60 bg-red-500/20'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                style={change !== 'decrease' ? { borderColor: 'var(--surface-border)' } : {}}
               >
-                {loading ? 'Submitting...' : 'Submit Suggestion'}
+                <MinusIcon size={16} /> Decrease
               </button>
-              <Link
-                href="/suggestions"
-                className="px-6 py-3 bg-neutral-800 border border-neutral-700 hover:border-neutral-600 text-white font-semibold rounded-xl transition"
+              <select
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                className="field flex-1 text-center"
               >
-                Cancel
-              </Link>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    By {n}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setChange('increase')}
+                className={`flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-1.5 border ${
+                  change === 'increase'
+                    ? 'text-emerald-300 border-emerald-500/60 bg-emerald-500/20'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                style={change !== 'increase' ? { borderColor: 'var(--surface-border)' } : {}}
+              >
+                <PlusIcon size={16} /> Increase
+              </button>
             </div>
-          </form>
-
-          <div className="mt-8 pt-8 border-t border-neutral-700">
-            <h3 className="text-sm font-semibold text-white mb-4">📝 How Suggestions Work</h3>
-            <ul className="space-y-3 text-sm">
-              <li className="flex items-start gap-3">
-                <span style={{ color: 'var(--accent-cyan)' }} className="font-bold flex-shrink-0">✓</span>
-                <span style={{ color: 'var(--text-secondary)' }}>Submit a suggestion with a reason</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span style={{ color: 'var(--accent-cyan)' }} className="font-bold flex-shrink-0">✓</span>
-                <span style={{ color: 'var(--text-secondary)' }}>Minimum 3 valid votes required to pass</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span style={{ color: 'var(--accent-cyan)' }} className="font-bold flex-shrink-0">✓</span>
-                <span style={{ color: 'var(--text-secondary)' }}>Vote period: 30 seconds</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span style={{ color: 'var(--accent-cyan)' }} className="font-bold flex-shrink-0">✓</span>
-                <span style={{ color: 'var(--text-secondary)' }}>Excluded voters: target player, suggester</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span style={{ color: 'var(--accent-cyan)' }} className="font-bold flex-shrink-0">✓</span>
-                <span style={{ color: 'var(--text-secondary)' }}>More yes votes than no votes = approved</span>
-              </li>
-            </ul>
           </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-white mb-2">Reason (required)</label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="field resize-none"
+              rows={4}
+              placeholder="Why is this change warranted? Bring receipts."
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/40 bg-red-500/10">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-xl px-4 py-3 text-sm text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 flex items-center gap-2">
+              <CheckIcon size={15} /> Suggestion created! Redirecting...
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={loading} className="btn-gradient flex-1">
+              {loading ? 'Submitting...' : 'Submit suggestion'}
+            </button>
+            <Link href="/suggestions" className="btn-ghost">
+              Cancel
+            </Link>
+          </div>
+        </form>
+
+        <div className="mt-8 pt-6 border-t" style={{ borderColor: 'var(--surface-border)' }}>
+          <h3 className="text-sm font-semibold text-white mb-3">How it works</h3>
+          <ul className="space-y-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {[
+              'Submit a suggestion with a reason',
+              'Minimum 3 valid votes required to pass',
+              'Vote period: 30 seconds',
+              'The target player and the suggester cannot vote',
+              'More yes than no votes = approved',
+            ].map((line) => (
+              <li key={line} className="flex items-start gap-2.5">
+                <span style={{ color: 'var(--accent-cyan)' }} className="mt-0.5 shrink-0">
+                  <CheckIcon size={14} />
+                </span>
+                {line}
+              </li>
+            ))}
+          </ul>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

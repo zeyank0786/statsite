@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -13,9 +13,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "Stats Dashboard",
-  description: "Personal stats tracking and quarterly review system",
+  title: "4WARD — Four friends. One direction.",
+  description:
+    "4WARD is the shared development tracker for Zeyan, Ryan, Qam and B — 70 stats, 7 categories, one direction: forward.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0f",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -26,9 +38,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-50">
+      <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
       </body>
     </html>

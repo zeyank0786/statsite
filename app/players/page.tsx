@@ -4,24 +4,36 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import AppShell from '@/components/AppShell';
+import PageHeader from '@/components/PageHeader';
+import Avatar from '@/components/Avatar';
+import { getUserColorHex } from '@/lib/userColors';
+import { getCategoryMeta } from '@/lib/categories';
+import { CompareIcon, ChevronRightIcon, AwardIcon } from '@/components/icons';
 
-interface Player {
+interface LeaderboardPlayer {
   id: string;
   username: string;
+  overall: number;
+  categories: { code: string; label: string; avg: number }[];
+  net90: number;
+  achievementsEarned: number;
+  bestStat: { label: string; value: number; categoryCode: string } | null;
 }
 
 export default function PlayersPage() {
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const router = useRouter();
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const currentPlayerId = (session?.user as any)?.playerId;
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
       return;
     }
-
     if (status === 'authenticated') {
       loadPlayers();
     }
@@ -29,9 +41,14 @@ export default function PlayersPage() {
 
   const loadPlayers = async () => {
     try {
-      const res = await fetch('/api/players');
-      const result = await res.json();
-      setPlayers(result);
+      const res = await fetch('/api/leaderboards');
+      if (res.ok) {
+        const data = await res.json();
+        // Alphabetical here — the leaderboard page is where ranking lives
+        setPlayers(
+          [...(data.players || [])].sort((a, b) => a.username.localeCompare(b.username))
+        );
+      }
     } catch (error) {
       console.error('Failed to load players:', error);
     } finally {
@@ -41,66 +58,123 @@ export default function PlayersPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
-      </div>
+      <AppShell>
+        <PageHeader title="Players" subtitle="The crew" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="glass h-64 animate-pulse" />
+          ))}
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header with gradient accent */}
-      <header className="border-b border-neutral-800 bg-black/50 backdrop-blur sticky top-0 z-40">
-        <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple), var(--accent-pink), var(--accent-green))' }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Link href="/" className="text-sm font-medium mb-4 block" style={{ color: 'var(--accent-cyan)' }}>
-            ← Back to Dashboard
+    <AppShell>
+      <PageHeader
+        title="Players"
+        subtitle="Four friends, seventy stats each. Tap a card for the full breakdown."
+        actions={
+          <Link href="/compare" className="btn-ghost text-sm">
+            <CompareIcon size={16} />
+            Compare
           </Link>
-          <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>Player Profiles</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>View and compare teammates</p>
+        }
+      />
+
+      {players.length === 0 ? (
+        <div className="glass card-shadow text-center py-20">
+          <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>
+            No players found. Seed the database to get started.
+          </p>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {players.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">👥</div>
-            <p style={{ color: 'var(--text-secondary)' }} className="text-lg">No players found. Seed the database to get started.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {players.map((player, idx) => {
-              const colors = [
-                { accent: 'var(--accent-cyan)' },
-                { accent: 'var(--accent-purple)' },
-                { accent: 'var(--accent-pink)' },
-                { accent: 'var(--accent-green)' }
-              ];
-              const color = colors[idx % 4];
-
-              return (
-                <Link key={player.id} href={`/players/${player.id}`}>
-                  <div className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-2xl p-6 transition cursor-pointer group card-shadow overflow-hidden relative">
-                    <div className="absolute -top-16 -right-16 w-32 h-32 rounded-full opacity-10 group-hover:opacity-20 transition" style={{ backgroundColor: color.accent }} />
-                    <div className="relative z-10">
-                      <div
-                        className="w-3 h-3 rounded-full mb-4"
-                        style={{ backgroundColor: color.accent }}
-                      />
-                      <h2 className="text-2xl font-bold mb-2 text-white">
-                        {player.username}
-                      </h2>
-                      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        View detailed stats
-                      </p>
-                    </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {players.map((player, idx) => {
+            const hex = getUserColorHex(player.id);
+            const isYou = player.id === currentPlayerId;
+            return (
+              <Link
+                key={player.id}
+                href={`/players/${player.id}`}
+                className={`glass glass-hover card-shadow p-6 relative overflow-hidden group animate-rise animate-rise-${Math.min(idx + 1, 4)}`}
+              >
+                <div
+                  className="absolute -top-20 -right-20 w-48 h-48 rounded-full opacity-15 blur-2xl transition group-hover:opacity-30 pointer-events-none"
+                  style={{ backgroundColor: hex }}
+                />
+                <div className="relative z-10">
+                  <div className="flex items-start justify-between mb-4">
+                    <Avatar id={player.id} name={player.username} size={52} ring />
+                    {isYou && (
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"
+                        style={{ background: `${hex}22`, color: hex }}
+                      >
+                        You
+                      </span>
+                    )}
                   </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </main>
-    </div>
+
+                  <h2 className="font-display text-xl font-bold text-white mb-1">
+                    {player.username}
+                  </h2>
+                  <div className="flex items-baseline gap-1.5 mb-4">
+                    <span className="font-display text-3xl font-bold" style={{ color: hex }}>
+                      {player.overall.toFixed(1)}
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      overall
+                    </span>
+                    {player.net90 !== 0 && (
+                      <span
+                        className="text-xs font-bold ml-auto"
+                        style={{
+                          color: player.net90 > 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                        }}
+                      >
+                        {player.net90 > 0 ? '+' : ''}
+                        {player.net90}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Mini category bars in canonical order */}
+                  <div className="flex items-end gap-1 h-9 mb-4">
+                    {player.categories.map((cat) => {
+                      const meta = getCategoryMeta(cat.code);
+                      return (
+                        <div
+                          key={cat.code}
+                          className="flex-1 rounded-sm transition-all group-hover:opacity-100 opacity-80"
+                          style={{
+                            height: `${Math.max(8, (cat.avg / 10) * 100)}%`,
+                            backgroundColor: meta.hex,
+                          }}
+                          title={`${meta.label}: ${cat.avg.toFixed(1)}`}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                      <AwardIcon size={13} />
+                      {player.achievementsEarned} badges
+                    </span>
+                    <span
+                      className="flex items-center gap-0.5 font-semibold transition group-hover:translate-x-0.5"
+                      style={{ color: hex }}
+                    >
+                      Profile <ChevronRightIcon size={13} />
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </AppShell>
   );
 }

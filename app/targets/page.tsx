@@ -3,9 +3,14 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import AppShell from '@/components/AppShell';
+import PageHeader from '@/components/PageHeader';
+import Avatar from '@/components/Avatar';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 import StatDescriptionModal from '@/components/StatDescriptionModal';
+import { getCategoryMeta } from '@/lib/categories';
+import { getUserColorHex } from '@/lib/userColors';
+import { SearchIcon, XIcon, CheckIcon, TargetIcon } from '@/components/icons';
 
 interface Target {
   id: string;
@@ -13,13 +18,6 @@ interface Target {
   statCode: string;
   statLabel: string;
   username: string;
-}
-
-interface PlayerStat {
-  id: string;
-  code: string;
-  label: string;
-  value: number;
 }
 
 interface Stat {
@@ -109,6 +107,7 @@ export default function TargetsPage() {
   const [allPlayersStats, setAllPlayersStats] = useState<Record<string, Record<string, number>>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [hideMaxed, setHideMaxed] = useState(true);
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
@@ -122,7 +121,6 @@ export default function TargetsPage() {
       router.push('/auth/signin');
       return;
     }
-
     if (status === 'authenticated' && currentPlayerId) {
       loadTargets();
     }
@@ -132,44 +130,29 @@ export default function TargetsPage() {
     try {
       const targetsRes = await fetch('/api/targets');
       let data: Target[] = [];
-
       if (targetsRes.ok) {
         data = await targetsRes.json();
         setAllTargets(data);
-
-        // Get user's own targets
         const userTargets = data.filter((t: Target) => t.playerId === currentPlayerId);
-        const selected = userTargets.map((t: Target) => ({
-          code: t.statCode,
-          label: t.statLabel,
-        }));
-        setSelectedTargets(selected);
+        setSelectedTargets(userTargets.map((t: Target) => ({ code: t.statCode, label: t.statLabel })));
       }
 
-      // Fetch current user's stats
       const statsRes = await fetch(`/api/players/${currentPlayerId}`);
       if (statsRes.ok) {
         const statsData = await statsRes.json();
-        console.log('API response for current user:', statsData);
         const statsMap: Record<string, number> = {};
-        if (statsData.categories) {
-          statsData.categories.forEach((category: any) => {
-            if (category.stats) {
-              category.stats.forEach((stat: any) => {
-                statsMap[stat.code] = stat.value;
-              });
-            }
+        statsData.categories?.forEach((category: any) => {
+          category.stats?.forEach((stat: any) => {
+            statsMap[stat.code] = stat.value;
           });
-        }
+        });
         setPlayerStats(statsMap);
-      } else {
-        console.error('Failed to fetch current user stats:', statsRes.status);
       }
 
-      // Fetch stats for all other players with targets
-      const otherPlayerIds = [...new Set(data.filter((t) => t.playerId !== currentPlayerId).map((t) => t.playerId))];
+      const otherPlayerIds = [
+        ...new Set(data.filter((t) => t.playerId !== currentPlayerId).map((t) => t.playerId)),
+      ];
       const allPlayersStatsMap: Record<string, Record<string, number>> = {};
-
       await Promise.all(
         otherPlayerIds.map(async (playerId) => {
           try {
@@ -189,7 +172,6 @@ export default function TargetsPage() {
           }
         })
       );
-
       setAllPlayersStats(allPlayersStatsMap);
     } catch (error) {
       console.error('Failed to load targets:', error);
@@ -199,6 +181,7 @@ export default function TargetsPage() {
   };
 
   const handleSelectTarget = (stat: Stat) => {
+    setSaved(false);
     if (selectedTargets.find((t) => t.code === stat.code)) {
       setSelectedTargets(selectedTargets.filter((t) => t.code !== stat.code));
     } else if (selectedTargets.length < 3) {
@@ -214,8 +197,8 @@ export default function TargetsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targets: selectedTargets }),
       });
-
       if (res.ok) {
+        setSaved(true);
         await loadTargets();
       }
     } catch (error) {
@@ -225,24 +208,10 @@ export default function TargetsPage() {
     }
   };
 
-  const getValueColor = (value: number): string => {
-    if (value >= 8) return 'text-green-400';
+  const getValueColorClass = (value: number) => {
+    if (value >= 8) return 'text-emerald-400';
     if (value >= 4) return 'text-orange-400';
     return 'text-red-400';
-  };
-
-  const getSortedStats = (stats: typeof ALL_STATS) => {
-    const sorted = [...stats];
-    switch (sortBy) {
-      case 'name':
-        const nameSorted = sorted.sort((a, b) => a.code.localeCompare(b.code));
-        return sortAscending ? nameSorted : nameSorted.reverse();
-      case 'total':
-        return sorted.sort((a, b) => (playerStats[b.code] ?? 0) - (playerStats[a.code] ?? 0));
-      case 'default':
-      default:
-        return sorted.sort((a, b) => a.code.localeCompare(b.code));
-    }
   };
 
   const getColorCategory = (value: number): 'green' | 'yellow' | 'red' => {
@@ -251,22 +220,28 @@ export default function TargetsPage() {
     return 'red';
   };
 
+  const getSortedStats = (stats: typeof ALL_STATS) => {
+    const sorted = [...stats];
+    switch (sortBy) {
+      case 'name': {
+        const nameSorted = sorted.sort((a, b) => a.code.localeCompare(b.code));
+        return sortAscending ? nameSorted : nameSorted.reverse();
+      }
+      case 'total':
+        return sorted.sort((a, b) => (playerStats[b.code] ?? 0) - (playerStats[a.code] ?? 0));
+      default:
+        return sorted.sort((a, b) => a.code.localeCompare(b.code));
+    }
+  };
+
   const filteredStats = ALL_STATS.filter((stat) => {
-    const matchesSearch = stat.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch =
+      stat.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
       stat.code.toLowerCase().includes(searchQuery.toLowerCase());
-
     if (!matchesSearch) return false;
-
-    if (hideMaxed) {
-      const currentValue = playerStats[stat.code] ?? 0;
-      if (currentValue >= 10) return false;
-    }
-
-    if (colorFilter !== 'all') {
-      const currentValue = playerStats[stat.code] ?? 0;
-      if (getColorCategory(currentValue) !== colorFilter) return false;
-    }
-
+    const currentValue = playerStats[stat.code] ?? 0;
+    if (hideMaxed && currentValue >= 10) return false;
+    if (colorFilter !== 'all' && getColorCategory(currentValue) !== colorFilter) return false;
     return true;
   });
 
@@ -278,295 +253,296 @@ export default function TargetsPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
-      </div>
+      <AppShell>
+        <PageHeader title="Targets" eyebrow="Focus" eyebrowColor="var(--accent-green)" />
+        <div className="glass h-48 animate-pulse mb-6" />
+        <div className="glass h-96 animate-pulse" />
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-neutral-800 bg-black/50 backdrop-blur sticky top-0 z-40">
-        <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple), var(--accent-pink))' }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Link href="/" className="text-sm font-medium mb-4 block" style={{ color: 'var(--accent-cyan)' }}>
-            ← Back to Dashboard
-          </Link>
-          <h1 className="text-4xl font-bold" style={{ color: 'var(--foreground)' }}>Targets</h1>
-          <p style={{ color: 'var(--text-secondary)' }} className="mt-1">Pick up to 3 stats to focus on</p>
-        </div>
-      </header>
+    <AppShell>
+      <PageHeader
+        title="Targets"
+        subtitle="Each of us commits to 3 stats. Lock in, then prove it at the next review."
+        eyebrow="Focus"
+        eyebrowColor="var(--accent-green)"
+      />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Team Targets Section */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8" style={{ color: 'var(--foreground)' }}>Team Targets</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {targetsByPlayer.map(([playerName, targets]) => {
-              const playerId = targets.length > 0 ? targets[0].playerId : null;
-              const isCurrentUser = playerId === currentPlayerId;
-              const playerStatValues = isCurrentUser ? playerStats : (playerId ? (allPlayersStats[playerId] || {}) : {});
+      {/* Team targets */}
+      <section className="mb-10 animate-rise">
+        <h2 className="font-display text-xl font-bold text-white mb-4">Crew Targets</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {targetsByPlayer.map(([playerName, targets]) => {
+            const playerId = targets.length > 0 ? targets[0].playerId : null;
+            const isCurrentUser = playerId === currentPlayerId;
+            const playerStatValues = isCurrentUser
+              ? playerStats
+              : playerId
+              ? allPlayersStats[playerId] || {}
+              : {};
+            const hex = playerId ? getUserColorHex(playerId) : '#22d3ee';
 
-              return (
-                <div key={playerName} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 card-shadow">
-                  <h3 className="text-lg font-bold text-white mb-4">{playerName}</h3>
-                  <div className="space-y-2">
-                    {targets.length > 0 ? (
-                      targets.map((target) => {
-                        const playerCurrentValue = playerStatValues[target.statCode] ?? 0;
-                        return (
-                          <div
-                            key={target.id}
-                            className="bg-neutral-800/50 rounded-lg px-3 py-2 border border-neutral-700 group cursor-help"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="text-sm font-medium text-white">{target.statLabel}</p>
-                                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                                  {target.statCode}
-                                </p>
-                                <p className={`text-xs mt-2 font-semibold ${getValueColor(playerCurrentValue)}`}>Current: {playerCurrentValue}/10</p>
-                              </div>
-                              <StatDescriptionModal
-                                statCode={target.statCode}
-                                statLabel={target.statLabel}
-                                description={STAT_DESCRIPTIONS[target.statCode] || 'No description available'}
+            return (
+              <div key={playerName} className="glass card-shadow p-5" style={{ borderTop: `3px solid ${hex}` }}>
+                <div className="flex items-center gap-2.5 mb-4">
+                  {playerId && <Avatar id={playerId} name={playerName} size={30} />}
+                  <h3 className="font-display font-bold text-white truncate">{playerName}</h3>
+                  {isCurrentUser && (
+                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ml-auto" style={{ background: `${hex}22`, color: hex }}>
+                      you
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {targets.length > 0 ? (
+                    targets.map((target) => {
+                      const value = playerStatValues[target.statCode] ?? 0;
+                      const meta = getCategoryMeta(target.statCode.split('-')[0]);
+                      return (
+                        <div
+                          key={target.id}
+                          className="rounded-xl px-3 py-2.5 border"
+                          style={{ borderColor: 'var(--surface-border)', background: 'rgba(255,255,255,0.02)' }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-white leading-snug">{target.statLabel}</p>
+                              <p className="text-[10px] font-bold uppercase tracking-wider mt-1" style={{ color: meta.hex }}>
+                                {target.statCode}
+                              </p>
+                            </div>
+                            <StatDescriptionModal
+                              statCode={target.statCode}
+                              statLabel={target.statLabel}
+                              description={STAT_DESCRIPTIONS[target.statCode] || 'No description available'}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${value * 10}%`, background: meta.hex }}
                               />
                             </div>
+                            <span className={`text-xs font-bold ${getValueColorClass(value)}`}>{value}/10</span>
                           </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>
-                        No targets yet
-                      </p>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-center py-6" style={{ color: 'var(--text-secondary)' }}>
+                      No targets yet
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {targetsByPlayer.length === 0 && (
+            <div className="glass col-span-full text-center py-10">
+              <p style={{ color: 'var(--text-secondary)' }}>Nobody has set targets yet. Be the first.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Your targets */}
+      <section className="animate-rise animate-rise-1">
+        <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+          <div>
+            <h2 className="font-display text-xl font-bold text-white">Your Targets</h2>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              {selectedTargets.length} of 3 selected
+            </p>
+          </div>
+          <button onClick={handleSave} disabled={saving} className="btn-gradient">
+            <CheckIcon size={16} />
+            {saving ? 'Saving...' : saved ? 'Saved!' : 'Save targets'}
+          </button>
+        </div>
+
+        {/* Selected slots */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          {selectedTargets.map((target, idx) => {
+            const currentValue = playerStats[target.code] ?? 0;
+            const meta = getCategoryMeta(target.code.split('-')[0]);
+            return (
+              <div
+                key={target.code}
+                className="rounded-2xl p-5 border card-shadow"
+                style={{
+                  borderColor: `${meta.hex}55`,
+                  background: `linear-gradient(150deg, ${meta.hex}14, transparent 70%)`,
+                }}
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: meta.hex }}>
+                    Target {idx + 1}
+                  </p>
+                  <button
+                    onClick={() => handleSelectTarget(target)}
+                    className="text-neutral-400 hover:text-red-400 transition"
+                    title="Remove target"
+                  >
+                    <XIcon size={15} />
+                  </button>
+                </div>
+                <h3 className="font-semibold text-white leading-snug mb-1">{target.label}</h3>
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-3 text-neutral-500">{target.code}</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${currentValue * 10}%`, background: meta.hex }} />
+                  </div>
+                  <span className={`text-sm font-bold ${getValueColorClass(currentValue)}`}>{currentValue}/10</span>
+                </div>
+              </div>
+            );
+          })}
+          {[...Array(3 - selectedTargets.length)].map((_, idx) => (
+            <div
+              key={`empty-${idx}`}
+              className="rounded-2xl p-5 border border-dashed flex flex-col items-center justify-center gap-2 min-h-[140px]"
+              style={{ borderColor: 'var(--surface-border)' }}
+            >
+              <TargetIcon size={22} className="opacity-30" />
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                Empty slot
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Search + filters */}
+        <div className="glass card-shadow p-4 mb-4 space-y-3">
+          <div className="relative">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500">
+              <SearchIcon size={16} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search stats by name or code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="field pl-10"
+            />
+          </div>
+          <div className="flex gap-1.5 items-center flex-wrap">
+            {(['default', 'name', 'total'] as const).map((key) => (
+              <button
+                key={key}
+                onClick={() => setSortBy(key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition ${
+                  sortBy === key ? 'text-black' : 'text-neutral-400 hover:text-white'
+                }`}
+                style={sortBy === key ? { backgroundColor: 'var(--accent-cyan)' } : {}}
+              >
+                {key}
+              </button>
+            ))}
+            {sortBy === 'name' && (
+              <button
+                onClick={() => setSortAscending(!sortAscending)}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-black"
+                style={{ backgroundColor: 'var(--accent-cyan)' }}
+              >
+                {sortAscending ? 'A→Z' : 'Z→A'}
+              </button>
+            )}
+            <span className="w-px self-stretch mx-1" style={{ background: 'var(--surface-border)' }} />
+            {(
+              [
+                { key: 'all', label: 'All', color: 'var(--accent-cyan)' },
+                { key: 'green', label: 'Strong', color: 'var(--accent-green)' },
+                { key: 'yellow', label: 'Medium', color: 'var(--accent-orange)' },
+                { key: 'red', label: 'Weak', color: 'var(--accent-red)' },
+              ] as const
+            ).map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setColorFilter(f.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+                  colorFilter === f.key ? 'text-white' : 'text-neutral-400 hover:text-white'
+                }`}
+                style={
+                  colorFilter === f.key
+                    ? { background: `color-mix(in srgb, ${f.color} 22%, transparent)`, borderColor: `color-mix(in srgb, ${f.color} 55%, transparent)` }
+                    : { borderColor: 'var(--surface-border)' }
+                }
+              >
+                {f.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setHideMaxed(!hideMaxed)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ml-auto ${
+                hideMaxed ? 'text-black' : 'text-neutral-400 hover:text-white'
+              }`}
+              style={
+                hideMaxed
+                  ? { backgroundColor: 'var(--accent-cyan)', borderColor: 'var(--accent-cyan)' }
+                  : { borderColor: 'var(--surface-border)' }
+              }
+            >
+              {hideMaxed ? '✓ ' : ''}Hide 10/10s
+            </button>
+          </div>
+        </div>
+
+        {/* Stat grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {sortedFilteredStats.map((stat) => {
+            const isSelected = !!selectedTargets.find((t) => t.code === stat.code);
+            const isDisabled = !isSelected && selectedTargets.length >= 3;
+            const currentValue = playerStats[stat.code] ?? 0;
+            const meta = getCategoryMeta(stat.code.split('-')[0]);
+
+            return (
+              <button
+                key={stat.code}
+                onClick={() => handleSelectTarget(stat)}
+                disabled={isDisabled}
+                className={`text-left px-4 py-3 rounded-xl border transition ${
+                  isSelected
+                    ? 'text-white'
+                    : isDisabled
+                    ? 'opacity-40 cursor-not-allowed text-neutral-500'
+                    : 'text-white hover:bg-white/[0.04]'
+                }`}
+                style={{
+                  borderColor: isSelected ? `${meta.hex}88` : 'var(--surface-border)',
+                  background: isSelected ? `${meta.hex}14` : 'rgba(255,255,255,0.02)',
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm leading-snug">{stat.label}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mt-1" style={{ color: meta.hex }}>
+                      {stat.code}
+                    </p>
+                    <p className={`text-xs mt-1.5 font-semibold ${getValueColorClass(currentValue)}`}>
+                      Current: {currentValue}/10
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <StatDescriptionModal
+                      statCode={stat.code}
+                      statLabel={stat.label}
+                      description={STAT_DESCRIPTIONS[stat.code] || 'No description available'}
+                    />
+                    {isSelected && (
+                      <span style={{ color: meta.hex }}>
+                        <CheckIcon size={16} />
+                      </span>
                     )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Your Targets Section */}
-        <div className="mb-16">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-3xl font-bold" style={{ color: 'var(--foreground)' }}>Your Targets</h2>
-              <p style={{ color: 'var(--text-secondary)' }} className="text-sm mt-2">
-                Focus on {selectedTargets.length} of 3 stats
-              </p>
-            </div>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-3 rounded-lg font-semibold text-white transition"
-              style={{
-                backgroundColor: 'var(--accent-cyan)',
-                opacity: saving ? 0.5 : 1,
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {saving ? '⏳ Saving...' : '✓ Save'}
-            </button>
-          </div>
-
-          {/* Selected Targets Display */}
-          {selectedTargets.length > 0 && Object.keys(playerStats).length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              {selectedTargets.map((target, idx) => {
-                const currentValue = playerStats[target.code] ?? 0;
-                return (
-                  <div
-                    key={target.code}
-                    className="bg-gradient-to-br from-cyan-900/20 to-cyan-900/5 border border-cyan-700/50 rounded-2xl p-6 card-shadow"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--accent-cyan)' }}>
-                          Target {idx + 1}
-                        </p>
-                        <h3 className="text-lg font-bold text-white">{target.label}</h3>
-                      </div>
-                      <button
-                        onClick={() => handleSelectTarget(target)}
-                        className="text-cyan-400 hover:text-red-400 transition"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>{target.code}</p>
-                    <div className={`text-sm font-semibold ${getValueColor(currentValue)}`}>Current: {currentValue}/10</div>
-                  </div>
-                );
-              })}
-              {[...Array(3 - selectedTargets.length)].map((_, idx) => (
-                <div
-                  key={`empty-${idx}`}
-                  className="bg-neutral-800/30 border border-dashed border-neutral-700 rounded-2xl p-6 flex items-center justify-center"
-                >
-                  <p style={{ color: 'var(--text-secondary)' }} className="text-sm">
-                    Empty slot
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Search and Stats Grid */}
-          <div>
-            <div className="flex gap-3 mb-6 flex-wrap items-center">
-              <input
-                type="text"
-                placeholder="Search by stat name or code..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 min-w-64"
-              />
-              <div className="flex gap-2 items-center">
-                <button
-                  onClick={() => setSortBy('default')}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                    sortBy === 'default'
-                      ? 'text-white'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                  style={sortBy === 'default' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
-                >
-                  Default
-                </button>
-                <div className="flex gap-1 items-center">
-                  <button
-                    onClick={() => setSortBy('name')}
-                    className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                      sortBy === 'name'
-                        ? 'text-white'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
-                    style={sortBy === 'name' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
-                  >
-                    Name
-                  </button>
-                  {sortBy === 'name' && (
-                    <button
-                      onClick={() => setSortAscending(!sortAscending)}
-                      className="px-2 py-2 rounded-lg font-medium text-sm text-white transition"
-                      style={{ backgroundColor: 'var(--accent-cyan)' }}
-                    >
-                      {sortAscending ? '↑ A-Z' : '↓ Z-A'}
-                    </button>
-                  )}
-                </div>
-                <button
-                  onClick={() => setSortBy('total')}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                    sortBy === 'total'
-                      ? 'text-white'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                  style={sortBy === 'total' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
-                >
-                  Total
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setColorFilter('all')}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                    colorFilter === 'all'
-                      ? 'text-white'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                  style={colorFilter === 'all' ? { backgroundColor: 'var(--accent-cyan)' } : {}}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setColorFilter('green')}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                    colorFilter === 'green' ? 'text-white' : 'text-gray-400 hover:text-white'
-                  }`}
-                  style={colorFilter === 'green' ? { backgroundColor: 'var(--accent-green)' } : {}}
-                >
-                  🟢 Strong
-                </button>
-                <button
-                  onClick={() => setColorFilter('yellow')}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                    colorFilter === 'yellow' ? 'text-white' : 'text-gray-400 hover:text-white'
-                  }`}
-                  style={colorFilter === 'yellow' ? { backgroundColor: 'var(--accent-orange)' } : {}}
-                >
-                  🟡 Medium
-                </button>
-                <button
-                  onClick={() => setColorFilter('red')}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition ${
-                    colorFilter === 'red' ? 'text-white' : 'text-gray-400 hover:text-white'
-                  }`}
-                  style={colorFilter === 'red' ? { backgroundColor: 'var(--accent-red)' } : {}}
-                >
-                  🔴 Weak
-                </button>
-              </div>
-              <button
-                onClick={() => setHideMaxed(!hideMaxed)}
-                className={`px-4 py-2 rounded-xl font-medium transition whitespace-nowrap ${
-                  hideMaxed
-                    ? 'bg-accent-cyan text-black'
-                    : 'bg-neutral-800 border border-neutral-700 text-white hover:border-neutral-600'
-                }`}
-                style={hideMaxed ? { backgroundColor: 'var(--accent-cyan)', color: 'black' } : {}}
-              >
-                {hideMaxed ? '✓ Hide 10/10s' : 'Hide 10/10s'}
               </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {sortedFilteredStats.map((stat) => {
-                const isSelected = selectedTargets.find((t) => t.code === stat.code);
-                const isDisabled = !isSelected && selectedTargets.length >= 3;
-                const currentValue = playerStats[stat.code] ?? 0;
-
-                return (
-                  <button
-                    key={stat.code}
-                    onClick={() => handleSelectTarget(stat)}
-                    disabled={isDisabled}
-                    className={`text-left px-4 py-3 rounded-xl border transition ${
-                      isSelected
-                        ? 'bg-cyan-900/30 border-cyan-700 text-white'
-                        : isDisabled
-                        ? 'bg-neutral-800/20 border-neutral-700 text-neutral-600 cursor-not-allowed'
-                        : 'bg-neutral-800/50 border-neutral-700 text-white hover:border-neutral-600 hover:bg-neutral-800'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{stat.label}</p>
-                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                          {stat.code}
-                        </p>
-                        <p className={`text-xs mt-2 font-semibold ${getValueColor(currentValue)}`}>Current: {currentValue}/10</p>
-                      </div>
-                      <div className="flex items-center gap-2 ml-2">
-                        <StatDescriptionModal
-                          statCode={stat.code}
-                          statLabel={stat.label}
-                          description={STAT_DESCRIPTIONS[stat.code] || 'No description available'}
-                        />
-                        {isSelected && (
-                          <span className="text-cyan-400 font-bold">✓</span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            );
+          })}
         </div>
-      </main>
-    </div>
+      </section>
+    </AppShell>
   );
 }

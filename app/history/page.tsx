@@ -3,7 +3,10 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import AppShell from '@/components/AppShell';
+import PageHeader from '@/components/PageHeader';
+import { getCategoryMeta } from '@/lib/categories';
+import { TrendUpIcon, TrendDownIcon } from '@/components/icons';
 
 interface HistoryEntry {
   id: string;
@@ -17,18 +20,25 @@ interface HistoryEntry {
   changedAt: string;
 }
 
+const SOURCE_META: Record<string, { label: string; color: string }> = {
+  admin_edit: { label: 'Admin edit', color: 'var(--accent-cyan)' },
+  suggestion: { label: 'Suggestion', color: 'var(--accent-purple)' },
+  review_cycle: { label: 'Review', color: 'var(--accent-orange)' },
+};
+
 export default function HistoryPage() {
   const { status } = useSession();
   const router = useRouter();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [playerFilter, setPlayerFilter] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
       return;
     }
-
     if (status === 'authenticated') {
       loadHistory();
     }
@@ -38,7 +48,7 @@ export default function HistoryPage() {
     try {
       const res = await fetch('/api/history');
       const results = await res.json();
-      setHistory(results);
+      setHistory(Array.isArray(results) ? results : []);
     } catch (error) {
       console.error('Failed to load history:', error);
     } finally {
@@ -46,124 +56,156 @@ export default function HistoryPage() {
     }
   };
 
-  const getSourceLabel = (source: string) => {
-    switch (source) {
-      case 'admin_edit':
-        return '⚙️ Admin Edit';
-      case 'suggestion':
-        return '💡 Suggestion';
-      case 'review_cycle':
-        return '📋 Review';
-      default:
-        return '📝 ' + source;
-    }
-  };
-
-  const getSourceColor = (source: string) => {
-    switch (source) {
-      case 'admin_edit':
-        return 'var(--accent-cyan)';
-      case 'suggestion':
-        return 'var(--accent-purple)';
-      case 'review_cycle':
-        return 'var(--accent-orange)';
-      default:
-        return 'var(--accent-cyan)';
-    }
-  };
-
   if (status === 'loading' || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
-      </div>
+      <AppShell width="narrow">
+        <PageHeader title="Stat History" eyebrow="Timeline" eyebrowColor="var(--accent-orange)" />
+        <div className="glass h-96 animate-pulse" />
+      </AppShell>
     );
   }
 
-  return (
-    <div className="min-h-screen">
-      {/* Header with gradient accent */}
-      <header className="border-b border-neutral-800 bg-black/50 backdrop-blur sticky top-0 z-40">
-        <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-orange), var(--accent-green))' }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Link href="/" className="text-sm font-medium mb-4 block" style={{ color: 'var(--accent-cyan)' }}>
-            ← Back to Dashboard
-          </Link>
-          <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>📈 Stat History</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>All stat changes and updates</p>
-        </div>
-      </header>
+  const players = Array.from(new Set(history.map((h) => h.playerName)));
+  const filtered = history.filter(
+    (h) =>
+      (!playerFilter || h.playerName === playerFilter) &&
+      (!sourceFilter || h.source === sourceFilter)
+  );
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {history.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">📊</div>
-            <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>No stat changes yet. Start tracking changes to see them here.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {history.map((entry) => {
-              const sourceColor = getSourceColor(entry.source);
+  return (
+    <AppShell width="narrow">
+      <PageHeader
+        title="Stat History"
+        subtitle="Every change, who made it, and why."
+        eyebrow="Timeline"
+        eyebrowColor="var(--accent-orange)"
+      />
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <FilterPill active={!playerFilter} onClick={() => setPlayerFilter(null)}>
+          All players
+        </FilterPill>
+        {players.map((p) => (
+          <FilterPill key={p} active={playerFilter === p} onClick={() => setPlayerFilter(p)}>
+            {p}
+          </FilterPill>
+        ))}
+        <span className="w-px self-stretch mx-1" style={{ background: 'var(--surface-border)' }} />
+        <FilterPill active={!sourceFilter} onClick={() => setSourceFilter(null)}>
+          All sources
+        </FilterPill>
+        {Object.entries(SOURCE_META).map(([key, meta]) => (
+          <FilterPill key={key} active={sourceFilter === key} onClick={() => setSourceFilter(key)} color={meta.color}>
+            {meta.label}
+          </FilterPill>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="glass text-center py-16">
+          <p style={{ color: 'var(--text-secondary)' }}>
+            {history.length === 0 ? 'No stat changes yet.' : 'Nothing matches those filters.'}
+          </p>
+        </div>
+      ) : (
+        <div className="relative pl-5">
+          {/* timeline spine */}
+          <div className="absolute left-[5px] top-2 bottom-2 w-px" style={{ background: 'var(--surface-border)' }} />
+          <div className="space-y-3">
+            {filtered.map((entry) => {
+              const source = SOURCE_META[entry.source] || { label: entry.source, color: 'var(--accent-cyan)' };
               const isIncrease = entry.newValue > entry.oldValue;
+              const catMeta = getCategoryMeta(entry.statCode?.split('-')[0]);
 
               return (
-                <div
-                  key={entry.id}
-                  className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl p-5 transition card-shadow"
-                >
-                  <div className="flex flex-col md:flex-row items-start md:items-center gap-6 justify-between">
-                    {/* Left: Player & Stat */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sourceColor }} />
-                        <h3 className="text-white font-bold">{entry.playerName}</h3>
-                      </div>
-                      <p className="text-sm text-white font-medium mb-1">
-                        {entry.statLabel}
-                      </p>
-                      <p className="text-xs font-mono mb-2" style={{ color: 'var(--text-secondary)' }}>
-                        {entry.statCode}
-                      </p>
-                      {entry.reason && (
-                        <p className="text-sm italic" style={{ color: 'var(--text-secondary)' }}>
-                          "{entry.reason}"
+                <div key={entry.id} className="relative">
+                  <span
+                    className="absolute -left-[19px] top-5 w-2.5 h-2.5 rounded-full border-2"
+                    style={{ background: 'var(--background)', borderColor: source.color }}
+                  />
+                  <div className="glass glass-hover card-shadow p-4 sm:p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <h3 className="text-white font-semibold text-sm">{entry.playerName}</h3>
+                          <span
+                            className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                            style={{ background: `color-mix(in srgb, ${source.color} 15%, transparent)`, color: source.color }}
+                          >
+                            {source.label}
+                          </span>
+                          <span className="text-[10px] ml-auto sm:hidden" style={{ color: 'var(--text-secondary)' }}>
+                            {new Date(entry.changedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-white">{entry.statLabel}</p>
+                        <p className="text-[11px] font-bold uppercase tracking-wider mt-0.5" style={{ color: catMeta.hex }}>
+                          {entry.statCode}
                         </p>
-                      )}
-                    </div>
+                        {entry.reason && (
+                          <p className="text-xs italic mt-1.5" style={{ color: 'var(--text-secondary)' }}>
+                            "{entry.reason}"
+                          </p>
+                        )}
+                      </div>
 
-                    {/* Center: Value Change */}
-                    <div className="flex items-center gap-4 bg-neutral-800/50 px-5 py-3 rounded-lg">
-                      <div className="text-center">
-                        <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>Before</p>
-                        <p className="text-2xl font-bold text-white">{entry.oldValue}</p>
+                      <div className="flex items-center gap-4 shrink-0">
+                        <div
+                          className="flex items-center gap-2.5 rounded-xl px-4 py-2 border"
+                          style={{ borderColor: 'var(--surface-border)', background: 'rgba(255,255,255,0.02)' }}
+                        >
+                          <span className="text-lg font-bold text-neutral-400">{entry.oldValue}</span>
+                          <span style={{ color: isIncrease ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                            {isIncrease ? <TrendUpIcon size={16} /> : <TrendDownIcon size={16} />}
+                          </span>
+                          <span
+                            className="text-lg font-bold"
+                            style={{ color: isIncrease ? 'var(--accent-green)' : 'var(--accent-red)' }}
+                          >
+                            {entry.newValue}
+                          </span>
+                        </div>
+                        <span className="text-xs hidden sm:block w-20 text-right" style={{ color: 'var(--text-secondary)' }}>
+                          {new Date(entry.changedAt).toLocaleDateString()}
+                        </span>
                       </div>
-                      <div className="text-lg" style={{ color: isIncrease ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                        {isIncrease ? '↑' : '↓'}
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>After</p>
-                        <p className="text-2xl font-bold" style={{ color: sourceColor }}>
-                          {entry.newValue}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Right: Source & Date */}
-                    <div className="text-right text-sm">
-                      <div className="px-3 py-1 rounded-lg font-semibold mb-2 text-white text-xs" style={{ backgroundColor: sourceColor }}>
-                        {getSourceLabel(entry.source)}
-                      </div>
-                      <p style={{ color: 'var(--text-secondary)' }}>
-                        {new Date(entry.changedAt).toLocaleDateString()}
-                      </p>
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        )}
-      </main>
-    </div>
+        </div>
+      )}
+    </AppShell>
+  );
+}
+
+function FilterPill({
+  children,
+  active,
+  onClick,
+  color = 'var(--accent-cyan)',
+}: {
+  children: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  color?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+        active ? 'text-white' : 'text-neutral-400 hover:text-white'
+      }`}
+      style={
+        active
+          ? { background: `color-mix(in srgb, ${color} 20%, transparent)`, borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }
+          : { borderColor: 'var(--surface-border)' }
+      }
+    >
+      {children}
+    </button>
   );
 }
