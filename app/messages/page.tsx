@@ -83,6 +83,10 @@ function getUserColorBg(userColor: string, opacity: number): string {
   return colorMap[userColor] || `rgba(107, 114, 128, ${opacity})`;
 }
 
+// Category order (official stats sheet order)
+const CATEGORY_ORDER = ['mtl', 'phy', 'kno', 'strs', 'stra', 'ski', 'enr'];
+const STAT_LETTER_ORDER = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
+
 export default function MessagesPage() {
   const { status, data: session } = useSession();
   const router = useRouter();
@@ -567,35 +571,39 @@ export default function MessagesPage() {
                   <div className="space-y-3">
                     <p className="text-sm font-semibold text-white mb-4">Choose a category:</p>
                     {playerStats.length > 0 ? (
-                      Array.from(
-                        new Map(
+                      (() => {
+                        const categoryMap = new Map(
                           playerStats.map((stat: any) => [
                             stat.categoryCode,
                             { code: stat.categoryCode, label: stat.categoryLabel },
                           ])
-                        ).values()
-                      ).map((category: any) => (
-                        <button
-                          key={category.code}
-                          onClick={() => {
-                            setSelectedCategory(category);
-                            setSelectorStep('stat');
-                          }}
-                          className="w-full px-5 py-3 rounded-lg text-sm transition text-white text-left font-medium border-2 hover:border-opacity-100 border-opacity-50"
-                          style={{
-                            borderColor: 'var(--accent-purple)',
-                            backgroundColor: 'rgba(168, 85, 247, 0.05)',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.15)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.05)';
-                          }}
-                        >
-                          {category.label}
-                        </button>
-                      ))
+                        );
+                        const sortedCategories = CATEGORY_ORDER
+                          .filter((code) => categoryMap.has(code))
+                          .map((code) => categoryMap.get(code));
+                        return sortedCategories.map((category: any) => (
+                          <button
+                            key={category.code}
+                            onClick={() => {
+                              setSelectedCategory(category);
+                              setSelectorStep('stat');
+                            }}
+                            className="w-full px-5 py-3 rounded-lg text-sm transition text-white text-left font-medium border-2 hover:border-opacity-100 border-opacity-50"
+                            style={{
+                              borderColor: 'var(--accent-purple)',
+                              backgroundColor: 'rgba(168, 85, 247, 0.05)',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.05)';
+                            }}
+                          >
+                            {category.label}
+                          </button>
+                        ));
+                      })()
                     ) : (
                       <p className="text-center text-neutral-500">Loading categories...</p>
                     )}
@@ -609,6 +617,11 @@ export default function MessagesPage() {
                     <div className="space-y-2">
                       {playerStats
                         .filter((s: any) => s.categoryCode === selectedCategory.code)
+                        .sort((a: any, b: any) => {
+                          const letterA = a.code?.split('-')[1]?.toLowerCase() || '';
+                          const letterB = b.code?.split('-')[1]?.toLowerCase() || '';
+                          return STAT_LETTER_ORDER.indexOf(letterA) - STAT_LETTER_ORDER.indexOf(letterB);
+                        })
                         .map((stat: any) => (
                           <button
                             key={stat.id}
