@@ -59,6 +59,7 @@ function NewSuggestionContent() {
 
   const [subjectId, setSubjectId] = useState('');
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
+  const [testimony, setTestimony] = useState('');
   const [selectedStatId, setSelectedStatId] = useState('');
   const [delta, setDelta] = useState(1);
   const [reason, setReason] = useState('');
@@ -137,20 +138,29 @@ function NewSuggestionContent() {
     };
   }, [subjectId]);
 
+  const MIN_TESTIMONY = 20;
   const eligibleSubjects = players.filter((p) => p.id !== currentPlayerId);
   const subjectEvidence = evidence.filter((e) => e.playerId === subjectId);
   const selectedEvidence = subjectEvidence.filter((e) => selectedEvidenceIds.includes(e.id));
+  const testimonyReady = testimony.trim().length >= MIN_TESTIMONY;
+  const grounded = selectedEvidenceIds.length > 0 || testimonyReady;
 
-  // Stat choice is constrained to categories the selected evidence is tagged with
+  // With evidence attached, stat choice is constrained to categories the
+  // evidence is tagged with. Testimony-only suggestions have no tags, so any
+  // (visible, unlocked) stat is fair game — the vote vets relevance.
   const allowedCategoryCodes = new Set(
     selectedEvidence.flatMap((e) => e.categories.map((c) => c.code))
   );
-  const availableStats = subjectStats.filter((s) => allowedCategoryCodes.has(s.categoryCode));
+  const availableStats =
+    selectedEvidenceIds.length > 0
+      ? subjectStats.filter((s) => allowedCategoryCodes.has(s.categoryCode))
+      : subjectStats;
   const selectedStat = subjectStats.find((s) => s.id === selectedStatId);
 
   const changeSubject = (id: string) => {
     setSubjectId(id);
     setSelectedEvidenceIds([]);
+    setTestimony('');
     setSelectedStatId('');
     setError('');
   };
@@ -164,8 +174,8 @@ function NewSuggestionContent() {
 
   const handleSubmit = async () => {
     setError('');
-    if (!subjectId || !selectedStatId || selectedEvidenceIds.length === 0 || !reason.trim()) {
-      setError('Complete every step: subject, evidence, stat, and a reason.');
+    if (!subjectId || !selectedStatId || !grounded || !reason.trim()) {
+      setError('Complete every step: subject, evidence (or witness testimony), stat, and a reason.');
       return;
     }
     setSubmitting(true);
@@ -179,6 +189,7 @@ function NewSuggestionContent() {
           delta,
           reason: reason.trim(),
           evidenceIds: selectedEvidenceIds,
+          testimony: testimony.trim() || null,
         }),
       });
       const data = await res.json();
@@ -248,14 +259,14 @@ function NewSuggestionContent() {
           </p>
         </section>
 
-        {/* Step 2: evidence */}
+        {/* Step 2: evidence or witness testimony */}
         {subjectId && (
           <section className="glass card-shadow p-5 animate-rise">
-            <StepLabel n={2} title="Attach their evidence" />
+            <StepLabel n={2} title="Ground it: their evidence, or what you witnessed" />
             {subjectEvidence.length === 0 ? (
-              <p className="text-sm py-4" style={{ color: 'var(--text-secondary)' }}>
-                They haven't posted any evidence yet — suggestions must cite evidence, so there's
-                nothing to build on. Nudge them on the{' '}
+              <p className="text-sm py-2 mb-3" style={{ color: 'var(--text-secondary)' }}>
+                They haven't posted any evidence yet — but you can still write what you witnessed
+                below, or nudge them on the{' '}
                 <Link href="/messages" className="underline" style={{ color: 'var(--accent-cyan)' }}>
                   message board
                 </Link>
@@ -317,15 +328,40 @@ function NewSuggestionContent() {
                 })}
               </div>
             )}
+
+            {/* Witness testimony — substitutes for evidence when it happened IRL with no media */}
+            <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--surface-border)' }}>
+              <p className="text-sm font-semibold text-white mb-1">
+                {selectedEvidenceIds.length > 0 ? 'Add witness context (optional)' : 'No media? Write what you witnessed'}
+              </p>
+              <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
+                Saw it happen in real life with nothing on camera? Describe it first-hand — your
+                account substitutes for evidence and the crew's vote decides if it holds up.
+              </p>
+              <textarea
+                value={testimony}
+                onChange={(e) => setTestimony(e.target.value)}
+                className="field resize-none text-sm"
+                rows={3}
+                placeholder="What did you see them do, when, and why does it matter?"
+              />
+              {testimony.trim().length > 0 && !testimonyReady && (
+                <p className="text-[11px] mt-1" style={{ color: 'var(--accent-yellow)' }}>
+                  {MIN_TESTIMONY - testimony.trim().length} more characters — make it substantive
+                </p>
+              )}
+            </div>
           </section>
         )}
 
-        {/* Step 3: stat (constrained to evidence categories) */}
-        {selectedEvidenceIds.length > 0 && (
+        {/* Step 3: stat (constrained to evidence categories when evidence is attached) */}
+        {grounded && (
           <section className="glass card-shadow p-5 animate-rise">
             <StepLabel n={3} title="Which stat does it prove?" />
             <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
-              Limited to categories the attached evidence is tagged with.
+              {selectedEvidenceIds.length > 0
+                ? 'Limited to categories the attached evidence is tagged with.'
+                : 'Testimony-only — any of their tracked stats is fair game.'}
             </p>
             {loadingStats ? (
               <div className="h-24 rounded-xl animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }} />

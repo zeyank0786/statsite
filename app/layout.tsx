@@ -19,9 +19,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "4WARD — Four friends. One direction.",
+  title: "4WARD — One crew. One direction.",
   description:
-    "4WARD is the shared development tracker for Zeyan, Ryan, Qam and B — 70 stats, 7 categories, one direction: forward.",
+    "4WARD is the crew's shared development tracker — 70 stats, 7 categories, one direction: forward.",
 };
 
 export const viewport: Viewport = {

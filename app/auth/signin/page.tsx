@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 import { EyeIcon, EyeOffIcon } from '@/components/icons';
 
-const CREW = ['Zeyan', 'Ryan', 'Qam', 'B'];
+// Fallback while the live roster loads (or if the API is unreachable)
+const CREW_FALLBACK = ['Zeyan', 'Ryan', 'Qam', 'B'];
 
 export default function SignIn() {
   const router = useRouter();
@@ -16,6 +17,19 @@ export default function SignIn() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [crew, setCrew] = useState<string[]>(CREW_FALLBACK);
+
+  // Live roster — the crew grows/shrinks with the admin's roster changes
+  useEffect(() => {
+    fetch('/api/players')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((players: any[] | null) => {
+        if (Array.isArray(players) && players.length > 0) {
+          setCrew(players.map((p) => String(p.username)));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,10 +73,10 @@ export default function SignIn() {
             className="text-xs font-bold uppercase tracking-[0.25em]"
             style={{ color: 'var(--text-secondary)' }}
           >
-            Four friends · One direction
+            One crew · One direction
           </p>
-          <div className="flex items-center justify-center gap-2 mt-3">
-            {CREW.map((name, i) => (
+          <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+            {crew.map((name, i) => (
               <span key={name} className="flex items-center gap-2">
                 {i > 0 && (
                   <span className="w-1 h-1 rounded-full" style={{ background: 'var(--surface-border-strong)' }} />
@@ -140,7 +154,7 @@ export default function SignIn() {
           {[
             { label: 'Categories', value: '7', color: 'var(--accent-green)' },
             { label: 'Stats each', value: '70', color: 'var(--accent-orange)' },
-            { label: 'Friends', value: '4', color: 'var(--accent-pink)' },
+            { label: 'Friends', value: String(crew.length), color: 'var(--accent-pink)' },
           ].map((item) => (
             <div key={item.label} className="glass p-4">
               <p className="font-display text-2xl font-bold" style={{ color: item.color }}>

@@ -23,7 +23,8 @@ export async function GET() {
 
   try {
     const [categories, stats, visibility, prereqs, overrides, players] = await Promise.all([
-      queryAll('SELECT id, code, label, emoji FROM Category ORDER BY createdAt ASC'),
+      // SELECT * — older prod tables may lack emoji/createdAt; naming them would 500.
+      queryAll('SELECT * FROM Category'),
       queryAll('SELECT id, code, label, categoryId FROM Stat ORDER BY code ASC'),
       queryAll('SELECT id, statId, playerId, hidden FROM StatVisibility'),
       queryAll(
@@ -37,7 +38,19 @@ export async function GET() {
       queryAll('SELECT id, username, active FROM Player ORDER BY username ASC'),
     ]);
 
-    return NextResponse.json({ categories, stats, visibility, prereqs, overrides, players });
+    return NextResponse.json({
+      categories: (categories as any[]).map((c) => ({
+        id: String(c.id),
+        code: String(c.code),
+        label: String(c.label),
+        emoji: c.emoji ? String(c.emoji) : '',
+      })),
+      stats,
+      visibility,
+      prereqs,
+      overrides,
+      players,
+    });
   } catch (error: any) {
     console.error('Error loading catalog:', error);
     return NextResponse.json({ error: 'Failed to load catalog', details: error.message }, { status: 500 });
@@ -90,13 +103,18 @@ export async function POST(request: Request) {
         const clash = await queryOne('SELECT id FROM Category WHERE code = ?', [code]);
         if (clash) code = `${code}-${Math.random().toString(36).slice(2, 5)}`;
         const id = uuid();
-        await query('INSERT INTO Category (id, code, label, emoji, createdAt) VALUES (?, ?, ?, ?, ?)', [
-          id,
-          code,
-          label.trim(),
-          emoji || '⭐',
-          now,
-        ]);
+        try {
+          await query('INSERT INTO Category (id, code, label, emoji, createdAt) VALUES (?, ?, ?, ?, ?)', [
+            id,
+            code,
+            label.trim(),
+            emoji || '⭐',
+            now,
+          ]);
+        } catch {
+          // Older prod tables may lack emoji/createdAt columns.
+          await query('INSERT INTO Category (id, code, label) VALUES (?, ?, ?)', [id, code, label.trim()]);
+        }
         return NextResponse.json({ success: true, id, code });
       }
 

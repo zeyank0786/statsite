@@ -59,7 +59,7 @@ export default function Logo({ size = 'md', tagline = false, href = '/' }: LogoP
             className="mt-1.5 text-[0.65em] font-semibold uppercase tracking-[0.22em]"
             style={{ color: 'var(--text-secondary)' }}
           >
-            Four friends. One direction.
+            One crew. One direction.
           </span>
         )}
       </span>

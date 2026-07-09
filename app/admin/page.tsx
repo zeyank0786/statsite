@@ -129,8 +129,8 @@ export default function AdminPage() {
           </span>
           <h1 className="font-display text-2xl font-bold text-white mb-2">Admins only</h1>
           <p style={{ color: 'var(--text-secondary)' }}>
-            Roster, stat catalog and lock management are restricted. Ask Zeyan if you think you
-            should have access.
+            Roster, stat catalog and lock management are restricted. Ask an admin if you think
+            you should have access.
           </p>
         </div>
       </AppShell>

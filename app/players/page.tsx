@@ -73,7 +73,7 @@ export default function PlayersPage() {
     <AppShell>
       <PageHeader
         title="Players"
-        subtitle="Four friends, seventy stats each. Tap a card for the full breakdown."
+        subtitle="The whole crew, seventy stats each. Tap a card for the full breakdown."
         actions={
           <Link href="/compare" className="btn-ghost text-sm">
             <CompareIcon size={16} />

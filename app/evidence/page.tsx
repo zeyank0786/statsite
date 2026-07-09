@@ -9,7 +9,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, orderCategories } from '@/lib/categories';
-import { cloudinaryConfigured, uploadToCloudinary } from '@/lib/cloudinary';
+import { cloudinaryConfigured, uploadToCloudinary, fileTooLargeError, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '@/lib/cloudinary';
 import {
   UploadIcon,
   XIcon,
@@ -91,7 +91,19 @@ export default function EvidenceBoardPage() {
         fetch('/api/categories'),
       ]);
       if (playersRes.ok) setPlayers(await playersRes.json());
-      if (postsRes.ok) setPosts(await postsRes.json());
+      if (postsRes.ok) {
+        const loaded: EvidencePost[] = await postsRes.json();
+        setPosts(loaded);
+        // Seeing the board = reading it; clears the nav badge (own posts never count)
+        const seenIds = loaded.filter((p) => !p.isOwn).map((p) => p.id);
+        if (seenIds.length > 0) {
+          fetch('/api/evidence/unread', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ evidenceIds: seenIds }),
+          }).catch(() => {});
+        }
+      }
       if (categoriesRes.ok) {
         const cats = await categoriesRes.json();
         setCategories(orderCategories(cats));
@@ -104,6 +116,14 @@ export default function EvidenceBoardPage() {
   };
 
   const handleFilePick = (picked: File | null) => {
+    if (picked) {
+      const tooLarge = fileTooLargeError(picked);
+      if (tooLarge) {
+        setComposerError(tooLarge);
+        return; // reject — keep whatever was previously selected
+      }
+      setComposerError('');
+    }
     setFile(picked);
     if (filePreview) URL.revokeObjectURL(filePreview);
     setFilePreview(picked ? URL.createObjectURL(picked) : null);
@@ -315,6 +335,11 @@ export default function EvidenceBoardPage() {
                     >
                       <UploadIcon size={20} />
                       {cloudinaryConfigured ? 'Add photo or video' : 'Uploads not configured'}
+                      {cloudinaryConfigured && (
+                        <span className="text-xs opacity-70">
+                          Max {Math.round(MAX_IMAGE_BYTES / 1048576)} MB image · {Math.round(MAX_VIDEO_BYTES / 1048576)} MB video
+                        </span>
+                      )}
                     </button>
                   )}
 
@@ -329,6 +354,14 @@ export default function EvidenceBoardPage() {
                   <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>
                     Categories this relates to
                   </p>
+                  {categories.length === 0 && (
+                    <p className="text-xs text-red-400 mb-3">
+                      Couldn&apos;t load the category list — posting needs at least one category.{' '}
+                      <button onClick={loadAll} className="underline hover:text-red-300">
+                        Retry
+                      </button>
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {categories.map((cat) => {
                       const meta = getCategoryMeta(cat.code, cat.label);

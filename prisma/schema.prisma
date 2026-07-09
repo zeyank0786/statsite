@@ -160,9 +160,10 @@ model Suggestion {
   statId       String
   stat         Stat    @relation(fields: [statId], references: [id], onDelete: Cascade)
 
-  delta  Int
-  reason String
-  status String // "pending" | "approved" | "rejected"
+  delta     Int
+  reason    String
+  testimony String? // written witness account — substitutes for evidence when something was seen IRL with no media
+  status    String // "pending" | "approved" | "rejected"
 
   votes    Vote[]
   evidence SuggestionEvidence[]

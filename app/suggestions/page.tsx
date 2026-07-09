@@ -31,6 +31,7 @@ interface Suggestion {
   currentValue: number;
   delta: number;
   reason: string;
+  testimony: string | null;
   status: string;
   createdAt: string;
   resolvedAt: string | null;
@@ -233,6 +234,19 @@ export default function SuggestionsPage() {
                 <p className="text-sm italic mb-3" style={{ color: 'var(--text-secondary)' }}>
                   "{sg.reason}"
                 </p>
+
+                {/* Written witness testimony (substitutes for media evidence) */}
+                {sg.testimony && (
+                  <div
+                    className="rounded-xl px-3.5 py-2.5 mb-3 text-sm border"
+                    style={{ borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.06)' }}
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent-yellow)' }}>
+                      Witness testimony — {sg.proposerName}
+                    </p>
+                    <p className="text-neutral-200 whitespace-pre-wrap break-words">{sg.testimony}</p>
+                  </div>
+                )}
 
                 {/* Evidence thumbnails */}
                 {sg.evidence.length > 0 && (

@@ -73,6 +73,23 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           token.playerId = (user as any).playerId;
           token.playerUsername = (user as any).playerUsername;
           token.isAdmin = (user as any).isAdmin;
+        } else if (token.id) {
+          // Refresh from DB on every pass so sessions minted before the
+          // isAdmin column existed gain admin without re-login, and revoked
+          // admins/profile links drop off without waiting for token expiry.
+          try {
+            const row = await queryOne(
+              'SELECT u.playerId, u.isAdmin, p.username FROM User u LEFT JOIN Player p ON u.playerId = p.id WHERE u.id = ?',
+              [token.id]
+            );
+            if (row) {
+              token.playerId = row.playerId ? String(row.playerId) : undefined;
+              token.playerUsername = row.username ? String(row.username) : undefined;
+              token.isAdmin = Boolean(Number(row.isAdmin));
+            }
+          } catch {
+            /* keep existing token claims if the DB hiccups */
+          }
         }
         return token;
       },
