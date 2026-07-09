@@ -23,6 +23,7 @@ import {
   ShieldIcon,
   XIcon,
   CameraIcon,
+  AwardIcon,
 } from './icons';
 
 interface NavItem {
@@ -43,6 +44,7 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const MORE_NAV: NavItem[] = [
+  { href: '/achievements', label: 'Achievements', icon: AwardIcon },
   { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
   { href: '/targets', label: 'Targets', icon: TargetIcon },
   { href: '/compare', label: 'Compare', icon: CompareIcon },
@@ -60,6 +62,7 @@ const MOBILE_TABS: NavItem[] = [
 const MOBILE_MORE: NavItem[] = [
   { href: '/players', label: 'Players', icon: UsersIcon },
   { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
+  { href: '/achievements', label: 'Achievements', icon: AwardIcon },
   { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
   { href: '/compare', label: 'Compare', icon: CompareIcon },
   { href: '/targets', label: 'Targets', icon: TargetIcon },
@@ -274,7 +277,8 @@ export default function AppShell({
       </header>
 
       {/* ===== Page content ===== */}
-      <main className={`${maxW} w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-28 md:pb-16 flex-1`}>
+      {/* Mobile bottom padding clears the fixed tab bar + safe-area inset with room to breathe */}
+      <main className={`${maxW} w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-36 md:pb-16 flex-1`}>
         {children}
       </main>
 

@@ -115,7 +115,12 @@ export function buildPlayerAggregates(rows: StatRow[]): PlayerAggregate[] {
       byCat.get(row.categoryCode)!.push(row);
     }
 
-    const categories = CATEGORY_ORDER.filter((code) => byCat.has(code)).map((code) => {
+    // Canonical categories first, then any admin-created ones (never dropped)
+    const orderedCodes = [
+      ...CATEGORY_ORDER.filter((code) => byCat.has(code)),
+      ...[...byCat.keys()].filter((code) => !(CATEGORY_ORDER as readonly string[]).includes(code)).sort(),
+    ];
+    const categories = orderedCodes.map((code) => {
       const stats = byCat.get(code)!;
       const total = stats.reduce((s, r) => s + r.value, 0);
       return {

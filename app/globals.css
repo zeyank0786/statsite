@@ -310,6 +310,8 @@ input[type="range"] {
 }
 
 /* ---------- Safe areas (mobile bottom nav) ---------- */
+/* Home-indicator inset when present, but never less than a small breather —
+   some launchers report 0 and the bar ends up flush with the screen edge. */
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
 }

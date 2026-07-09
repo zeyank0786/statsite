@@ -97,11 +97,41 @@ export function orderStats<T extends { code: string }>(stats: T[]): T[] {
   return [...stats].sort((a, b) => rank(a.code) - rank(b.code) || a.code.localeCompare(b.code));
 }
 
-/** Traffic-light color for a stat value (unbounded scale, low end still matters). */
+/**
+ * Stat tier ladder — every individual stat total maps to a named tier.
+ * Defined up to 100; the ladder gets revisited when someone actually
+ * hits triple digits (values past 100 stay Legendary).
+ */
+export interface StatTier {
+  name: string;
+  min: number;
+  max: number; // inclusive
+  hex: string;
+}
+
+export const STAT_TIERS: StatTier[] = [
+  { name: 'Starting Out', min: 0, max: 9, hex: '#9ca3af' },
+  { name: 'Really Improving', min: 10, max: 29, hex: '#22d3ee' },
+  { name: 'Established', min: 30, max: 59, hex: '#34d399' },
+  { name: 'Elite', min: 60, max: 89, hex: '#a855f7' },
+  { name: 'Legendary', min: 90, max: 100, hex: '#fbbf24' },
+];
+
+export function getStatTier(value: number): StatTier {
+  const v = Math.max(0, Math.floor(value));
+  return STAT_TIERS.find((t) => v >= t.min && v <= t.max) || STAT_TIERS[STAT_TIERS.length - 1];
+}
+
+/** The next rung up, or null when already Legendary. */
+export function getNextTier(value: number): StatTier | null {
+  const current = getStatTier(value);
+  const idx = STAT_TIERS.indexOf(current);
+  return idx >= 0 && idx < STAT_TIERS.length - 1 ? STAT_TIERS[idx + 1] : null;
+}
+
+/** Traffic-light color for a stat value — tier-aligned. */
 export function getValueColor(value: number): string {
-  if (value <= 3) return 'var(--accent-red)';
-  if (value <= 7) return 'var(--accent-orange)';
-  return 'var(--accent-green)';
+  return getStatTier(value).hex;
 }
 
 /**

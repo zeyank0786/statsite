@@ -12,7 +12,6 @@ import {
   orderCategories,
   getCategoryMeta,
   computeOverallScore,
-  categoryAvg,
   scaleMax,
   CATEGORY_ORDER,
 } from '@/lib/categories';
@@ -113,7 +112,10 @@ export default function Dashboard() {
 
   const radarLabels = orderedCategories.map((c: any) => getCategoryMeta(c.code).short);
   const radarColors = orderedCategories.map((c: any) => getCategoryMeta(c.code).hex);
-  const radarValues = orderedCategories.map((c: any) => categoryAvg(c.stats));
+  // Category totals as ratios — the strongest category defines the outer edge
+  const radarValues = orderedCategories.map((c: any) =>
+    c.stats.reduce((s: number, st: any) => s + st.value, 0)
+  );
 
   return (
     <AppShell>
@@ -184,7 +186,7 @@ export default function Dashboard() {
                 labels={radarLabels}
                 labelColors={radarColors}
                 series={[{ label: 'You', color: '#a855f7', values: radarValues }]}
-                max={scaleMax(radarValues)}
+                max={Math.max(...radarValues, 1)}
                 size={340}
               />
             ) : (
@@ -255,7 +257,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-5">
             <h2 className="font-display text-lg font-bold text-white">Achievements</h2>
             <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-              {earnedAchievements.length}/{achievements.length || 11}
+              {earnedAchievements.length}/{achievements.length}
             </span>
           </div>
           {earnedAchievements.length > 0 ? (
@@ -264,17 +266,28 @@ export default function Dashboard() {
                 <AchievementBadge key={a.id} achievement={a} />
               ))}
               <Link
-                href={`/players/${playerId}`}
+                href="/achievements"
                 className="block text-center text-xs font-semibold pt-2 hover:underline"
                 style={{ color: 'var(--accent-cyan)' }}
               >
-                See all on your profile →
+                See all achievements →
               </Link>
             </div>
           ) : (
-            <p className="text-sm py-6 text-center" style={{ color: 'var(--text-secondary)' }}>
-              {loading ? 'Loading...' : 'No badges yet — keep grinding. Every stat gain counts.'}
-            </p>
+            <div className="text-center py-6">
+              <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+                {loading ? 'Loading...' : 'No badges yet — keep grinding. Every stat gain counts.'}
+              </p>
+              {!loading && (
+                <Link
+                  href="/achievements"
+                  className="text-xs font-semibold hover:underline"
+                  style={{ color: 'var(--accent-cyan)' }}
+                >
+                  Browse everything there is to earn →
+                </Link>
+              )}
+            </div>
           )}
         </div>
       </section>

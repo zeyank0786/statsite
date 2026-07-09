@@ -10,7 +10,8 @@ import Avatar from '@/components/Avatar';
 import LockBadge from '@/components/LockBadge';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
-import { ChevronLeftIcon, CheckIcon, ImageIcon, LockIcon } from '@/components/icons';
+import TierBadge from '@/components/TierBadge';
+import { ChevronLeftIcon, CheckIcon, ImageIcon, XIcon } from '@/components/icons';
 
 interface Player {
   id: string;
@@ -60,8 +61,8 @@ function NewSuggestionContent() {
   const [subjectId, setSubjectId] = useState('');
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
   const [testimony, setTestimony] = useState('');
-  const [selectedStatId, setSelectedStatId] = useState('');
-  const [delta, setDelta] = useState(1);
+  // statId → delta for every stat attached to this proposal (default +1)
+  const [changes, setChanges] = useState<Record<string, number>>({});
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -141,27 +142,19 @@ function NewSuggestionContent() {
   const MIN_TESTIMONY = 20;
   const eligibleSubjects = players.filter((p) => p.id !== currentPlayerId);
   const subjectEvidence = evidence.filter((e) => e.playerId === subjectId);
-  const selectedEvidence = subjectEvidence.filter((e) => selectedEvidenceIds.includes(e.id));
   const testimonyReady = testimony.trim().length >= MIN_TESTIMONY;
   const grounded = selectedEvidenceIds.length > 0 || testimonyReady;
 
-  // With evidence attached, stat choice is constrained to categories the
-  // evidence is tagged with. Testimony-only suggestions have no tags, so any
-  // (visible, unlocked) stat is fair game — the vote vets relevance.
-  const allowedCategoryCodes = new Set(
-    selectedEvidence.flatMap((e) => e.categories.map((c) => c.code))
-  );
-  const availableStats =
-    selectedEvidenceIds.length > 0
-      ? subjectStats.filter((s) => allowedCategoryCodes.has(s.categoryCode))
-      : subjectStats;
-  const selectedStat = subjectStats.find((s) => s.id === selectedStatId);
+  // Stats are picked manually — evidence tags don't constrain the choice
+  // (written testimony has no tags, and the crew's vote vets relevance).
+  const changeCount = Object.keys(changes).length;
+  const selectedStats = subjectStats.filter((s) => changes[s.id] !== undefined);
 
   const changeSubject = (id: string) => {
     setSubjectId(id);
     setSelectedEvidenceIds([]);
     setTestimony('');
-    setSelectedStatId('');
+    setChanges({});
     setError('');
   };
 
@@ -169,13 +162,25 @@ function NewSuggestionContent() {
     setSelectedEvidenceIds((prev) =>
       prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]
     );
-    setSelectedStatId('');
+  };
+
+  const toggleStat = (statId: string) => {
+    setChanges((prev) => {
+      const next = { ...prev };
+      if (next[statId] !== undefined) delete next[statId];
+      else next[statId] = 1;
+      return next;
+    });
+  };
+
+  const setStatDelta = (statId: string, delta: number) => {
+    setChanges((prev) => ({ ...prev, [statId]: delta }));
   };
 
   const handleSubmit = async () => {
     setError('');
-    if (!subjectId || !selectedStatId || !grounded || !reason.trim()) {
-      setError('Complete every step: subject, evidence (or witness testimony), stat, and a reason.');
+    if (!subjectId || changeCount === 0 || !grounded || !reason.trim()) {
+      setError('Complete every step: subject, evidence (or witness testimony), stats, and a reason.');
       return;
     }
     setSubmitting(true);
@@ -185,8 +190,7 @@ function NewSuggestionContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subjectPlayerId: subjectId,
-          statId: selectedStatId,
-          delta,
+          changes: Object.entries(changes).map(([statId, delta]) => ({ statId, delta })),
           reason: reason.trim(),
           evidenceIds: selectedEvidenceIds,
           testimony: testimony.trim() || null,
@@ -194,10 +198,14 @@ function NewSuggestionContent() {
       });
       const data = await res.json();
       if (res.ok) {
+        const approvedNow = (data.created || []).filter(
+          (c: any) => c.resolution?.status === 'approved'
+        ).length;
+        const n = data.count || 1;
         setSuccessMessage(
-          data.resolution?.status === 'approved'
-            ? 'Suggestion created — and instantly approved (your yes was already a majority)!'
-            : 'Suggestion created! The crew can now vote.'
+          approvedNow === n
+            ? `${n} suggestion${n > 1 ? 's' : ''} created — and instantly approved (your yes was already a majority)!`
+            : `${n} suggestion${n > 1 ? 's' : ''} created! The crew votes on each separately.`
         );
         setTimeout(() => router.push('/suggestions'), 1600);
       } else {
@@ -354,63 +362,78 @@ function NewSuggestionContent() {
           </section>
         )}
 
-        {/* Step 3: stat (constrained to evidence categories when evidence is attached) */}
+        {/* Step 3: pick the stats (manual — evidence tags don't constrain the choice) */}
         {grounded && (
           <section className="glass card-shadow p-5 animate-rise">
-            <StepLabel n={3} title="Which stat does it prove?" />
+            <StepLabel n={3} title="Which stats does it prove?" />
             <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
-              {selectedEvidenceIds.length > 0
-                ? 'Limited to categories the attached evidence is tagged with.'
-                : 'Testimony-only — any of their tracked stats is fair game.'}
+              Pick as many as the moment genuinely demonstrated — each becomes its own suggestion
+              the crew votes on separately.
             </p>
             {loadingStats ? (
               <div className="h-24 rounded-xl animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }} />
-            ) : availableStats.length === 0 ? (
+            ) : subjectStats.length === 0 ? (
               <p className="text-sm py-3" style={{ color: 'var(--text-secondary)' }}>
-                No stats available in the evidence's categories.
+                No tracked stats for this player.
               </p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableStats.map((stat) => {
-                  const meta = getCategoryMeta(stat.categoryCode, stat.categoryLabel);
-                  const active = selectedStatId === stat.id;
+              <div className="space-y-4">
+                {[...new Set(subjectStats.map((s) => s.categoryCode))].map((catCode) => {
+                  const catStats = subjectStats.filter((s) => s.categoryCode === catCode);
+                  const meta = getCategoryMeta(catCode, catStats[0]?.categoryLabel);
                   return (
-                    <button
-                      key={stat.id}
-                      onClick={() => !stat.locked && setSelectedStatId(stat.id)}
-                      disabled={stat.locked}
-                      className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-left transition ${
-                        stat.locked
-                          ? 'opacity-50 cursor-not-allowed'
-                          : active
-                          ? 'text-white'
-                          : 'text-neutral-300 hover:text-white'
-                      }`}
-                      style={{
-                        borderColor: active ? meta.hex : 'var(--surface-border)',
-                        background: active ? `${meta.hex}18` : 'rgba(255,255,255,0.02)',
-                      }}
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium truncate">{stat.label}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: meta.hex }}>
-                          {stat.code} · now {stat.value}
-                        </span>
-                      </span>
-                      <span className="shrink-0 flex items-center gap-1.5">
-                        {stat.locked ? (
-                          <LockBadge
-                            reasons={stat.lockReasons}
-                            source={stat.lockSource}
-                            statLabel={stat.label}
-                          />
-                        ) : active ? (
-                          <span style={{ color: meta.hex }}>
-                            <CheckIcon size={16} />
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
+                    <div key={catCode}>
+                      <p
+                        className="text-[11px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"
+                        style={{ color: meta.hex }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.hex }} />
+                        {catStats[0]?.categoryLabel || catCode}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {catStats.map((stat) => {
+                          const active = changes[stat.id] !== undefined;
+                          return (
+                            <button
+                              key={stat.id}
+                              onClick={() => !stat.locked && toggleStat(stat.id)}
+                              disabled={stat.locked}
+                              className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-left transition ${
+                                stat.locked
+                                  ? 'opacity-50 cursor-not-allowed'
+                                  : active
+                                  ? 'text-white'
+                                  : 'text-neutral-300 hover:text-white'
+                              }`}
+                              style={{
+                                borderColor: active ? meta.hex : 'var(--surface-border)',
+                                background: active ? `${meta.hex}18` : 'rgba(255,255,255,0.02)',
+                              }}
+                            >
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium truncate">{stat.label}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: meta.hex }}>
+                                  {stat.code} · now {stat.value}
+                                </span>
+                              </span>
+                              <span className="shrink-0 flex items-center gap-1.5">
+                                {stat.locked ? (
+                                  <LockBadge
+                                    reasons={stat.lockReasons}
+                                    source={stat.lockSource}
+                                    statLabel={stat.label}
+                                  />
+                                ) : active ? (
+                                  <span style={{ color: meta.hex }}>
+                                    <CheckIcon size={16} />
+                                  </span>
+                                ) : null}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -418,41 +441,73 @@ function NewSuggestionContent() {
           </section>
         )}
 
-        {/* Step 4: delta + reason */}
-        {selectedStat && (
+        {/* Step 4: per-stat deltas + reason */}
+        {changeCount > 0 && (
           <section className="glass card-shadow p-5 animate-rise">
-            <StepLabel n={4} title="The change" />
-            <div className="grid grid-cols-4 gap-2 mb-2">
-              {DELTAS.map((d) => {
-                const active = delta === d.value;
-                const positive = d.value > 0;
-                const color = positive ? 'var(--accent-green)' : 'var(--accent-red)';
+            <StepLabel n={4} title={`The change${changeCount > 1 ? 's' : ''}`} />
+            <p className="text-xs mb-4" style={{ color: 'var(--text-secondary)' }}>
+              ±1 is the default. <span className="text-white font-medium">Save ±2 for genuinely
+              exceptional moments</span> — particularly impressive or particularly bad.
+            </p>
+
+            <div className="space-y-3 mb-4">
+              {selectedStats.map((stat) => {
+                const meta = getCategoryMeta(stat.categoryCode, stat.categoryLabel);
+                const d = changes[stat.id] ?? 1;
+                const projected = Math.max(0, stat.value + d);
                 return (
-                  <button
-                    key={d.value}
-                    onClick={() => setDelta(d.value)}
-                    className={`py-3 rounded-xl border font-bold font-display text-lg transition ${
-                      active ? 'text-white' : 'text-neutral-400 hover:text-white'
-                    }`}
-                    style={{
-                      borderColor: active ? color : 'var(--surface-border)',
-                      background: active ? `color-mix(in srgb, ${color} 20%, transparent)` : 'transparent',
-                    }}
+                  <div
+                    key={stat.id}
+                    className="rounded-xl border p-3"
+                    style={{ borderColor: 'var(--surface-border)', background: 'rgba(255,255,255,0.02)' }}
                   >
-                    {d.label}
-                    <span className="block text-[9px] font-sans font-semibold uppercase tracking-wide opacity-70">
-                      {d.note}
-                    </span>
-                  </button>
+                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{stat.label}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: meta.hex }}>
+                          {stat.code}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-sm font-bold" style={{ color: d > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                          {stat.value} → {projected}
+                        </span>
+                        <TierBadge value={projected} />
+                        <button
+                          onClick={() => toggleStat(stat.id)}
+                          className="p-1 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition"
+                          title="Remove this stat"
+                        >
+                          <XIcon size={13} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {DELTAS.map((opt) => {
+                        const active = d === opt.value;
+                        const color = opt.value > 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => setStatDelta(stat.id, opt.value)}
+                            className={`py-1.5 rounded-lg border font-bold font-display text-sm transition ${
+                              active ? 'text-white' : 'text-neutral-400 hover:text-white'
+                            }`}
+                            style={{
+                              borderColor: active ? color : 'var(--surface-border)',
+                              background: active ? `color-mix(in srgb, ${color} 20%, transparent)` : 'transparent',
+                            }}
+                            title={opt.note}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>
-            <p className="text-xs mb-4" style={{ color: 'var(--text-secondary)' }}>
-              ±1 is the default. Save ±2 for genuinely exceptional cases.{' '}
-              <span className="text-white font-medium">
-                {selectedStat.label}: {selectedStat.value} → {Math.max(0, selectedStat.value + delta)}
-              </span>
-            </p>
 
             <label className="block text-sm font-semibold text-white mb-2">Reason (required)</label>
             <textarea
@@ -460,7 +515,7 @@ function NewSuggestionContent() {
               onChange={(e) => setReason(e.target.value)}
               className="field resize-none"
               rows={3}
-              placeholder="Why does the evidence justify this change?"
+              placeholder="Why does the evidence / what you witnessed justify these changes?"
             />
 
             {error && (
@@ -479,12 +534,14 @@ function NewSuggestionContent() {
               disabled={submitting || !reason.trim()}
               className="btn-gradient w-full py-3 mt-4"
             >
-              {submitting ? 'Submitting...' : 'Submit — this is your yes vote'}
+              {submitting
+                ? 'Submitting...'
+                : `Submit ${changeCount > 1 ? `${changeCount} suggestions` : 'suggestion'} — your yes vote on each`}
             </button>
           </section>
         )}
 
-        {error && !selectedStat && (
+        {error && changeCount === 0 && (
           <div className="rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/40 bg-red-500/10">
             {error}
           </div>

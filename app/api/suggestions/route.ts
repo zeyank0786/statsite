@@ -145,16 +145,27 @@ export async function POST(request: Request) {
   if (!proposerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { subjectPlayerId, statId, delta, reason, evidenceIds, testimony } = await request.json();
+    const { subjectPlayerId, changes, reason, evidenceIds, testimony } = await request.json();
 
-    if (!subjectPlayerId || !statId || !reason?.trim()) {
-      return NextResponse.json({ error: 'subjectPlayerId, statId and reason are required' }, { status: 400 });
+    if (!subjectPlayerId || !reason?.trim()) {
+      return NextResponse.json({ error: 'subjectPlayerId and reason are required' }, { status: 400 });
     }
     if (subjectPlayerId === proposerId) {
       return NextResponse.json({ error: "You can't make suggestions about your own stats" }, { status: 403 });
     }
-    if (!ALLOWED_DELTAS.includes(Number(delta))) {
-      return NextResponse.json({ error: 'Delta must be -2, -1, +1 or +2' }, { status: 400 });
+    // changes = [{ statId, delta }, ...] — one suggestion is created per stat
+    // (auto-split), so the crew votes on each change independently.
+    if (!Array.isArray(changes) || changes.length === 0) {
+      return NextResponse.json({ error: 'Pick at least one stat to change' }, { status: 400 });
+    }
+    const statIds = changes.map((c: any) => String(c?.statId || ''));
+    if (statIds.some((s: string) => !s) || new Set(statIds).size !== statIds.length) {
+      return NextResponse.json({ error: 'Each change needs a distinct statId' }, { status: 400 });
+    }
+    for (const change of changes) {
+      if (!ALLOWED_DELTAS.includes(Number(change.delta))) {
+        return NextResponse.json({ error: 'Each delta must be -2, -1, +1 or +2' }, { status: 400 });
+      }
     }
     const hasEvidence = Array.isArray(evidenceIds) && evidenceIds.length > 0;
     const cleanTestimony = typeof testimony === 'string' ? testimony.trim() : '';
@@ -181,39 +192,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Subject player is not active' }, { status: 400 });
     }
 
-    const stat = await queryOne('SELECT s.id, s.categoryId, s.label FROM Stat s WHERE s.id = ?', [statId]);
-    if (!stat) return NextResponse.json({ error: 'Stat not found' }, { status: 404 });
+    // Every named stat must exist, be visible for the subject, and be unlocked.
+    // Categories are chosen manually by the proposer now — evidence tags no
+    // longer constrain which stats are fair game (written testimony has no
+    // tags, so the constraint stopped making sense).
+    for (const change of changes) {
+      const stat = await queryOne('SELECT s.id, s.label FROM Stat s WHERE s.id = ?', [change.statId]);
+      if (!stat) return NextResponse.json({ error: 'Stat not found' }, { status: 404 });
 
-    // Visibility: hidden stats aren't suggestible for that player
-    const hiddenRow = await queryOne(
-      'SELECT hidden FROM StatVisibility WHERE statId = ? AND playerId = ? AND hidden = 1',
-      [statId, subjectPlayerId]
-    );
-    if (hiddenRow) {
-      return NextResponse.json({ error: 'That stat is not tracked for this player' }, { status: 400 });
-    }
-
-    // Locking: blocked with a clear unlock message
-    const lock = await isStatLockedForPlayer(String(statId), String(subjectPlayerId));
-    if (lock.locked) {
-      return NextResponse.json(
-        { error: `"${stat.label}" is locked for this player. ${describeLock(lock)}` },
-        { status: 400 }
+      const hiddenRow = await queryOne(
+        'SELECT hidden FROM StatVisibility WHERE statId = ? AND playerId = ? AND hidden = 1',
+        [change.statId, subjectPlayerId]
       );
+      if (hiddenRow) {
+        return NextResponse.json({ error: `"${stat.label}" is not tracked for this player` }, { status: 400 });
+      }
+
+      const lock = await isStatLockedForPlayer(String(change.statId), String(subjectPlayerId));
+      if (lock.locked) {
+        return NextResponse.json(
+          { error: `"${stat.label}" is locked for this player. ${describeLock(lock)}` },
+          { status: 400 }
+        );
+      }
     }
 
-    // Evidence (when attached): must exist, be posted by the subject, and at
-    // least one piece must be tagged with the stat's category (keeps
-    // suggestions relevant). Testimony-only suggestions skip these checks —
-    // the written account itself is the grounding, vetted by the vote.
+    // Evidence (when attached): must exist and be posted by the subject.
     const uniqueEvidenceIds = hasEvidence ? [...new Set(evidenceIds as string[])] : [];
     if (hasEvidence) {
       const placeholders = uniqueEvidenceIds.map(() => '?').join(',');
       const evidence = await queryAll(
-        `SELECT e.id, e.playerId,
-                (SELECT COUNT(*) FROM EvidenceCategory ec WHERE ec.evidenceId = e.id AND ec.categoryId = ?) as matchesCategory
-         FROM Evidence e WHERE e.id IN (${placeholders})`,
-        [String(stat.categoryId), ...uniqueEvidenceIds]
+        `SELECT e.id, e.playerId FROM Evidence e WHERE e.id IN (${placeholders})`,
+        uniqueEvidenceIds
       );
       if (evidence.length !== uniqueEvidenceIds.length) {
         return NextResponse.json({ error: 'One or more evidence posts were not found' }, { status: 400 });
@@ -223,61 +233,58 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Evidence must be posted by the subject themselves' }, { status: 400 });
         }
       }
-      if (!(evidence as any[]).some((post) => Number(post.matchesCategory) > 0)) {
-        return NextResponse.json(
-          { error: 'The stat must belong to a category the attached evidence was tagged with' },
-          { status: 400 }
-        );
-      }
     }
 
-    const id = uuid();
+    // Auto-split: one Suggestion row per stat change, all sharing the same
+    // reason / testimony / evidence links. The crew votes on each separately.
     const now = new Date().toISOString();
-    const insertArgs = [
-      id,
-      subjectPlayerId,
-      proposerId,
-      statId,
-      Number(delta),
-      reason.trim(),
-      cleanTestimony || null,
-      now,
-      now,
-    ];
-    try {
-      await query(
-        `INSERT INTO Suggestion (id, playerId, proposedById, statId, delta, reason, testimony, status, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
-        insertArgs
-      );
-    } catch (e: any) {
-      // Self-healing migration: the testimony column is additive, so create it
-      // on first use instead of requiring a manual Turso migration.
-      if (!/no column named testimony|no such column/i.test(String(e?.message))) throw e;
-      await query('ALTER TABLE Suggestion ADD COLUMN testimony TEXT');
-      await query(
-        `INSERT INTO Suggestion (id, playerId, proposedById, statId, delta, reason, testimony, status, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
-        insertArgs
-      );
+    const created: { id: string; statId: string; resolution: any }[] = [];
+    let testimonyColumnEnsured = false;
+
+    for (const change of changes) {
+      const id = uuid();
+      const insertArgs = [
+        id,
+        subjectPlayerId,
+        proposerId,
+        String(change.statId),
+        Number(change.delta),
+        reason.trim(),
+        cleanTestimony || null,
+        now,
+        now,
+      ];
+      const insertSql = `INSERT INTO Suggestion (id, playerId, proposedById, statId, delta, reason, testimony, status, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`;
+      try {
+        await query(insertSql, insertArgs);
+      } catch (e: any) {
+        // Self-healing migration: the testimony column is additive, so create it
+        // on first use instead of requiring a manual Turso migration.
+        if (testimonyColumnEnsured || !/no column named testimony|no such column/i.test(String(e?.message))) throw e;
+        await query('ALTER TABLE Suggestion ADD COLUMN testimony TEXT');
+        testimonyColumnEnsured = true;
+        await query(insertSql, insertArgs);
+      }
+      for (const evidenceId of uniqueEvidenceIds) {
+        await query('INSERT INTO SuggestionEvidence (suggestionId, evidenceId) VALUES (?, ?)', [id, evidenceId]);
+      }
+
+      // Proposing counts as an implicit yes — write the Vote row so tallies stay simple
+      await query('INSERT INTO Vote (id, suggestionId, userId, choice, createdAt) VALUES (?, ?, ?, ?, ?)', [
+        uuid(),
+        id,
+        proposerId,
+        'yes',
+        now,
+      ]);
+
+      // A 2-player roster means 1 eligible voter — the proposal itself is already a majority
+      const resolution = await resolveSuggestion(id);
+      created.push({ id, statId: String(change.statId), resolution });
     }
-    for (const evidenceId of uniqueEvidenceIds) {
-      await query('INSERT INTO SuggestionEvidence (suggestionId, evidenceId) VALUES (?, ?)', [id, evidenceId]);
-    }
 
-    // Proposing counts as an implicit yes — write the Vote row so tallies stay simple
-    await query('INSERT INTO Vote (id, suggestionId, userId, choice, createdAt) VALUES (?, ?, ?, ?, ?)', [
-      uuid(),
-      id,
-      proposerId,
-      'yes',
-      now,
-    ]);
-
-    // A 2-player roster means 1 eligible voter — the proposal itself is already a majority
-    const resolution = await resolveSuggestion(id);
-
-    return NextResponse.json({ success: true, id, resolution });
+    return NextResponse.json({ success: true, created, count: created.length });
   } catch (error: any) {
     console.error('Error creating suggestion:', error);
     return NextResponse.json({ error: 'Failed to create suggestion', details: error.message }, { status: 500 });

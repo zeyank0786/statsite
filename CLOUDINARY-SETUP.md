@@ -39,6 +39,24 @@ NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name_here
 NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=4ward-evidence
 ```
 
+### Optional but recommended: auto-delete assets (saves storage)
+When someone deletes an evidence post, the app can also delete the photo/video
+from Cloudinary. That needs the **API key + secret** from the same dashboard
+page as your cloud name (Dashboard → "API Keys"):
+
+```
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+These are server-side secrets (no `NEXT_PUBLIC_` prefix — never expose them to
+the browser). Without them everything still works; deleted posts just leave
+their media behind in Cloudinary.
+
+> File size limits are enforced by the app itself (10 MB images / 100 MB
+> videos, `lib/cloudinary.ts`) — you can skip the preset's max-file-size
+> setting entirely.
+
 Redeploy (these are build-time variables). The "uploads not configured" banner
 on the evidence board disappears and the photo/video picker goes live.
 

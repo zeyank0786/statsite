@@ -28,6 +28,9 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0f",
   width: "device-width",
   initialScale: 1,
+  // Required for env(safe-area-inset-*) to be non-zero on iOS home-screen
+  // installs — without it the tab bar sits flush against the home indicator.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

@@ -13,6 +13,9 @@ import {
   TrophyIcon,
   AwardIcon,
   CheckIcon,
+  CameraIcon,
+  LightbulbIcon,
+  MessageIcon,
 } from './icons';
 
 export interface AchievementData {
@@ -20,6 +23,7 @@ export interface AchievementData {
   name: string;
   description: string;
   icon: string;
+  group?: string;
   earned: boolean;
   detail?: string;
 }
@@ -36,6 +40,9 @@ const ICON_MAP: Record<string, { Icon: (p: any) => React.ReactNode; rgb: string 
   flame: { Icon: FlameIcon, rgb: '249, 115, 22' },
   trophy: { Icon: TrophyIcon, rgb: '251, 191, 36' },
   award: { Icon: AwardIcon, rgb: '236, 72, 153' },
+  camera: { Icon: CameraIcon, rgb: '249, 115, 22' },
+  lightbulb: { Icon: LightbulbIcon, rgb: '168, 85, 247' },
+  message: { Icon: MessageIcon, rgb: '34, 211, 238' },
 };
 
 export default function AchievementBadge({

@@ -11,8 +11,9 @@ import AchievementBadge, { AchievementData } from '@/components/AchievementBadge
 import StatDescriptionModal from '@/components/StatDescriptionModal';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 import { getUserColorHex } from '@/lib/userColors';
-import { orderCategories, getCategoryMeta, getValueColor, categoryAvg, scaleMax } from '@/lib/categories';
+import { orderCategories, getCategoryMeta, getValueColor, scaleMax } from '@/lib/categories';
 import LockBadge from '@/components/LockBadge';
+import TierBadge from '@/components/TierBadge';
 import {
   CompareIcon,
   PencilIcon,
@@ -215,7 +216,8 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const earned = achievements.filter((a) => a.earned);
   const radarLabels = orderedCategories.map((c) => getCategoryMeta(c.code).short);
   const radarColors = orderedCategories.map((c) => getCategoryMeta(c.code).hex);
-  const radarValues = orderedCategories.map((c) => categoryAvg(c.stats));
+  // Category totals as ratios — the strongest category defines the outer edge
+  const radarValues = orderedCategories.map((c) => c.stats.reduce((s, st) => s + st.value, 0));
 
   return (
     <AppShell>
@@ -343,7 +345,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
               labels={radarLabels}
               labelColors={radarColors}
               series={[{ label: playerName, color: hex, values: radarValues }]}
-              max={scaleMax(radarValues)}
+              max={Math.max(...radarValues, 1)}
               size={300}
             />
           </div>
@@ -487,6 +489,9 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                           className="h-full rounded-full transition-all duration-500"
                           style={{ width: `${Math.min(100, (stat.value / catMax) * 100)}%`, backgroundColor: valueColor }}
                         />
+                      </div>
+                      <div className="mt-2">
+                        <TierBadge value={stat.value} />
                       </div>
 
                       {notes[stat.id] && notes[stat.id].length > 0 && (

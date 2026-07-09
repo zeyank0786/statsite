@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
+import { destroyCloudinaryAsset } from '@/lib/cloudinaryServer';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -175,7 +176,10 @@ export async function DELETE(request: Request) {
     const { evidenceId } = await request.json();
     if (!evidenceId) return NextResponse.json({ error: 'evidenceId required' }, { status: 400 });
 
-    const post = await queryOne('SELECT playerId FROM Evidence WHERE id = ?', [evidenceId]);
+    const post = await queryOne(
+      'SELECT playerId, cloudinaryPublicId, mediaType FROM Evidence WHERE id = ?',
+      [evidenceId]
+    );
     if (!post) return NextResponse.json({ error: 'Evidence not found' }, { status: 404 });
     if (String(post.playerId) !== playerId) {
       return NextResponse.json({ error: 'You can only delete your own evidence' }, { status: 403 });
@@ -187,6 +191,18 @@ export async function DELETE(request: Request) {
         { error: 'This evidence is cited by a suggestion and can no longer be deleted (hide the caption instead)' },
         { status: 400 }
       );
+    }
+
+    // Free the storage too — a failed/unconfigured Cloudinary delete never
+    // blocks the post's deletion, it just logs.
+    if (post.cloudinaryPublicId) {
+      const destroyed = await destroyCloudinaryAsset(
+        String(post.cloudinaryPublicId),
+        post.mediaType ? String(post.mediaType) : null
+      );
+      if (!destroyed.ok && !destroyed.skipped) {
+        console.error('Cloudinary destroy failed:', destroyed.error);
+      }
     }
 
     await query('DELETE FROM EvidenceCategory WHERE evidenceId = ?', [evidenceId]);

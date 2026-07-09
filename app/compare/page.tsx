@@ -7,7 +7,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import RadarChart from '@/components/RadarChart';
-import { orderCategories, getCategoryMeta, categoryAvg, computeOverallScore, scaleMax } from '@/lib/categories';
+import { orderCategories, getCategoryMeta, computeOverallScore, scaleMax } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
 
 interface Player {
@@ -94,17 +94,28 @@ function CompareContent() {
   const catsB = profileB ? orderCategories(profileB.categories) : [];
   const ready = catsA.length > 0 && catsB.length > 0 && !loading;
 
-  const labels = catsA.map((c) => getCategoryMeta(c.code).short);
-  const labelColors = catsA.map((c) => getCategoryMeta(c.code).hex);
-  const valuesA = catsA.map((c) => categoryAvg(c.stats));
-  const valuesB = catsB.map((c) => categoryAvg(c.stats));
+  // Axes = the union of both players' visible categories (per-player hidden
+  // stats/categories can differ), values = category totals, shared max so the
+  // radar reads as a true ratio comparison.
+  const unionCats = orderCategories([
+    ...catsA,
+    ...catsB.filter((cb) => !catsA.some((ca) => ca.code === cb.code)),
+  ]);
+  const categoryTotal = (cats: typeof catsA, code: string) =>
+    cats.find((c) => c.code === code)?.stats.reduce((s, st) => s + st.value, 0) ?? 0;
+
+  const labels = unionCats.map((c) => getCategoryMeta(c.code).short);
+  const labelColors = unionCats.map((c) => getCategoryMeta(c.code).hex);
+  const valuesA = unionCats.map((c) => categoryTotal(catsA, c.code));
+  const valuesB = unionCats.map((c) => categoryTotal(catsB, c.code));
+  const radarMax = Math.max(...valuesA, ...valuesB, 1);
 
   const overallA = profileA ? computeOverallScore(profileA.categories) : 0;
   const overallB = profileB ? computeOverallScore(profileB.categories) : 0;
 
   let winsA = 0;
   let winsB = 0;
-  catsA.forEach((cat, i) => {
+  unionCats.forEach((cat, i) => {
     const a = valuesA[i] ?? 0;
     const b = valuesB[i] ?? 0;
     if (a > b) winsA++;
@@ -185,7 +196,7 @@ function CompareContent() {
                     { label: profileA!.player.username, color: hexA, values: valuesA },
                     { label: profileB!.player.username, color: hexB, values: valuesB },
                   ]}
-                  max={scaleMax([...valuesA, ...valuesB])}
+                  max={radarMax}
                   size={340}
                 />
                 <div className="flex justify-center gap-5 mt-2">
@@ -208,23 +219,23 @@ function CompareContent() {
           <section className="glass card-shadow p-6 md:p-8 mb-6 animate-rise animate-rise-3">
             <h2 className="font-display text-xl font-bold text-white mb-6">Category Breakdown</h2>
             <div className="space-y-5">
-              {catsA.map((cat, i) => {
+              {unionCats.map((cat, i) => {
                 const meta = getCategoryMeta(cat.code, cat.label);
                 const a = valuesA[i] ?? 0;
                 const b = valuesB[i] ?? 0;
-                const rowMax = scaleMax([...valuesA, ...valuesB]);
+                const rowMax = radarMax;
                 return (
                   <div key={cat.code}>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm font-bold" style={{ color: hexA }}>
-                        {a.toFixed(1)}
+                        {a} pts
                       </span>
                       <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: meta.hex }}>
                         <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.hex }} />
                         {meta.label}
                       </span>
                       <span className="text-sm font-bold" style={{ color: hexB }}>
-                        {b.toFixed(1)}
+                        {b} pts
                       </span>
                     </div>
                     <div className="flex gap-1.5 items-center">
@@ -249,12 +260,15 @@ function CompareContent() {
 
           {/* Per-stat table */}
           <section className="space-y-5">
-            {catsA.map((cat, ci) => {
+            {unionCats.map((cat) => {
               const meta = getCategoryMeta(cat.code, cat.label);
-              const statsB = new Map(catsB[ci]?.stats.map((s) => [s.code, s.value]) || []);
+              const catB = catsB.find((c) => c.code === cat.code);
+              const catA = catsA.find((c) => c.code === cat.code);
+              const rowStats = (catA ?? cat).stats;
+              const statsB = new Map(catB?.stats.map((s) => [s.code, s.value]) || []);
               const statMax = scaleMax([
-                ...cat.stats.map((s) => s.value),
-                ...(catsB[ci]?.stats.map((s) => s.value) || []),
+                ...rowStats.map((s) => s.value),
+                ...(catB?.stats.map((s) => s.value) || []),
               ]);
               return (
                 <div key={cat.code} className="glass card-shadow p-5 md:p-6">
@@ -263,8 +277,8 @@ function CompareContent() {
                     {cat.label}
                   </h3>
                   <div className="space-y-1">
-                    {cat.stats.map((stat) => {
-                      const a = stat.value;
+                    {rowStats.map((stat) => {
+                      const a = catA ? stat.value : 0;
                       const b = statsB.get(stat.code) ?? 0;
                       const diff = a - b;
                       return (
