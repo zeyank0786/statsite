@@ -306,7 +306,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
 
   const handleEditStat = async (statId: string, newValue: number) => {
     if (!isEditor) return;
-    if (newValue < 0 || newValue > 10) return;
+    if (newValue < 0) return; // scores are unbounded above, floored at 0
     setSaving(true);
     try {
       const res = await fetch(`/api/reviews/sessions/${sessionId}/stats`, {
@@ -505,7 +505,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                   </p>
                   <p className="text-xl md:text-2xl font-bold" style={{ color: meta.hex }}>
                     {categoryTotal}
-                    <span className="text-sm font-medium opacity-60">/{category.stats.length * 10}</span>
+                    <span className="text-sm font-medium opacity-60"> pts</span>
                   </p>
                 </div>
               </div>
@@ -544,7 +544,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                         <p className="text-3xl font-bold font-display" style={{ color: valueColor }}>
                           {stat.value}
                         </p>
-                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>/10</p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>pts</p>
                         {diff !== null && diff !== 0 && (
                           <span
                             className="ml-auto text-[11px] font-bold flex items-center gap-0.5"
@@ -570,8 +570,8 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                               <MinusIcon size={14} />
                             </button>
                             <button
-                              onClick={() => handleEditStat(stat.statId, Math.min(10, stat.value + 1))}
-                              disabled={saving || closing || stat.value === 10}
+                              onClick={() => handleEditStat(stat.statId, stat.value + 1)}
+                              disabled={saving || closing}
                               className="flex-1 py-1.5 rounded-lg font-bold transition text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-40 flex items-center justify-center"
                             >
                               <PlusIcon size={14} />
@@ -580,7 +580,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                           <input
                             type="range"
                             min="0"
-                            max="10"
+                            max={Math.max(10, stat.value + 2)}
                             value={stat.value}
                             onChange={(e) => handleEditStat(stat.statId, parseInt(e.target.value))}
                             disabled={saving || closing}

@@ -8,7 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 import StatDescriptionModal from '@/components/StatDescriptionModal';
-import { getCategoryMeta } from '@/lib/categories';
+import { getCategoryMeta, orderCategories, orderStats, scaleMax } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
 import { SearchIcon, XIcon, CheckIcon, TargetIcon } from '@/components/icons';
 
@@ -20,96 +20,23 @@ interface Target {
   username: string;
 }
 
-interface Stat {
+interface StatOption {
   code: string;
   label: string;
 }
 
-const ALL_STATS = [
-  { code: 'mtl-a', label: 'Unwavering Self-Confidence' },
-  { code: 'mtl-b', label: 'Pressure Performance' },
-  { code: 'mtl-c', label: 'Creative Problem-Solving' },
-  { code: 'mtl-d', label: 'Maximum Potential Drive' },
-  { code: 'mtl-e', label: 'Growth Mindset' },
-  { code: 'mtl-f', label: 'Emotional Resilience' },
-  { code: 'mtl-g', label: 'Mental Clarity & Focus' },
-  { code: 'mtl-h', label: 'Positive Self-Talk' },
-  { code: 'mtl-i', label: 'Long-Term Vision Alignment' },
-  { code: 'mtl-j', label: 'Adaptability to Uncertainty' },
-  { code: 'phy-a', label: 'Overall Strength' },
-  { code: 'phy-b', label: 'Cardiovascular Endurance' },
-  { code: 'phy-c', label: 'Hand Speed & Reaction Time' },
-  { code: 'phy-d', label: 'Sprint Speed & Explosiveness' },
-  { code: 'phy-e', label: 'Vertical Jump & Power' },
-  { code: 'phy-f', label: 'Balance & Proprioception' },
-  { code: 'phy-g', label: 'Body Aesthetics & Composition' },
-  { code: 'phy-h', label: 'Punch Power & Striking Force' },
-  { code: 'phy-i', label: 'Push Power & Upper Body Force' },
-  { code: 'phy-j', label: 'Hand-Eye Coordination' },
-  { code: 'kno-a', label: 'Business & Entrepreneurship Knowledge' },
-  { code: 'kno-b', label: 'Sports Knowledge' },
-  { code: 'kno-c', label: 'General World Knowledge' },
-  { code: 'kno-d', label: 'Pop Culture Awareness' },
-  { code: 'kno-e', label: 'News & Current Affairs' },
-  { code: 'kno-f', label: 'Academic / Technical Knowledge' },
-  { code: 'kno-g', label: 'Psychology & Human Behavior' },
-  { code: 'kno-h', label: 'Financial Literacy' },
-  { code: 'kno-i', label: 'Health & Nutrition Science' },
-  { code: 'kno-j', label: 'Technology & Future Trends' },
-  { code: 'strs-a', label: 'People Reading & Social Adaptability' },
-  { code: 'strs-b', label: 'Learning on the Fly' },
-  { code: 'strs-c', label: 'Opportunity Spotting' },
-  { code: 'strs-d', label: 'Risk & Trap Avoidance' },
-  { code: 'strs-e', label: 'Real-World Resourcefulness' },
-  { code: 'strs-f', label: 'Negotiation & Persuasion' },
-  { code: 'strs-g', label: 'Situational Awareness' },
-  { code: 'strs-h', label: 'Independence from Systems' },
-  { code: 'strs-i', label: 'Street-Level Practical Wisdom' },
-  { code: 'strs-j', label: 'Boundary Setting & Self-Protection' },
-  { code: 'stra-a', label: 'Long-Term Planning' },
-  { code: 'stra-b', label: 'Sacrifice Discipline' },
-  { code: 'stra-c', label: 'Environmental Adaptation' },
-  { code: 'stra-d', label: 'Trap Setting & Avoidance' },
-  { code: 'stra-e', label: 'Composure Under Complexity' },
-  { code: 'stra-f', label: 'Scenario Thinking' },
-  { code: 'stra-g', label: 'Resource Allocation' },
-  { code: 'stra-h', label: 'On-the-Spot Reactivity' },
-  { code: 'stra-i', label: 'Risk Assessment' },
-  { code: 'stra-j', label: 'Contingency Planning' },
-  { code: 'ski-a', label: 'Depth in Core High-Value Skills' },
-  { code: 'ski-b', label: 'Breadth of Useful Skills' },
-  { code: 'ski-c', label: 'Rapid Learning Ability' },
-  { code: 'ski-d', label: 'Self-Initiated Skill Development' },
-  { code: 'ski-e', label: 'Skill Transferability' },
-  { code: 'ski-f', label: 'Deliberate Practice Habit' },
-  { code: 'ski-g', label: 'Teaching / Explaining Ability' },
-  { code: 'ski-h', label: 'Adaptability of Skills' },
-  { code: 'ski-i', label: 'Portfolio of Demonstrable Skills' },
-  { code: 'ski-j', label: 'Continuous Skill Upgrading' },
-  { code: 'enr-a', label: 'Physical Appearance & Vitality' },
-  { code: 'enr-b', label: 'Presence & Charisma' },
-  { code: 'enr-c', label: 'Vocal Energy & Tone' },
-  { code: 'enr-d', label: 'Clarity of Communication' },
-  { code: 'enr-e', label: 'Body Language' },
-  { code: 'enr-f', label: 'Emotional Contagion' },
-  { code: 'enr-g', label: 'Social Stamina' },
-  { code: 'enr-h', label: 'Natural Authority' },
-  { code: 'enr-i', label: 'Inspirational Motivation' },
-  { code: 'enr-j', label: 'Crisis Leadership' },
-];
-
 export default function TargetsPage() {
   const { status, data: session } = useSession();
   const router = useRouter();
-  const [selectedTargets, setSelectedTargets] = useState<Stat[]>([]);
+  const [selectedTargets, setSelectedTargets] = useState<StatOption[]>([]);
   const [allTargets, setAllTargets] = useState<Target[]>([]);
+  const [availableStats, setAvailableStats] = useState<StatOption[]>([]);
   const [playerStats, setPlayerStats] = useState<Record<string, number>>({});
   const [allPlayersStats, setAllPlayersStats] = useState<Record<string, Record<string, number>>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [hideMaxed, setHideMaxed] = useState(true);
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
   const [sortAscending, setSortAscending] = useState(true);
   const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
@@ -137,16 +64,20 @@ export default function TargetsPage() {
         setSelectedTargets(userTargets.map((t: Target) => ({ code: t.statCode, label: t.statLabel })));
       }
 
+      // Your visible stat catalog + current values come from your profile API
       const statsRes = await fetch(`/api/players/${currentPlayerId}`);
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         const statsMap: Record<string, number> = {};
-        statsData.categories?.forEach((category: any) => {
-          category.stats?.forEach((stat: any) => {
+        const options: StatOption[] = [];
+        for (const category of orderCategories<any>(statsData.categories || [])) {
+          for (const stat of orderStats<any>(category.stats || [])) {
             statsMap[stat.code] = stat.value;
-          });
-        });
+            options.push({ code: stat.code, label: stat.label });
+          }
+        }
         setPlayerStats(statsMap);
+        setAvailableStats(options);
       }
 
       const otherPlayerIds = [
@@ -180,7 +111,7 @@ export default function TargetsPage() {
     }
   };
 
-  const handleSelectTarget = (stat: Stat) => {
+  const handleSelectTarget = (stat: StatOption) => {
     setSaved(false);
     if (selectedTargets.find((t) => t.code === stat.code)) {
       setSelectedTargets(selectedTargets.filter((t) => t.code !== stat.code));
@@ -220,7 +151,7 @@ export default function TargetsPage() {
     return 'red';
   };
 
-  const getSortedStats = (stats: typeof ALL_STATS) => {
+  const getSortedStats = (stats: StatOption[]) => {
     const sorted = [...stats];
     switch (sortBy) {
       case 'name': {
@@ -234,18 +165,18 @@ export default function TargetsPage() {
     }
   };
 
-  const filteredStats = ALL_STATS.filter((stat) => {
+  const filteredStats = availableStats.filter((stat) => {
     const matchesSearch =
       stat.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
       stat.code.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
     const currentValue = playerStats[stat.code] ?? 0;
-    if (hideMaxed && currentValue >= 10) return false;
     if (colorFilter !== 'all' && getColorCategory(currentValue) !== colorFilter) return false;
     return true;
   });
 
   const sortedFilteredStats = getSortedStats(filteredStats);
+  const globalMax = scaleMax(Object.values(playerStats));
 
   const targetsByPlayer = Array.from(
     new Map(allTargets.map((t) => [t.username, allTargets.filter((x) => x.username === t.username)])).entries()
@@ -265,15 +196,15 @@ export default function TargetsPage() {
     <AppShell>
       <PageHeader
         title="Targets"
-        subtitle="Each of us commits to 3 stats. Lock in, then prove it at the next review."
+        subtitle="Each of us commits to 3 stats. Lock in, then bring the evidence."
         eyebrow="Focus"
         eyebrowColor="var(--accent-green)"
       />
 
-      {/* Team targets */}
+      {/* Crew targets */}
       <section className="mb-10 animate-rise">
         <h2 className="font-display text-xl font-bold text-white mb-4">Crew Targets</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:repeat(auto-fill,minmax(250px,1fr))] gap-4">
           {targetsByPlayer.map(([playerName, targets]) => {
             const playerId = targets.length > 0 ? targets[0].playerId : null;
             const isCurrentUser = playerId === currentPlayerId;
@@ -283,6 +214,7 @@ export default function TargetsPage() {
               ? allPlayersStats[playerId] || {}
               : {};
             const hex = playerId ? getUserColorHex(playerId) : '#22d3ee';
+            const cardMax = scaleMax(Object.values(playerStatValues));
 
             return (
               <div key={playerName} className="glass card-shadow p-5" style={{ borderTop: `3px solid ${hex}` }}>
@@ -323,10 +255,10 @@ export default function TargetsPage() {
                             <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
                               <div
                                 className="h-full rounded-full"
-                                style={{ width: `${value * 10}%`, background: meta.hex }}
+                                style={{ width: `${Math.min(100, (value / cardMax) * 100)}%`, background: meta.hex }}
                               />
                             </div>
-                            <span className={`text-xs font-bold ${getValueColorClass(value)}`}>{value}/10</span>
+                            <span className={`text-xs font-bold ${getValueColorClass(value)}`}>{value} pts</span>
                           </div>
                         </div>
                       );
@@ -393,9 +325,12 @@ export default function TargetsPage() {
                 <p className="text-[10px] font-bold uppercase tracking-wider mb-3 text-neutral-500">{target.code}</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${currentValue * 10}%`, background: meta.hex }} />
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${Math.min(100, (currentValue / globalMax) * 100)}%`, background: meta.hex }}
+                    />
                   </div>
-                  <span className={`text-sm font-bold ${getValueColorClass(currentValue)}`}>{currentValue}/10</span>
+                  <span className={`text-sm font-bold ${getValueColorClass(currentValue)}`}>{currentValue} pts</span>
                 </div>
               </div>
             );
@@ -474,19 +409,6 @@ export default function TargetsPage() {
                 {f.label}
               </button>
             ))}
-            <button
-              onClick={() => setHideMaxed(!hideMaxed)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ml-auto ${
-                hideMaxed ? 'text-black' : 'text-neutral-400 hover:text-white'
-              }`}
-              style={
-                hideMaxed
-                  ? { backgroundColor: 'var(--accent-cyan)', borderColor: 'var(--accent-cyan)' }
-                  : { borderColor: 'var(--surface-border)' }
-              }
-            >
-              {hideMaxed ? '✓ ' : ''}Hide 10/10s
-            </button>
           </div>
         </div>
 
@@ -522,7 +444,7 @@ export default function TargetsPage() {
                       {stat.code}
                     </p>
                     <p className={`text-xs mt-1.5 font-semibold ${getValueColorClass(currentValue)}`}>
-                      Current: {currentValue}/10
+                      Current: {currentValue} pts
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">

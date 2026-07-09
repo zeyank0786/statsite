@@ -1,7 +1,27 @@
 import { compare } from 'bcryptjs';
 import type { NextAuthOptions } from 'next-auth';
+import { getServerSession } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { queryOne } from './db';
+
+/**
+ * Server-side guard for admin-only API routes. Re-checks isAdmin against the
+ * database (not just the JWT) so a revoked admin can't keep using an old token.
+ * Returns the session on success, or null if the caller is not an admin.
+ */
+export async function requireAdmin() {
+  const authOptions = await getAuthOptions();
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return null;
+
+  const userId = (session.user as any).id;
+  if (!userId) return null;
+
+  const row = await queryOne('SELECT isAdmin FROM User WHERE id = ?', [userId]);
+  if (!row || !Number(row.isAdmin)) return null;
+
+  return session;
+}
 
 export async function getAuthOptions(): Promise<NextAuthOptions> {
   return {
@@ -19,7 +39,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
 
             const user = await queryOne(
-              'SELECT u.id, u.email, u.password, u.playerId, p.username FROM User u LEFT JOIN Player p ON u.playerId = p.id WHERE u.email = ?',
+              'SELECT u.id, u.email, u.password, u.playerId, u.isAdmin, p.username FROM User u LEFT JOIN Player p ON u.playerId = p.id WHERE u.email = ?',
               [credentials.email]
             );
 
@@ -37,6 +57,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               email: String(user.email),
               playerId: user.playerId ? String(user.playerId) : null,
               playerUsername: user.username ? String(user.username) : null,
+              isAdmin: Boolean(Number(user.isAdmin)),
             };
           } catch (error: any) {
             console.error('Auth error:', error.message);
@@ -51,6 +72,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           token.id = (user as any).id;
           token.playerId = (user as any).playerId;
           token.playerUsername = (user as any).playerUsername;
+          token.isAdmin = (user as any).isAdmin;
         }
         return token;
       },
@@ -59,6 +81,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           (session.user as any).id = token.id;
           (session.user as any).playerId = token.playerId;
           (session.user as any).playerUsername = token.playerUsername;
+          (session.user as any).isAdmin = token.isAdmin;
         }
         return session;
       },

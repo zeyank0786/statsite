@@ -6,35 +6,54 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
+import Avatar from '@/components/Avatar';
 import { getCategoryMeta } from '@/lib/categories';
-import { PlusIcon, TrendUpIcon, TrendDownIcon, CheckIcon, XIcon } from '@/components/icons';
+import { PlusIcon, CheckIcon, XIcon, ImageIcon } from '@/components/icons';
+
+interface EvidenceRef {
+  id: string;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  caption: string | null;
+  posterName: string;
+}
 
 interface Suggestion {
   id: string;
-  playerId: string;
-  playerName: string;
+  subjectId: string;
+  subjectName: string;
+  proposerId: string;
+  proposerName: string;
   statCode: string;
   statLabel: string;
-  reason: string;
-  suggestedNewValue: number;
+  categoryCode: string;
+  categoryLabel: string;
   currentValue: number;
-  yesVotes: number;
-  noVotes: number;
+  delta: number;
+  reason: string;
   status: string;
   createdAt: string;
+  resolvedAt: string | null;
+  evidence: EvidenceRef[];
+  yesVotes: number;
+  noVotes: number;
+  eligibleCount: number;
+  votesNeeded: number;
+  voters: { playerId: string; name: string; choice: string }[];
+  yourVote: string | null;
+  canVote: boolean;
+  isSubject: boolean;
+  isProposer: boolean;
 }
-
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  approved: { label: 'Approved', color: 'var(--accent-green)' },
-  rejected: { label: 'Rejected', color: 'var(--accent-red)' },
-  pending: { label: 'Pending', color: 'var(--accent-orange)' },
-};
 
 export default function SuggestionsPage() {
   const { status } = useSession();
   const router = useRouter();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'pending' | 'resolved'>('pending');
+  const [voting, setVoting] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<EvidenceRef | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -43,14 +62,18 @@ export default function SuggestionsPage() {
     }
     if (status === 'authenticated') {
       loadSuggestions();
+      const interval = setInterval(loadSuggestions, 8000);
+      return () => clearInterval(interval);
     }
   }, [status, router]);
 
   const loadSuggestions = async () => {
     try {
       const res = await fetch('/api/suggestions');
-      const results = await res.json();
-      setSuggestions(Array.isArray(results) ? results : []);
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestions(Array.isArray(data) ? data : []);
+      }
     } catch (error) {
       console.error('Failed to load suggestions:', error);
     } finally {
@@ -59,15 +82,23 @@ export default function SuggestionsPage() {
   };
 
   const handleVote = async (suggestionId: string, vote: 'yes' | 'no') => {
+    setVoting(suggestionId);
     try {
       const res = await fetch(`/api/suggestions/${suggestionId}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ vote }),
       });
-      if (res.ok) loadSuggestions();
+      if (res.ok) {
+        await loadSuggestions();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to vote');
+      }
     } catch (error) {
       console.error('Failed to vote:', error);
+    } finally {
+      setVoting(null);
     }
   };
 
@@ -80,11 +111,15 @@ export default function SuggestionsPage() {
     );
   }
 
+  const pending = suggestions.filter((s) => s.status === 'pending');
+  const resolved = suggestions.filter((s) => s.status !== 'pending');
+  const shown = tab === 'pending' ? pending : resolved;
+
   return (
     <AppShell width="narrow">
       <PageHeader
         title="Suggestions"
-        subtitle="Propose stat changes — the crew votes."
+        subtitle="The only way stats change: propose with evidence, the crew votes, majority decides."
         eyebrow="Crew Votes"
         eyebrowColor="var(--accent-purple)"
         actions={
@@ -95,93 +130,250 @@ export default function SuggestionsPage() {
         }
       />
 
-      {suggestions.length === 0 ? (
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl border w-fit mb-6" style={{ borderColor: 'var(--surface-border)' }}>
+        {(
+          [
+            { key: 'pending', label: `Live queue (${pending.length})` },
+            { key: 'resolved', label: `Resolved (${resolved.length})` },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+              tab === t.key ? 'text-white' : 'text-neutral-400 hover:text-white'
+            }`}
+            style={tab === t.key ? { background: 'rgba(168,85,247,0.25)' } : {}}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 ? (
         <div className="glass card-shadow text-center py-16 px-6">
           <p className="text-lg mb-5" style={{ color: 'var(--text-secondary)' }}>
-            No suggestions yet. Be the first to propose a change.
+            {tab === 'pending'
+              ? 'No live suggestions. Spot progress on the evidence board? Call it.'
+              : 'Nothing resolved yet.'}
           </p>
-          <Link href="/suggestions/new" className="btn-gradient inline-flex">
-            <PlusIcon size={16} />
-            Create suggestion
-          </Link>
+          {tab === 'pending' && (
+            <Link href="/evidence" className="btn-ghost inline-flex">
+              Browse the evidence board
+            </Link>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
-          {suggestions.map((suggestion) => {
-            const statusMeta = STATUS_META[suggestion.status] || STATUS_META.pending;
-            const diff = suggestion.suggestedNewValue - suggestion.currentValue;
-            const isIncrease = diff > 0;
-            const catMeta = getCategoryMeta(suggestion.statCode?.split('-')[0]);
+          {shown.map((sg) => {
+            const meta = getCategoryMeta(sg.categoryCode, sg.categoryLabel);
+            const positive = sg.delta > 0;
+            const deltaColor = positive ? 'var(--accent-green)' : 'var(--accent-red)';
+            const projected = Math.max(0, sg.currentValue + sg.delta);
 
             return (
-              <article key={suggestion.id} className="glass glass-hover card-shadow p-5">
-                <div className="flex flex-col md:flex-row gap-5 md:items-center">
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className="font-display text-lg font-bold text-white">{suggestion.playerName}</h3>
-                      <span
-                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                        style={{
-                          background: `color-mix(in srgb, ${statusMeta.color} 15%, transparent)`,
-                          color: statusMeta.color,
-                        }}
-                      >
-                        {statusMeta.label}
-                      </span>
+              <article
+                key={sg.id}
+                className="glass card-shadow p-5"
+                style={{ borderLeft: `3px solid ${meta.hex}` }}
+              >
+                {/* Header row */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar id={sg.subjectId} name={sg.subjectName} size={38} />
+                    <div className="min-w-0">
+                      <p className="font-display font-bold text-white truncate">{sg.subjectName}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        proposed by {sg.proposerName}
+                        {sg.isProposer && ' (you)'} · {new Date(sg.createdAt).toLocaleDateString()}
+                      </p>
                     </div>
-                    <p className="text-sm text-white font-medium">{suggestion.statLabel}</p>
-                    <p className="text-[11px] font-bold uppercase tracking-wider mt-0.5" style={{ color: catMeta.hex }}>
-                      {suggestion.statCode}
-                    </p>
-                    <p className="text-sm italic mt-2" style={{ color: 'var(--text-secondary)' }}>
-                      "{suggestion.reason}"
-                    </p>
                   </div>
-
-                  {/* Change */}
-                  <div
-                    className="flex items-center justify-center gap-3 rounded-xl px-5 py-3 border shrink-0"
-                    style={{ borderColor: 'var(--surface-border)', background: 'rgba(255,255,255,0.02)' }}
-                  >
-                    <span className="text-2xl font-bold text-neutral-400">{suggestion.currentValue}</span>
-                    <span style={{ color: isIncrease ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                      {isIncrease ? <TrendUpIcon size={18} /> : <TrendDownIcon size={18} />}
-                    </span>
+                  {sg.status !== 'pending' && (
                     <span
-                      className="text-2xl font-bold"
-                      style={{ color: isIncrease ? 'var(--accent-green)' : 'var(--accent-red)' }}
+                      className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide shrink-0"
+                      style={{
+                        background:
+                          sg.status === 'approved' ? 'rgba(52,211,153,0.15)' : 'rgba(239,68,68,0.15)',
+                        color: sg.status === 'approved' ? 'var(--accent-green)' : 'var(--accent-red)',
+                      }}
                     >
-                      {suggestion.suggestedNewValue}
+                      {sg.status}
+                    </span>
+                  )}
+                </div>
+
+                {/* Stat + delta */}
+                <div
+                  className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-3 border"
+                  style={{ borderColor: `${meta.hex}33`, background: `${meta.hex}0c` }}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{sg.statLabel}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mt-0.5" style={{ color: meta.hex }}>
+                      {sg.statCode} · {sg.categoryLabel}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <span className="text-lg font-bold text-neutral-400">{sg.currentValue}</span>
+                    <span
+                      className="px-2 py-0.5 rounded-lg text-sm font-bold"
+                      style={{ background: `color-mix(in srgb, ${deltaColor} 18%, transparent)`, color: deltaColor }}
+                    >
+                      {positive ? '+' : ''}
+                      {sg.delta}
+                    </span>
+                    <span className="text-lg font-bold" style={{ color: deltaColor }}>
+                      → {projected}
                     </span>
                   </div>
+                </div>
 
-                  {/* Votes */}
-                  {suggestion.status === 'pending' && (
-                    <div className="flex md:flex-col gap-2 shrink-0">
+                <p className="text-sm italic mb-3" style={{ color: 'var(--text-secondary)' }}>
+                  "{sg.reason}"
+                </p>
+
+                {/* Evidence thumbnails */}
+                {sg.evidence.length > 0 && (
+                  <div className="flex gap-2 mb-4 flex-wrap">
+                    {sg.evidence.map((ev) => (
                       <button
-                        onClick={() => handleVote(suggestion.id, 'yes')}
-                        className="flex-1 md:flex-none px-4 py-2 rounded-xl text-sm font-semibold text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition flex items-center justify-center gap-1.5"
+                        key={ev.id}
+                        onClick={() => setLightbox(ev)}
+                        className="relative w-16 h-16 rounded-lg overflow-hidden border transition hover:brightness-110"
+                        style={{ borderColor: 'var(--surface-border-strong)' }}
+                        title={ev.caption || `Evidence from ${ev.posterName}`}
                       >
-                        <CheckIcon size={14} /> Yes · {suggestion.yesVotes}
+                        {ev.mediaUrl ? (
+                          ev.mediaType === 'video' ? (
+                            <video src={ev.mediaUrl} className="w-full h-full object-cover" muted />
+                          ) : (
+                            <img src={ev.mediaUrl} alt="" className="w-full h-full object-cover" />
+                          )
+                        ) : (
+                          <span className="w-full h-full flex items-center justify-center text-neutral-500">
+                            <ImageIcon size={18} />
+                          </span>
+                        )}
                       </button>
-                      <button
-                        onClick={() => handleVote(suggestion.id, 'no')}
-                        className="flex-1 md:flex-none px-4 py-2 rounded-xl text-sm font-semibold text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition flex items-center justify-center gap-1.5"
-                      >
-                        <XIcon size={14} /> No · {suggestion.noVotes}
-                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Vote tally + controls */}
+                <div className="border-t pt-3.5" style={{ borderColor: 'var(--surface-border)' }}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex-1 min-w-[180px]">
+                      <div className="flex items-center justify-between text-[11px] font-semibold mb-1.5">
+                        <span style={{ color: 'var(--accent-green)' }}>
+                          {sg.yesVotes} yes
+                        </span>
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          needs {sg.votesNeeded} of {sg.eligibleCount}
+                        </span>
+                        <span style={{ color: 'var(--accent-red)' }}>{sg.noVotes} no</span>
+                      </div>
+                      <div className="h-2 rounded-full overflow-hidden flex" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                        <div
+                          className="h-full transition-all"
+                          style={{
+                            width: `${(sg.yesVotes / Math.max(1, sg.eligibleCount)) * 100}%`,
+                            background: 'var(--accent-green)',
+                          }}
+                        />
+                        <div className="flex-1" />
+                        <div
+                          className="h-full transition-all"
+                          style={{
+                            width: `${(sg.noVotes / Math.max(1, sg.eligibleCount)) * 100}%`,
+                            background: 'var(--accent-red)',
+                          }}
+                        />
+                      </div>
+                      {sg.voters.length > 0 && (
+                        <div className="flex gap-1.5 mt-2 flex-wrap">
+                          {sg.voters.map((v) => (
+                            <span
+                              key={v.playerId}
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                              style={{
+                                background:
+                                  v.choice === 'yes' ? 'rgba(52,211,153,0.12)' : 'rgba(239,68,68,0.12)',
+                                color: v.choice === 'yes' ? 'var(--accent-green)' : 'var(--accent-red)',
+                              }}
+                            >
+                              {v.name} {v.choice === 'yes' ? '✓' : '✗'}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {suggestion.status !== 'pending' && (
-                    <div className="text-xs text-right shrink-0" style={{ color: 'var(--text-secondary)' }}>
-                      {suggestion.yesVotes} yes · {suggestion.noVotes} no
-                    </div>
-                  )}
+
+                    {sg.status === 'pending' &&
+                      (sg.isSubject ? (
+                        <p className="text-xs shrink-0" style={{ color: 'var(--text-secondary)' }}>
+                          Your stats — you don't vote on this one
+                        </p>
+                      ) : sg.canVote ? (
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            onClick={() => handleVote(sg.id, 'yes')}
+                            disabled={voting === sg.id}
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold border transition flex items-center gap-1.5 disabled:opacity-50 ${
+                              sg.yourVote === 'yes'
+                                ? 'text-white border-emerald-400 bg-emerald-500/30'
+                                : 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
+                            }`}
+                          >
+                            <CheckIcon size={14} /> Yes
+                          </button>
+                          <button
+                            onClick={() => handleVote(sg.id, 'no')}
+                            disabled={voting === sg.id}
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold border transition flex items-center gap-1.5 disabled:opacity-50 ${
+                              sg.yourVote === 'no'
+                                ? 'text-white border-red-400 bg-red-500/30'
+                                : 'text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20'
+                            }`}
+                          >
+                            <XIcon size={14} /> No
+                          </button>
+                        </div>
+                      ) : null)}
+                  </div>
                 </div>
               </article>
             );
           })}
+        </div>
+      )}
+
+      {/* Evidence lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <div className="max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+            {lightbox.mediaUrl &&
+              (lightbox.mediaType === 'video' ? (
+                <video src={lightbox.mediaUrl} className="w-full max-h-[70vh] object-contain rounded-2xl" controls autoPlay />
+              ) : (
+                <img src={lightbox.mediaUrl} alt="" className="w-full max-h-[70vh] object-contain rounded-2xl" />
+              ))}
+            <div className="flex items-start justify-between gap-3 mt-3">
+              <div>
+                {lightbox.caption && <p className="text-sm text-white">{lightbox.caption}</p>}
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  Posted by {lightbox.posterName}
+                </p>
+              </div>
+              <button onClick={() => setLightbox(null)} className="btn-ghost py-1.5 px-3 text-sm shrink-0">
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </AppShell>

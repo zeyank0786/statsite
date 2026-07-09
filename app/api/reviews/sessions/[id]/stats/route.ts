@@ -107,9 +107,9 @@ export async function PUT(
       );
     }
 
-    if (value < 0 || value > 10) {
+    if (value < 0) {
       return NextResponse.json(
-        { error: 'Value must be between 0 and 10' },
+        { error: 'Value cannot go below 0' },
         { status: 400 }
       );
     }

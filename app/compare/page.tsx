@@ -7,7 +7,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import RadarChart from '@/components/RadarChart';
-import { orderCategories, getCategoryMeta, categoryAvg, computeOverallScore } from '@/lib/categories';
+import { orderCategories, getCategoryMeta, categoryAvg, computeOverallScore, scaleMax } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
 
 interface Player {
@@ -185,6 +185,7 @@ function CompareContent() {
                     { label: profileA!.player.username, color: hexA, values: valuesA },
                     { label: profileB!.player.username, color: hexB, values: valuesB },
                   ]}
+                  max={scaleMax([...valuesA, ...valuesB])}
                   size={340}
                 />
                 <div className="flex justify-center gap-5 mt-2">
@@ -208,9 +209,10 @@ function CompareContent() {
             <h2 className="font-display text-xl font-bold text-white mb-6">Category Breakdown</h2>
             <div className="space-y-5">
               {catsA.map((cat, i) => {
-                const meta = getCategoryMeta(cat.code);
+                const meta = getCategoryMeta(cat.code, cat.label);
                 const a = valuesA[i] ?? 0;
                 const b = valuesB[i] ?? 0;
+                const rowMax = scaleMax([...valuesA, ...valuesB]);
                 return (
                   <div key={cat.code}>
                     <div className="flex items-center justify-between mb-1.5">
@@ -229,13 +231,13 @@ function CompareContent() {
                       <div className="flex-1 h-2.5 rounded-full overflow-hidden flex justify-end" style={{ background: 'rgba(255,255,255,0.05)' }}>
                         <div
                           className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${(a / 10) * 100}%`, background: `linear-gradient(270deg, ${hexA}, ${hexA}66)` }}
+                          style={{ width: `${Math.min(100, (a / rowMax) * 100)}%`, background: `linear-gradient(270deg, ${hexA}, ${hexA}66)` }}
                         />
                       </div>
                       <div className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
                         <div
                           className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${(b / 10) * 100}%`, background: `linear-gradient(90deg, ${hexB}, ${hexB}66)` }}
+                          style={{ width: `${Math.min(100, (b / rowMax) * 100)}%`, background: `linear-gradient(90deg, ${hexB}, ${hexB}66)` }}
                         />
                       </div>
                     </div>
@@ -248,8 +250,12 @@ function CompareContent() {
           {/* Per-stat table */}
           <section className="space-y-5">
             {catsA.map((cat, ci) => {
-              const meta = getCategoryMeta(cat.code);
+              const meta = getCategoryMeta(cat.code, cat.label);
               const statsB = new Map(catsB[ci]?.stats.map((s) => [s.code, s.value]) || []);
+              const statMax = scaleMax([
+                ...cat.stats.map((s) => s.value),
+                ...(catsB[ci]?.stats.map((s) => s.value) || []),
+              ]);
               return (
                 <div key={cat.code} className="glass card-shadow p-5 md:p-6">
                   <h3 className="font-display text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -270,7 +276,7 @@ function CompareContent() {
                             {a}
                           </span>
                           <div className="hidden sm:flex h-1.5 rounded-full overflow-hidden justify-end" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                            <div className="h-full rounded-full" style={{ width: `${a * 10}%`, background: hexA }} />
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(100, (a / statMax) * 100)}%`, background: hexA }} />
                           </div>
                           <span className="text-xs text-center font-medium truncate col-span-1 sm:col-auto" style={{ color: 'var(--text-secondary)' }} title={stat.label}>
                             <span className="block truncate">{stat.label}</span>
@@ -281,7 +287,7 @@ function CompareContent() {
                             )}
                           </span>
                           <div className="hidden sm:flex h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                            <div className="h-full rounded-full" style={{ width: `${b * 10}%`, background: hexB }} />
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(100, (b / statMax) * 100)}%`, background: hexB }} />
                           </div>
                           <span className="text-sm font-bold" style={{ color: diff < 0 ? hexB : 'rgba(255,255,255,0.45)' }}>
                             {b}

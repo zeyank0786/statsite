@@ -11,7 +11,8 @@ import AchievementBadge, { AchievementData } from '@/components/AchievementBadge
 import StatDescriptionModal from '@/components/StatDescriptionModal';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 import { getUserColorHex } from '@/lib/userColors';
-import { orderCategories, getCategoryMeta, getValueColor, categoryAvg } from '@/lib/categories';
+import { orderCategories, getCategoryMeta, getValueColor, categoryAvg, scaleMax } from '@/lib/categories';
+import LockBadge from '@/components/LockBadge';
 import {
   CompareIcon,
   PencilIcon,
@@ -27,6 +28,9 @@ interface Stat {
   code: string;
   label: string;
   value: number;
+  locked?: boolean;
+  lockSource?: 'override' | 'rules' | null;
+  lockReasons?: any[];
 }
 
 interface Category {
@@ -339,6 +343,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
               labels={radarLabels}
               labelColors={radarColors}
               series={[{ label: playerName, color: hex, values: radarValues }]}
+              max={scaleMax(radarValues)}
               size={300}
             />
           </div>
@@ -414,13 +419,15 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                   </p>
                   <p className="text-xl md:text-2xl font-bold" style={{ color: meta.hex }}>
                     {total}
-                    <span className="text-sm font-medium opacity-60">/{category.stats.length * 10}</span>
+                    <span className="text-sm font-medium opacity-60"> pts</span>
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                {getSortedStats(category.stats).map((stat) => {
+                {(() => {
+                  const catMax = scaleMax(category.stats.map((s) => s.value));
+                  return getSortedStats(category.stats).map((stat) => {
                   const change = changes[stat.code];
                   const diff =
                     change && change.lastReviewValue !== undefined && change.lastReviewValue !== null
@@ -435,24 +442,34 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                       style={{
                         borderColor: colorCodeEnabled ? valueColor : 'var(--surface-border)',
                         background: 'rgba(255,255,255,0.02)',
+                        opacity: stat.locked ? 0.7 : 1,
                       }}
                     >
-                      <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center justify-between mb-1.5 gap-1">
                         <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-secondary)' }}>
                           {stat.code}
                         </p>
-                        <StatDescriptionModal
-                          statCode={stat.code}
-                          statLabel={stat.label}
-                          description={STAT_DESCRIPTIONS[stat.code] || 'No description available'}
-                        />
+                        <span className="flex items-center gap-1">
+                          {stat.locked && (
+                            <LockBadge
+                              reasons={stat.lockReasons || []}
+                              source={stat.lockSource}
+                              statLabel={stat.label}
+                            />
+                          )}
+                          <StatDescriptionModal
+                            statCode={stat.code}
+                            statLabel={stat.label}
+                            description={STAT_DESCRIPTIONS[stat.code] || 'No description available'}
+                          />
+                        </span>
                       </div>
                       <p className="text-xs font-medium mb-3 line-clamp-2 min-h-8 text-white">{stat.label}</p>
                       <div className="flex items-baseline gap-1 mb-2">
                         <p className="text-3xl font-bold font-display" style={{ color: valueColor }}>
                           {stat.value}
                         </p>
-                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>/10</p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>pts</p>
                         {diff !== null && diff !== 0 && (
                           <span
                             className="ml-auto text-[11px] font-bold flex items-center gap-0.5"
@@ -468,7 +485,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
                         <div
                           className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${(stat.value / 10) * 100}%`, backgroundColor: valueColor }}
+                          style={{ width: `${Math.min(100, (stat.value / catMax) * 100)}%`, backgroundColor: valueColor }}
                         />
                       </div>
 
@@ -515,7 +532,8 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                       )}
                     </div>
                   );
-                })}
+                  });
+                })()}
               </div>
             </section>
           );

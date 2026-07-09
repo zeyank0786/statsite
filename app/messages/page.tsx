@@ -1,8 +1,8 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -19,6 +19,14 @@ import {
   ReplyIcon,
 } from '@/components/icons';
 
+interface EvidenceRef {
+  id: string;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  caption: string | null;
+  posterName: string;
+}
+
 interface Message {
   id: string;
   content: string;
@@ -30,6 +38,7 @@ interface Message {
   replies: Reply[];
   reactions: Reaction[];
   mentions: Mention[];
+  evidenceRefs?: EvidenceRef[];
   referencedStatId?: string | null;
   referencedPlayerId?: string | null;
   statCode?: string;
@@ -58,9 +67,10 @@ interface Mention {
   targetId: string;
 }
 
-export default function MessagesPage() {
+function MessagesContent() {
   const { status, data: session } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [messageContent, setMessageContent] = useState('');
@@ -82,8 +92,30 @@ export default function MessagesPage() {
   const [selectedCategory, setSelectedCategory] = useState<any | null>(null);
   const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(null);
   const [dismissGuidelines, setDismissGuidelines] = useState(false);
+  const [attachedEvidence, setAttachedEvidence] = useState<EvidenceRef | null>(null);
 
   const currentPlayerId = (session?.user as any)?.playerId;
+  const evidenceRefParam = searchParams.get('evidenceRef');
+
+  // "Reference in message" from the evidence board lands here with ?evidenceRef=
+  useEffect(() => {
+    if (!evidenceRefParam || status !== 'authenticated') return;
+    fetch('/api/evidence')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((posts: any[]) => {
+        const post = Array.isArray(posts) ? posts.find((p) => p.id === evidenceRefParam) : null;
+        if (post) {
+          setAttachedEvidence({
+            id: post.id,
+            mediaUrl: post.mediaUrl,
+            mediaType: post.mediaType,
+            caption: post.captionHidden ? null : post.caption,
+            posterName: post.playerName,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [evidenceRefParam, status]);
   const currentPlayerName = (session?.user as any)?.playerUsername || '';
 
   useEffect(() => {
@@ -174,7 +206,7 @@ export default function MessagesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: messageContent,
-          mentions: [],
+          mentions: attachedEvidence ? [{ type: 'evidence', targetId: attachedEvidence.id }] : [],
           referencedStatId,
           referencedPlayerId,
         }),
@@ -184,6 +216,7 @@ export default function MessagesPage() {
         setReferencedStatId(null);
         setReferencedPlayerId(null);
         setSelectedPlayerForStat(null);
+        setAttachedEvidence(null);
         await loadMessages();
       } else {
         const error = await res.json();
@@ -381,7 +414,7 @@ export default function MessagesPage() {
                         </span>
                         <span className="text-xl font-bold font-display" style={{ color: meta.hex }}>
                           {stat?.value ?? 0}
-                          <span className="text-xs opacity-60">/10</span>
+                          <span className="text-xs opacity-60"> pts</span>
                         </span>
                       </div>
                     </div>
@@ -399,6 +432,36 @@ export default function MessagesPage() {
                   </div>
                 );
               })()}
+
+            {/* Attached evidence preview */}
+            {attachedEvidence && (
+              <div
+                className="mt-3 p-3 rounded-xl border flex items-center gap-3"
+                style={{ borderColor: 'rgba(34,211,238,0.4)', background: 'rgba(34,211,238,0.06)' }}
+              >
+                {attachedEvidence.mediaUrl &&
+                  (attachedEvidence.mediaType === 'video' ? (
+                    <video src={attachedEvidence.mediaUrl} className="w-12 h-12 rounded-lg object-cover shrink-0" muted />
+                  ) : (
+                    <img src={attachedEvidence.mediaUrl} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                  ))}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-cyan)' }}>
+                    Evidence · {attachedEvidence.posterName}
+                  </p>
+                  <p className="text-xs text-neutral-300 truncate">
+                    {attachedEvidence.caption || 'Evidence post'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAttachedEvidence(null)}
+                  className="text-neutral-400 hover:text-red-400 transition shrink-0"
+                  title="Remove evidence reference"
+                >
+                  <XIcon size={15} />
+                </button>
+              </div>
+            )}
 
             <div className="flex items-center justify-between mt-3 gap-2">
               <button
@@ -723,6 +786,35 @@ export default function MessagesPage() {
                         {message.content}
                       </p>
 
+                      {/* Evidence embeds */}
+                      {message.evidenceRefs && message.evidenceRefs.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {message.evidenceRefs.map((ev) => (
+                            <Link
+                              key={ev.id}
+                              href="/evidence"
+                              className="flex items-center gap-3 p-3 rounded-xl border transition hover:bg-white/[0.03]"
+                              style={{ borderColor: 'rgba(34,211,238,0.35)', background: 'rgba(34,211,238,0.05)' }}
+                            >
+                              {ev.mediaUrl &&
+                                (ev.mediaType === 'video' ? (
+                                  <video src={ev.mediaUrl} className="w-16 h-16 rounded-lg object-cover shrink-0" muted />
+                                ) : (
+                                  <img src={ev.mediaUrl} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+                                ))}
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-cyan)' }}>
+                                  📎 Evidence · {ev.posterName}
+                                </p>
+                                <p className="text-sm text-neutral-200 line-clamp-2 mt-0.5">
+                                  {ev.caption || 'View on the evidence board →'}
+                                </p>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+
                       {message.referencedStatId && message.statCode && message.statValue !== null && refMeta && (
                         <div
                           className="mt-3 p-3.5 rounded-xl border flex items-center justify-between gap-3"
@@ -743,7 +835,7 @@ export default function MessagesPage() {
                           </div>
                           <p className="font-display text-3xl font-bold shrink-0" style={{ color: refMeta.hex }}>
                             {message.statValue}
-                            <span className="text-sm opacity-60">/10</span>
+                            <span className="text-sm opacity-60"> pts</span>
                           </p>
                         </div>
                       )}
@@ -869,5 +961,19 @@ export default function MessagesPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+        </div>
+      }
+    >
+      <MessagesContent />
+    </Suspense>
   );
 }

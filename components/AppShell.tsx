@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import Logo from './Logo';
 import Avatar from './Avatar';
+import { setKnownRoster } from '@/lib/userColors';
 import {
   HomeIcon,
   UsersIcon,
@@ -21,6 +22,7 @@ import {
   CompareIcon,
   ShieldIcon,
   XIcon,
+  CameraIcon,
 } from './icons';
 
 interface NavItem {
@@ -28,39 +30,42 @@ interface NavItem {
   label: string;
   icon: (p: { size?: number; className?: string }) => React.ReactNode;
   badge?: boolean;
+  adminOnly?: boolean;
 }
 
 const PRIMARY_NAV: NavItem[] = [
   { href: '/', label: 'Home', icon: HomeIcon },
   { href: '/players', label: 'Players', icon: UsersIcon },
   { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
+  { href: '/evidence', label: 'Evidence', icon: CameraIcon },
+  { href: '/suggestions', label: 'Suggestions', icon: LightbulbIcon },
   { href: '/messages', label: 'Messages', icon: MessageIcon, badge: true },
-  { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
-  { href: '/targets', label: 'Targets', icon: TargetIcon },
 ];
 
 const MORE_NAV: NavItem[] = [
+  { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
+  { href: '/targets', label: 'Targets', icon: TargetIcon },
   { href: '/compare', label: 'Compare', icon: CompareIcon },
   { href: '/history', label: 'History', icon: ClockIcon },
-  { href: '/suggestions', label: 'Suggestions', icon: LightbulbIcon },
-  { href: '/admin', label: 'Admin', icon: ShieldIcon },
+  { href: '/admin', label: 'Admin', icon: ShieldIcon, adminOnly: true },
 ];
 
 const MOBILE_TABS: NavItem[] = [
   { href: '/', label: 'Home', icon: HomeIcon },
-  { href: '/players', label: 'Players', icon: UsersIcon },
+  { href: '/evidence', label: 'Evidence', icon: CameraIcon },
+  { href: '/suggestions', label: 'Suggest', icon: LightbulbIcon },
   { href: '/messages', label: 'Board', icon: MessageIcon, badge: true },
-  { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
 ];
 
 const MOBILE_MORE: NavItem[] = [
+  { href: '/players', label: 'Players', icon: UsersIcon },
   { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
+  { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
   { href: '/compare', label: 'Compare', icon: CompareIcon },
   { href: '/targets', label: 'Targets', icon: TargetIcon },
   { href: '/history', label: 'History', icon: ClockIcon },
-  { href: '/suggestions', label: 'Suggestions', icon: LightbulbIcon },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
-  { href: '/admin', label: 'Admin', icon: ShieldIcon },
+  { href: '/admin', label: 'Admin', icon: ShieldIcon, adminOnly: true },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -80,9 +85,11 @@ export default function AppShell({
   const [unreadCount, setUnreadCount] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [, setRosterTick] = useState(0);
 
   const playerId = (session?.user as any)?.playerId;
   const playerName = (session?.user as any)?.playerUsername || session?.user?.name || '';
+  const isAdmin = Boolean((session?.user as any)?.isAdmin);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
@@ -104,11 +111,28 @@ export default function AppShell({
     return () => clearInterval(interval);
   }, [status, pathname]);
 
+  // Register the full roster (incl. archived) so user colors are collision-free
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    fetch('/api/players?includeInactive=1')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((players: any[]) => {
+        if (Array.isArray(players) && players.length > 0) {
+          setKnownRoster(players.map((p) => String(p.id)));
+          setRosterTick((t) => t + 1); // re-render with assigned colors
+        }
+      })
+      .catch(() => {});
+  }, [status]);
+
   // Close menus on navigation
   useEffect(() => {
     setMoreOpen(false);
     setSheetOpen(false);
   }, [pathname]);
+
+  const moreNav = MORE_NAV.filter((item) => !item.adminOnly || isAdmin);
+  const mobileMore = MOBILE_MORE.filter((item) => !item.adminOnly || isAdmin);
 
   const maxW =
     width === 'narrow' ? 'max-w-3xl' : width === 'wide' ? 'max-w-[90rem]' : 'max-w-7xl';
@@ -168,7 +192,7 @@ export default function AppShell({
                   <button
                     onClick={() => setMoreOpen(!moreOpen)}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition ${
-                      MORE_NAV.some((i) => isActive(pathname, i.href)) || moreOpen
+                      moreNav.some((i) => isActive(pathname, i.href)) || moreOpen
                         ? 'text-white bg-white/5'
                         : 'text-neutral-400 hover:text-white hover:bg-white/5'
                     }`}
@@ -180,7 +204,7 @@ export default function AppShell({
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
                       <div className="absolute right-0 top-full mt-2 z-50 w-52 glass-strong card-shadow-lg p-2 animate-rise">
-                        {MORE_NAV.map((item) => (
+                        {moreNav.map((item) => (
                           <Link
                             key={item.href}
                             href={item.href}
@@ -269,7 +293,7 @@ export default function AppShell({
           <button
             onClick={() => setSheetOpen(true)}
             className={`flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition ${
-              MOBILE_MORE.some((i) => isActive(pathname, i.href)) ? 'text-white' : 'text-neutral-500'
+              mobileMore.some((i) => isActive(pathname, i.href)) ? 'text-white' : 'text-neutral-500'
             }`}
           >
             <GridIcon size={21} />
@@ -296,7 +320,7 @@ export default function AppShell({
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2 mb-4">
-              {MOBILE_MORE.map((item) => (
+              {mobileMore.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

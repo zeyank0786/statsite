@@ -29,8 +29,10 @@ export async function GET(
       `SELECT c.code as categoryCode, c.label as categoryLabel, COALESCE(sv.value, 5) as value
        FROM Stat s
        JOIN Category c ON s.categoryId = c.id
-       LEFT JOIN StatValue sv ON sv.statId = s.id AND sv.playerId = ?`,
-      [id]
+       LEFT JOIN StatValue sv ON sv.statId = s.id AND sv.playerId = ?
+       LEFT JOIN StatVisibility vis ON vis.statId = s.id AND vis.playerId = ?
+       WHERE (vis.hidden IS NULL OR vis.hidden = 0)`,
+      [id, id]
     );
 
     const historyRows = await queryAll(
@@ -56,7 +58,7 @@ export async function GET(
     }
 
     const numCats = byCat.size;
-    const divisor = numCats > 1 ? numCats - 1 : 1;
+    const divisor = numCats > 0 ? numCats : 1;
     const currentTotal = Array.from(byCat.values()).reduce((s, c) => s + c.total, 0);
 
     const history = (historyRows as any[]).map((r) => ({

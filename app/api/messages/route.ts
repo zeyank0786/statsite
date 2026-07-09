@@ -58,6 +58,29 @@ export async function GET(request: Request) {
           [message.id]
         );
 
+        // Enrich evidence mentions so the board can render embeds directly
+        const evidenceRefs: any[] = [];
+        for (const mention of mentions as any[]) {
+          if (String(mention.type) !== 'evidence') continue;
+          const evidence = await queryAll(
+            `SELECT e.id, e.mediaUrl, e.mediaType, e.caption, e.captionHidden,
+                    p.username as posterName
+             FROM Evidence e JOIN Player p ON e.playerId = p.id
+             WHERE e.id = ?`,
+            [mention.targetId]
+          );
+          if (evidence.length > 0) {
+            const ev: any = evidence[0];
+            evidenceRefs.push({
+              id: String(ev.id),
+              mediaUrl: ev.mediaUrl || null,
+              mediaType: ev.mediaType || null,
+              caption: Number(ev.captionHidden) ? null : ev.caption || null,
+              posterName: String(ev.posterName),
+            });
+          }
+        }
+
         return {
           ...message,
           isAuthor: message.authorId === currentPlayerId,
@@ -67,6 +90,7 @@ export async function GET(request: Request) {
           })),
           reactions,
           mentions,
+          evidenceRefs,
         };
       })
     );

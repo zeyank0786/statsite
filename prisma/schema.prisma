@@ -11,6 +11,7 @@ model User {
   id        String     @id @default(cuid())
   email     String     @unique
   password  String
+  isAdmin   Boolean    @default(false)
   playerId  String?    @unique
   player    Player?    @relation(fields: [playerId], references: [id], onDelete: SetNull)
   createdAt DateTime   @default(now())
@@ -18,13 +19,16 @@ model User {
 }
 
 model Player {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  avatarUrl String?
-  user      User?
+  id         String    @id @default(cuid())
+  username   String    @unique
+  avatarUrl  String?
+  active     Boolean   @default(true)
+  archivedAt DateTime?
+  user       User?
 
   statValues        StatValue[]
   suggestions       Suggestion[]
+  proposedSuggestions Suggestion[] @relation("SuggestionProposer")
   votes             Vote[]
   comments          Comment[]
   commentsAuthored  Comment[]      @relation("CommentAuthor")
@@ -33,6 +37,8 @@ model Player {
   editingSessions   ReviewSession[] @relation("ReviewEditor")
   reviewParticipants ReviewParticipant[] @relation("ReviewParticipant")
   historyEdits      StatHistory[]  @relation("ChangedBy")
+  statVisibility    StatVisibility[]
+  lockOverrides     StatLockOverride[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -44,7 +50,8 @@ model Category {
   label String
   emoji String
 
-  stats Stat[]
+  stats             Stat[]
+  evidenceCategories EvidenceCategory[]
 
   createdAt DateTime @default(now())
 }
@@ -59,8 +66,54 @@ model Stat {
   statValues       StatValue[]
   suggestions      Suggestion[]
   sessionStats     ReviewSessionStat[]
+  visibility       StatVisibility[]
+  prerequisites    StatPrerequisite[] @relation("GatedStat")
+  requiredBy       StatPrerequisite[] @relation("RequiredStat")
+  lockOverrides    StatLockOverride[]
 
   createdAt DateTime @default(now())
+}
+
+// Presence of a row with hidden=true hides the stat for that player; no row = visible.
+model StatVisibility {
+  id       String  @id @default(cuid())
+  statId   String
+  stat     Stat    @relation(fields: [statId], references: [id], onDelete: Cascade)
+  playerId String
+  player   Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  hidden   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([statId, playerId])
+}
+
+// Multiple rows per statId = AND logic. Exactly one of requiredStatId/requiredCategoryId is set.
+model StatPrerequisite {
+  id                 String  @id @default(cuid())
+  statId             String
+  stat               Stat    @relation("GatedStat", fields: [statId], references: [id], onDelete: Cascade)
+  requiredStatId     String?
+  requiredStat       Stat?   @relation("RequiredStat", fields: [requiredStatId], references: [id], onDelete: Cascade)
+  requiredCategoryId String?
+  comparator         String  @default(">=")
+  thresholdValue     Int
+
+  createdAt DateTime @default(now())
+}
+
+// Manual per-stat-per-player override; supersedes computed prerequisite result.
+model StatLockOverride {
+  id          String @id @default(cuid())
+  statId      String
+  stat        Stat   @relation(fields: [statId], references: [id], onDelete: Cascade)
+  playerId    String
+  player      Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  forcedState String // "locked" | "unlocked"
+
+  createdAt DateTime @default(now())
+
+  @@unique([statId, playerId])
 }
 
 model StatValue {
@@ -74,7 +127,6 @@ model StatValue {
   notes     String?
 
   history   StatHistory[]
-  evidence  Evidence[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -97,23 +149,36 @@ model StatHistory {
   createdAt DateTime @default(now())
 }
 
+// The ONLY mechanism by which a stat value changes. delta is constrained to
+// -2/-1/1/2 in app logic; proposedById must differ from playerId (subject).
 model Suggestion {
-  id                String @id @default(cuid())
-  playerId          String
-  player            Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  statId            String
-  stat              Stat   @relation(fields: [statId], references: [id], onDelete: Cascade)
+  id           String  @id @default(cuid())
+  playerId     String // subject
+  player       Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  proposedById String
+  proposedBy   Player  @relation("SuggestionProposer", fields: [proposedById], references: [id], onDelete: Cascade)
+  statId       String
+  stat         Stat    @relation(fields: [statId], references: [id], onDelete: Cascade)
 
-  delta             Int
-  suggestedNewValue Int
-  reason            String
-  suggestedById      String
-  status            String  // "pending" | "approved" | "rejected"
+  delta  Int
+  reason String
+  status String // "pending" | "approved" | "rejected"
 
-  votes Vote[]
+  votes    Vote[]
+  evidence SuggestionEvidence[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+}
+
+model SuggestionEvidence {
+  suggestionId String
+  suggestion   Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  evidenceId   String
+  evidence     Evidence   @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@id([suggestionId, evidenceId])
 }
 
 model Vote {
@@ -145,17 +210,31 @@ model Comment {
   @@index([playerId])
 }
 
+// Evidence board post. Only the subject posts about themselves (playerId = poster = subject).
 model Evidence {
-  id        String @id @default(cuid())
-  statValueId String
-  statValue StatValue @relation(fields: [statValueId], references: [id], onDelete: Cascade)
+  id                 String  @id @default(cuid())
+  playerId           String
+  player             Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  mediaUrl           String?
+  mediaType          String? // "image" | "video"
+  cloudinaryPublicId String?
+  caption            String?
+  captionHidden      Boolean @default(false)
 
-  url         String
-  description String?
-  addedById   String
-  addedBy     Player  @relation(fields: [addedById], references: [id], onDelete: Cascade)
+  categories  EvidenceCategory[]
+  suggestions SuggestionEvidence[]
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EvidenceCategory {
+  evidenceId String
+  evidence   Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([evidenceId, categoryId])
 }
 
 model ReviewCycle {

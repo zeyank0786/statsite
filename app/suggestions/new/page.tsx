@@ -1,37 +1,74 @@
 'use client';
 
+import { Suspense, useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
-import { ChevronLeftIcon, MinusIcon, PlusIcon, CheckIcon } from '@/components/icons';
+import Avatar from '@/components/Avatar';
+import LockBadge from '@/components/LockBadge';
+import { getUserColorHex } from '@/lib/userColors';
+import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
+import { ChevronLeftIcon, CheckIcon, ImageIcon, LockIcon } from '@/components/icons';
 
 interface Player {
   id: string;
   username: string;
 }
 
-interface Stat {
+interface EvidencePost {
+  id: string;
+  playerId: string;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  caption: string | null;
+  captionHidden: boolean;
+  categories: { categoryId: string; code: string; label: string }[];
+  createdAt: string;
+}
+
+interface SubjectStat {
   id: string;
   code: string;
   label: string;
+  value: number;
+  locked: boolean;
+  lockSource: 'override' | 'rules' | null;
+  lockReasons: any[];
+  categoryCode: string;
+  categoryLabel: string;
 }
 
-export default function NewSuggestionPage() {
-  const { status } = useSession();
+const DELTAS = [
+  { value: -2, label: '-2', note: 'exceptional drop' },
+  { value: -1, label: '-1', note: 'step back' },
+  { value: 1, label: '+1', note: 'step forward' },
+  { value: 2, label: '+2', note: 'exceptional gain' },
+];
+
+function NewSuggestionContent() {
+  const { status, data: session } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [players, setPlayers] = useState<Player[]>([]);
-  const [stats, setStats] = useState<Stat[]>([]);
-  const [selectedPlayer, setSelectedPlayer] = useState('');
-  const [selectedStat, setSelectedStat] = useState('');
-  const [change, setChange] = useState<'increase' | 'decrease'>('increase');
-  const [amount, setAmount] = useState(1);
+  const [evidence, setEvidence] = useState<EvidencePost[]>([]);
+  const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  const [subjectId, setSubjectId] = useState('');
+  const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
+  const [selectedStatId, setSelectedStatId] = useState('');
+  const [delta, setDelta] = useState(1);
   const [reason, setReason] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const currentPlayerId = (session?.user as any)?.playerId;
+  const paramSubject = searchParams.get('subject');
+  const paramEvidence = searchParams.get('evidenceId');
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -39,104 +76,126 @@ export default function NewSuggestionPage() {
       return;
     }
     if (status === 'authenticated') {
-      loadPlayers();
+      loadBase();
     }
   }, [status, router]);
 
-  const loadPlayers = async () => {
+  const loadBase = async () => {
     try {
-      const res = await fetch('/api/players');
-      const result = await res.json();
-      setPlayers(Array.isArray(result) ? result : []);
+      const [playersRes, evidenceRes] = await Promise.all([
+        fetch('/api/players'),
+        fetch('/api/evidence'),
+      ]);
+      if (playersRes.ok) setPlayers(await playersRes.json());
+      if (evidenceRes.ok) setEvidence(await evidenceRes.json());
     } catch (error) {
-      console.error('Failed to load players:', error);
+      console.error('Failed to load:', error);
     }
   };
 
-  const loadStats = async (playerId: string) => {
-    try {
-      const res = await fetch(`/api/players/${playerId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const allStats: Stat[] = [];
-        data.categories.forEach((cat: any) => {
-          cat.stats.forEach((stat: any) => {
-            allStats.push({ id: stat.id, code: stat.code, label: stat.label });
-          });
-        });
-        setStats(allStats);
+  // Apply URL prefill once data is available
+  useEffect(() => {
+    if (paramSubject && paramSubject !== currentPlayerId && !subjectId) {
+      setSubjectId(paramSubject);
+    }
+  }, [paramSubject, currentPlayerId, subjectId]);
+
+  useEffect(() => {
+    if (paramEvidence && evidence.length > 0 && selectedEvidenceIds.length === 0) {
+      const post = evidence.find((e) => e.id === paramEvidence);
+      if (post && post.playerId !== currentPlayerId) {
+        if (!subjectId) setSubjectId(post.playerId);
+        setSelectedEvidenceIds([post.id]);
       }
-    } catch (error) {
-      console.error('Failed to load stats:', error);
     }
-  };
+  }, [paramEvidence, evidence, currentPlayerId, subjectId, selectedEvidenceIds.length]);
 
-  const handlePlayerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const playerId = e.target.value;
-    setSelectedPlayer(playerId);
-    setSelectedStat('');
-    if (playerId) loadStats(playerId);
-    else setStats([]);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess(false);
-
-    if (!selectedPlayer || !selectedStat || !reason.trim()) {
-      setError('Please fill in all required fields');
+  // Load the subject's stats (visibility-filtered + lock-annotated by the API)
+  useEffect(() => {
+    if (!subjectId) {
+      setSubjectStats([]);
       return;
     }
+    let cancelled = false;
+    setLoadingStats(true);
+    fetch(`/api/players/${subjectId}`)
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const flat: SubjectStat[] = [];
+        for (const cat of orderCategories<any>(data.categories || [])) {
+          for (const stat of orderStats<any>(cat.stats || [])) {
+            flat.push({ ...stat, categoryCode: cat.code, categoryLabel: cat.label });
+          }
+        }
+        setSubjectStats(flat);
+      })
+      .catch((e) => console.error('Failed to load subject stats:', e))
+      .finally(() => !cancelled && setLoadingStats(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [subjectId]);
 
-    setLoading(true);
+  const eligibleSubjects = players.filter((p) => p.id !== currentPlayerId);
+  const subjectEvidence = evidence.filter((e) => e.playerId === subjectId);
+  const selectedEvidence = subjectEvidence.filter((e) => selectedEvidenceIds.includes(e.id));
+
+  // Stat choice is constrained to categories the selected evidence is tagged with
+  const allowedCategoryCodes = new Set(
+    selectedEvidence.flatMap((e) => e.categories.map((c) => c.code))
+  );
+  const availableStats = subjectStats.filter((s) => allowedCategoryCodes.has(s.categoryCode));
+  const selectedStat = subjectStats.find((s) => s.id === selectedStatId);
+
+  const changeSubject = (id: string) => {
+    setSubjectId(id);
+    setSelectedEvidenceIds([]);
+    setSelectedStatId('');
+    setError('');
+  };
+
+  const toggleEvidence = (id: string) => {
+    setSelectedEvidenceIds((prev) =>
+      prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]
+    );
+    setSelectedStatId('');
+  };
+
+  const handleSubmit = async () => {
+    setError('');
+    if (!subjectId || !selectedStatId || selectedEvidenceIds.length === 0 || !reason.trim()) {
+      setError('Complete every step: subject, evidence, stat, and a reason.');
+      return;
+    }
+    setSubmitting(true);
     try {
-      const stat = stats.find((s) => s.code === selectedStat);
-      if (!stat) {
-        setError('Stat not found');
-        return;
-      }
-
-      const playerRes = await fetch(`/api/players/${selectedPlayer}`);
-      const playerData = await playerRes.json();
-      let currentValue = 5;
-      playerData.categories.forEach((cat: any) => {
-        const foundStat = cat.stats.find((s: any) => s.code === selectedStat);
-        if (foundStat) currentValue = foundStat.value;
-      });
-
-      const suggestedValue = change === 'increase' ? currentValue + amount : currentValue - amount;
-      if (suggestedValue < 0 || suggestedValue > 10) {
-        setError('Suggested value must be between 0 and 10');
-        return;
-      }
-
-      const res = await fetch('/api/suggestions/new', {
+      const res = await fetch('/api/suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          playerId: selectedPlayer,
-          statCode: selectedStat,
-          suggestedNewValue: suggestedValue,
+          subjectPlayerId: subjectId,
+          statId: selectedStatId,
+          delta,
           reason: reason.trim(),
+          evidenceIds: selectedEvidenceIds,
         }),
       });
-
+      const data = await res.json();
       if (res.ok) {
-        setSuccess(true);
-        setSelectedPlayer('');
-        setSelectedStat('');
-        setReason('');
-        setAmount(1);
-        setTimeout(() => router.push('/suggestions'), 2000);
+        setSuccessMessage(
+          data.resolution?.status === 'approved'
+            ? 'Suggestion created — and instantly approved (your yes was already a majority)!'
+            : 'Suggestion created! The crew can now vote.'
+        );
+        setTimeout(() => router.push('/suggestions'), 1600);
       } else {
-        const data = await res.json();
         setError(data.error || 'Failed to create suggestion');
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -153,137 +212,276 @@ export default function NewSuggestionPage() {
 
       <PageHeader
         title="New Suggestion"
-        subtitle="Propose a stat change for a teammate — the crew decides."
+        subtitle="Grounded in evidence, decided by majority. Your proposal counts as your yes vote."
         eyebrow="Crew Votes"
         eyebrowColor="var(--accent-purple)"
       />
 
-      <div className="glass card-shadow p-6 md:p-8 animate-rise">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-semibold text-white mb-2">Player</label>
-            <select value={selectedPlayer} onChange={handlePlayerChange} className="field" required>
-              <option value="">Choose a player...</option>
-              {players.map((p) => (
-                <option key={p.id} value={p.id}>
+      <div className="space-y-5">
+        {/* Step 1: subject */}
+        <section className="glass card-shadow p-5 animate-rise">
+          <StepLabel n={1} title="Who is this about?" />
+          <div className="flex flex-wrap gap-2">
+            {eligibleSubjects.map((p) => {
+              const hex = getUserColorHex(p.id);
+              const active = subjectId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => changeSubject(p.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition ${
+                    active ? 'text-white' : 'text-neutral-300 hover:text-white'
+                  }`}
+                  style={{
+                    borderColor: active ? hex : 'var(--surface-border)',
+                    background: active ? `${hex}1f` : 'transparent',
+                  }}
+                >
+                  <Avatar id={p.id} name={p.username} size={22} />
                   {p.username}
-                </option>
-              ))}
-            </select>
+                </button>
+              );
+            })}
           </div>
+          <p className="text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
+            You can't suggest about yourself — post evidence and let the crew call it.
+          </p>
+        </section>
 
-          <div>
-            <label className="block text-sm font-semibold text-white mb-2">Stat</label>
-            <select
-              value={selectedStat}
-              onChange={(e) => setSelectedStat(e.target.value)}
-              className="field"
-              required
-              disabled={!selectedPlayer}
-            >
-              <option value="">Choose a stat...</option>
-              {stats.map((s) => (
-                <option key={s.id} value={s.code}>
-                  {s.label} ({s.code})
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Step 2: evidence */}
+        {subjectId && (
+          <section className="glass card-shadow p-5 animate-rise">
+            <StepLabel n={2} title="Attach their evidence" />
+            {subjectEvidence.length === 0 ? (
+              <p className="text-sm py-4" style={{ color: 'var(--text-secondary)' }}>
+                They haven't posted any evidence yet — suggestions must cite evidence, so there's
+                nothing to build on. Nudge them on the{' '}
+                <Link href="/messages" className="underline" style={{ color: 'var(--accent-cyan)' }}>
+                  message board
+                </Link>
+                .
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {subjectEvidence.map((post) => {
+                  const selected = selectedEvidenceIds.includes(post.id);
+                  return (
+                    <button
+                      key={post.id}
+                      onClick={() => toggleEvidence(post.id)}
+                      className={`relative rounded-xl overflow-hidden border-2 text-left transition ${
+                        selected ? '' : 'opacity-75 hover:opacity-100'
+                      }`}
+                      style={{ borderColor: selected ? 'var(--accent-purple)' : 'var(--surface-border)' }}
+                    >
+                      {post.mediaUrl ? (
+                        post.mediaType === 'video' ? (
+                          <video src={post.mediaUrl} className="w-full h-24 object-cover" muted />
+                        ) : (
+                          <img src={post.mediaUrl} alt="" className="w-full h-24 object-cover" />
+                        )
+                      ) : (
+                        <div className="w-full h-24 flex items-center justify-center bg-white/[0.03] text-neutral-500">
+                          <ImageIcon size={22} />
+                        </div>
+                      )}
+                      <div className="p-2">
+                        <p className="text-[11px] text-neutral-300 line-clamp-2 min-h-[1.5em]">
+                          {post.captionHidden ? '' : post.caption || 'No caption'}
+                        </p>
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {post.categories.map((cat) => {
+                            const meta = getCategoryMeta(cat.code, cat.label);
+                            return (
+                              <span
+                                key={cat.categoryId}
+                                className="text-[9px] font-bold uppercase px-1 py-0.5 rounded"
+                                style={{ background: `${meta.hex}1f`, color: meta.hex }}
+                              >
+                                {meta.short}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {selected && (
+                        <span
+                          className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-white"
+                          style={{ background: 'var(--accent-purple)' }}
+                        >
+                          <CheckIcon size={12} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
 
-          <div>
-            <label className="block text-sm font-semibold text-white mb-2">Proposed change</label>
-            <div className="flex gap-2.5">
-              <button
-                type="button"
-                onClick={() => setChange('decrease')}
-                className={`flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-1.5 border ${
-                  change === 'decrease'
-                    ? 'text-red-300 border-red-500/60 bg-red-500/20'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                style={change !== 'decrease' ? { borderColor: 'var(--surface-border)' } : {}}
-              >
-                <MinusIcon size={16} /> Decrease
-              </button>
-              <select
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
-                className="field flex-1 text-center"
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>
-                    By {n}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setChange('increase')}
-                className={`flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-1.5 border ${
-                  change === 'increase'
-                    ? 'text-emerald-300 border-emerald-500/60 bg-emerald-500/20'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                style={change !== 'increase' ? { borderColor: 'var(--surface-border)' } : {}}
-              >
-                <PlusIcon size={16} /> Increase
-              </button>
+        {/* Step 3: stat (constrained to evidence categories) */}
+        {selectedEvidenceIds.length > 0 && (
+          <section className="glass card-shadow p-5 animate-rise">
+            <StepLabel n={3} title="Which stat does it prove?" />
+            <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+              Limited to categories the attached evidence is tagged with.
+            </p>
+            {loadingStats ? (
+              <div className="h-24 rounded-xl animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }} />
+            ) : availableStats.length === 0 ? (
+              <p className="text-sm py-3" style={{ color: 'var(--text-secondary)' }}>
+                No stats available in the evidence's categories.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availableStats.map((stat) => {
+                  const meta = getCategoryMeta(stat.categoryCode, stat.categoryLabel);
+                  const active = selectedStatId === stat.id;
+                  return (
+                    <button
+                      key={stat.id}
+                      onClick={() => !stat.locked && setSelectedStatId(stat.id)}
+                      disabled={stat.locked}
+                      className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-left transition ${
+                        stat.locked
+                          ? 'opacity-50 cursor-not-allowed'
+                          : active
+                          ? 'text-white'
+                          : 'text-neutral-300 hover:text-white'
+                      }`}
+                      style={{
+                        borderColor: active ? meta.hex : 'var(--surface-border)',
+                        background: active ? `${meta.hex}18` : 'rgba(255,255,255,0.02)',
+                      }}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium truncate">{stat.label}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: meta.hex }}>
+                          {stat.code} · now {stat.value}
+                        </span>
+                      </span>
+                      <span className="shrink-0 flex items-center gap-1.5">
+                        {stat.locked ? (
+                          <LockBadge
+                            reasons={stat.lockReasons}
+                            source={stat.lockSource}
+                            statLabel={stat.label}
+                          />
+                        ) : active ? (
+                          <span style={{ color: meta.hex }}>
+                            <CheckIcon size={16} />
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Step 4: delta + reason */}
+        {selectedStat && (
+          <section className="glass card-shadow p-5 animate-rise">
+            <StepLabel n={4} title="The change" />
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              {DELTAS.map((d) => {
+                const active = delta === d.value;
+                const positive = d.value > 0;
+                const color = positive ? 'var(--accent-green)' : 'var(--accent-red)';
+                return (
+                  <button
+                    key={d.value}
+                    onClick={() => setDelta(d.value)}
+                    className={`py-3 rounded-xl border font-bold font-display text-lg transition ${
+                      active ? 'text-white' : 'text-neutral-400 hover:text-white'
+                    }`}
+                    style={{
+                      borderColor: active ? color : 'var(--surface-border)',
+                      background: active ? `color-mix(in srgb, ${color} 20%, transparent)` : 'transparent',
+                    }}
+                  >
+                    {d.label}
+                    <span className="block text-[9px] font-sans font-semibold uppercase tracking-wide opacity-70">
+                      {d.note}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
+            <p className="text-xs mb-4" style={{ color: 'var(--text-secondary)' }}>
+              ±1 is the default. Save ±2 for genuinely exceptional cases.{' '}
+              <span className="text-white font-medium">
+                {selectedStat.label}: {selectedStat.value} → {Math.max(0, selectedStat.value + delta)}
+              </span>
+            </p>
 
-          <div>
             <label className="block text-sm font-semibold text-white mb-2">Reason (required)</label>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="field resize-none"
-              rows={4}
-              placeholder="Why is this change warranted? Bring receipts."
-              required
+              rows={3}
+              placeholder="Why does the evidence justify this change?"
             />
-          </div>
 
-          {error && (
-            <div className="rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/40 bg-red-500/10">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="rounded-xl px-4 py-3 text-sm text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 flex items-center gap-2">
-              <CheckIcon size={15} /> Suggestion created! Redirecting...
-            </div>
-          )}
+            {error && (
+              <div className="rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/40 bg-red-500/10 mt-4">
+                {error}
+              </div>
+            )}
+            {successMessage && (
+              <div className="rounded-xl px-4 py-3 text-sm text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 mt-4 flex items-center gap-2">
+                <CheckIcon size={15} /> {successMessage}
+              </div>
+            )}
 
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={loading} className="btn-gradient flex-1">
-              {loading ? 'Submitting...' : 'Submit suggestion'}
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || !reason.trim()}
+              className="btn-gradient w-full py-3 mt-4"
+            >
+              {submitting ? 'Submitting...' : 'Submit — this is your yes vote'}
             </button>
-            <Link href="/suggestions" className="btn-ghost">
-              Cancel
-            </Link>
-          </div>
-        </form>
+          </section>
+        )}
 
-        <div className="mt-8 pt-6 border-t" style={{ borderColor: 'var(--surface-border)' }}>
-          <h3 className="text-sm font-semibold text-white mb-3">How it works</h3>
-          <ul className="space-y-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-            {[
-              'Submit a suggestion with a reason',
-              'Minimum 3 valid votes required to pass',
-              'Vote period: 30 seconds',
-              'The target player and the suggester cannot vote',
-              'More yes than no votes = approved',
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <span style={{ color: 'var(--accent-cyan)' }} className="mt-0.5 shrink-0">
-                  <CheckIcon size={14} />
-                </span>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </div>
+        {error && !selectedStat && (
+          <div className="rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/40 bg-red-500/10">
+            {error}
+          </div>
+        )}
       </div>
     </AppShell>
+  );
+}
+
+function StepLabel({ n, title }: { n: number; title: string }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-4">
+      <span
+        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+        style={{ background: 'var(--brand-gradient)' }}
+      >
+        {n}
+      </span>
+      <h2 className="font-display text-lg font-bold text-white">{title}</h2>
+    </div>
+  );
+}
+
+export default function NewSuggestionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+        </div>
+      }
+    >
+      <NewSuggestionContent />
+    </Suspense>
   );
 }

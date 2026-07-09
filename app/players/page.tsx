@@ -8,7 +8,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getUserColorHex } from '@/lib/userColors';
-import { getCategoryMeta } from '@/lib/categories';
+import { getCategoryMeta, scaleMax } from '@/lib/categories';
 import { CompareIcon, ChevronRightIcon, AwardIcon } from '@/components/icons';
 
 interface LeaderboardPlayer {
@@ -89,10 +89,11 @@ export default function PlayersPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:repeat(auto-fill,minmax(260px,1fr))] gap-5">
           {players.map((player, idx) => {
             const hex = getUserColorHex(player.id);
             const isYou = player.id === currentPlayerId;
+            const barMax = scaleMax(player.categories.map((c) => c.avg));
             return (
               <Link
                 key={player.id}
@@ -142,13 +143,13 @@ export default function PlayersPage() {
                   {/* Mini category bars in canonical order */}
                   <div className="flex items-end gap-1 h-9 mb-4">
                     {player.categories.map((cat) => {
-                      const meta = getCategoryMeta(cat.code);
+                      const meta = getCategoryMeta(cat.code, cat.label);
                       return (
                         <div
                           key={cat.code}
                           className="flex-1 rounded-sm transition-all group-hover:opacity-100 opacity-80"
                           style={{
-                            height: `${Math.max(8, (cat.avg / 10) * 100)}%`,
+                            height: `${Math.max(8, Math.min(100, (cat.avg / barMax) * 100))}%`,
                             backgroundColor: meta.hex,
                           }}
                           title={`${meta.label}: ${cat.avg.toFixed(1)}`}

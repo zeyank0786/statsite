@@ -329,6 +329,62 @@ export const PinIcon = (p: IconProps) => (
   </Base>
 );
 
+export const LockIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="4" y="11" width="16" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </Base>
+);
+
+export const UnlockIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="4" y="11" width="16" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 0 1 7.8-1.3" />
+  </Base>
+);
+
+export const UploadIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M12 16V4" />
+    <path d="m7 9 5-5 5 5" />
+    <path d="M4 20h16" />
+  </Base>
+);
+
+export const ImageIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2.5" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-4.5-4.5L7 20" />
+  </Base>
+);
+
+export const FilmIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M8 4v16" />
+    <path d="M16 4v16" />
+    <path d="M3 9h5" />
+    <path d="M3 15h5" />
+    <path d="M16 9h5" />
+    <path d="M16 15h5" />
+  </Base>
+);
+
+export const LinkIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M10 14a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7-7l-1.6 1.5" />
+    <path d="M14 10a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7 7l1.6-1.5" />
+  </Base>
+);
+
+export const CameraIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+    <circle cx="12" cy="14" r="4" />
+  </Base>
+);
+
 export const WarningIcon = (p: IconProps) => (
   <Base {...p}>
     <path d="M12 3 2 20h20L12 3Z" />

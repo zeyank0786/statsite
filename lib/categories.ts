@@ -35,9 +35,43 @@ const FALLBACK_META: CategoryMeta = {
   rgb: '34, 211, 238',
 };
 
-export function getCategoryMeta(code: string | undefined | null): CategoryMeta {
+/** Deterministic color for admin-created categories not in the canonical set. */
+function dynamicCategoryMeta(code: string, label?: string): CategoryMeta {
+  let hash = 0;
+  for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
+  const h = (hash * 137.508) % 360;
+  const s = 0.78;
+  const l = 0.62;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = h / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  let r = 0, g = 0, b = 0;
+  if (hp < 1) [r, g, b] = [c, x, 0];
+  else if (hp < 2) [r, g, b] = [x, c, 0];
+  else if (hp < 3) [r, g, b] = [0, c, x];
+  else if (hp < 4) [r, g, b] = [0, x, c];
+  else if (hp < 5) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const m = l - c / 2;
+  const R = Math.round((r + m) * 255);
+  const G = Math.round((g + m) * 255);
+  const B = Math.round((b + m) * 255);
+  const hex = `#${[R, G, B].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  return {
+    code,
+    label: label || code.toUpperCase(),
+    short: code.toUpperCase().slice(0, 4),
+    color: hex,
+    hex,
+    rgb: `${R}, ${G}, ${B}`,
+  };
+}
+
+export function getCategoryMeta(code: string | undefined | null, label?: string): CategoryMeta {
   if (!code) return FALLBACK_META;
-  return CATEGORY_META[code.toLowerCase()] || FALLBACK_META;
+  const known = CATEGORY_META[code.toLowerCase()];
+  if (known) return known;
+  return dynamicCategoryMeta(code.toLowerCase(), label);
 }
 
 /** Sort categories (objects with a `code` field) into canonical order. */
@@ -49,30 +83,47 @@ export function orderCategories<T extends { code: string }>(categories: T[]): T[
   });
 }
 
-/** Sort stats (objects with a `code` like "mtl-a") a→j within a category. */
+/**
+ * Sort stats (objects with a `code` like "mtl-a") a→j within a category.
+ * Admin-created stats with letters beyond j (or odd codes) sort after the
+ * canonical block, alphabetically.
+ */
 export function orderStats<T extends { code: string }>(stats: T[]): T[] {
-  return [...stats].sort((a, b) => {
-    const la = a.code?.split('-')[1]?.toLowerCase() || '';
-    const lb = b.code?.split('-')[1]?.toLowerCase() || '';
-    return STAT_LETTER_ORDER.indexOf(la as any) - STAT_LETTER_ORDER.indexOf(lb as any);
-  });
+  const rank = (code: string) => {
+    const letter = code?.split('-')[1]?.toLowerCase() || '';
+    const idx = STAT_LETTER_ORDER.indexOf(letter as any);
+    return idx === -1 ? 100 + (letter.charCodeAt(0) || 0) : idx;
+  };
+  return [...stats].sort((a, b) => rank(a.code) - rank(b.code) || a.code.localeCompare(b.code));
 }
 
-/** Traffic-light color for a 0-10 stat value. */
+/** Traffic-light color for a stat value (unbounded scale, low end still matters). */
 export function getValueColor(value: number): string {
   if (value <= 3) return 'var(--accent-red)';
   if (value <= 7) return 'var(--accent-orange)';
   return 'var(--accent-green)';
 }
 
-/** The official overall score: sum of category totals / (categories - 1). */
+/**
+ * Stat values are unbounded running totals (floored at 0). Bars and radar
+ * charts scale against the largest value in view, never less than this floor,
+ * so a fresh roster still renders sensibly.
+ */
+export const SCALE_FLOOR = 10;
+
+/** Max for a bar/axis given the values in view: at least SCALE_FLOOR. */
+export function scaleMax(values: number[], floor: number = SCALE_FLOOR): number {
+  return Math.max(floor, ...values.map((v) => v || 0));
+}
+
+/** The overall score: average category total (sum of category totals / category count). */
 export function computeOverallScore(categories: { stats: { value: number }[] }[]): number {
-  if (!categories || categories.length <= 1) return 0;
+  if (!categories || categories.length === 0) return 0;
   const totalSum = categories.reduce(
     (sum, cat) => sum + cat.stats.reduce((s, st) => s + st.value, 0),
     0
   );
-  return totalSum / (categories.length - 1);
+  return totalSum / categories.length;
 }
 
 export function categoryAvg(stats: { value: number }[]): number {

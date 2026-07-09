@@ -13,6 +13,7 @@ import {
   getCategoryMeta,
   computeOverallScore,
   categoryAvg,
+  scaleMax,
   CATEGORY_ORDER,
 } from '@/lib/categories';
 import {
@@ -21,7 +22,7 @@ import {
   TargetIcon,
   LightbulbIcon,
   ClockIcon,
-  MessageIcon,
+  CameraIcon,
   ClipboardIcon,
   TrendUpIcon,
   TrendDownIcon,
@@ -47,8 +48,8 @@ const QUICK_ACTIONS = [
   { href: '/compare', label: 'Compare', desc: 'Head-to-head stats', icon: CompareIcon, rgb: '34, 211, 238' },
   { href: '/targets', label: 'Targets', desc: 'Your 3 focus stats', icon: TargetIcon, rgb: '52, 211, 153' },
   { href: '/reviews', label: 'Reviews', desc: 'Live stat sessions', icon: ClipboardIcon, rgb: '236, 72, 153' },
-  { href: '/messages', label: 'Board', desc: 'Share your wins', icon: MessageIcon, rgb: '168, 85, 247' },
-  { href: '/suggestions/new', label: 'Suggest', desc: 'Propose a change', icon: LightbulbIcon, rgb: '249, 115, 22' },
+  { href: '/evidence', label: 'Evidence', desc: 'Post your receipts', icon: CameraIcon, rgb: '249, 115, 22' },
+  { href: '/suggestions', label: 'Suggest', desc: 'Crew votes on changes', icon: LightbulbIcon, rgb: '168, 85, 247' },
 ];
 
 export default function Dashboard() {
@@ -183,6 +184,7 @@ export default function Dashboard() {
                 labels={radarLabels}
                 labelColors={radarColors}
                 series={[{ label: 'You', color: '#a855f7', values: radarValues }]}
+                max={scaleMax(radarValues)}
                 size={340}
               />
             ) : (
@@ -202,8 +204,13 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="space-y-4">
-            {(trends?.perCategory ?? CATEGORY_ORDER.map((code) => ({ code, label: getCategoryMeta(code).label, avg: 0, net90: 0 }))).map((cat) => {
-              const meta = getCategoryMeta(cat.code);
+            {(() => {
+              const rows =
+                trends?.perCategory ??
+                CATEGORY_ORDER.map((code) => ({ code, label: getCategoryMeta(code).label, avg: 0, net90: 0 }));
+              const momentumMax = scaleMax(rows.map((r) => Number(r.avg)));
+              return rows.map((cat) => {
+              const meta = getCategoryMeta(cat.code, (cat as any).label);
               return (
                 <div key={cat.code}>
                   <div className="flex items-center justify-between mb-1.5 gap-2">
@@ -231,14 +238,15 @@ export default function Dashboard() {
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{
-                        width: `${(Number(cat.avg) / 10) * 100}%`,
+                        width: `${Math.min(100, (Number(cat.avg) / momentumMax) * 100)}%`,
                         background: `linear-gradient(90deg, ${meta.hex}88, ${meta.hex})`,
                       }}
                     />
                   </div>
                 </div>
               );
-            })}
+              });
+            })()}
           </div>
         </div>
 

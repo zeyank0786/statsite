@@ -201,7 +201,7 @@ export default function ReviewsPage() {
         <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
           Pick a teammate to review. One editor drives the numbers, everyone else reviews live.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:repeat(auto-fill,minmax(220px,1fr))] gap-3">
           {players.map((player) => {
             const isCurrentUser = currentPlayerId === player.id;
             const hasActiveSession = sessions.some(

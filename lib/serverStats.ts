@@ -22,7 +22,11 @@ export interface HistoryRow {
   createdAt: string;
 }
 
-/** Every stat value for every player (missing values default to 5, matching the lazy-seed behavior). */
+/**
+ * Every stat value for every ACTIVE player (missing values default to 5,
+ * matching the lazy-seed behavior). Stats hidden for a player via
+ * StatVisibility are excluded from that player's rows.
+ */
 export async function fetchAllPlayerStats(): Promise<StatRow[]> {
   const rows = await queryAll(
     `SELECT
@@ -37,7 +41,9 @@ export async function fetchAllPlayerStats(): Promise<StatRow[]> {
      FROM Player p
      CROSS JOIN Stat s
      JOIN Category c ON s.categoryId = c.id
-     LEFT JOIN StatValue sv ON sv.statId = s.id AND sv.playerId = p.id`
+     LEFT JOIN StatValue sv ON sv.statId = s.id AND sv.playerId = p.id
+     LEFT JOIN StatVisibility vis ON vis.statId = s.id AND vis.playerId = p.id
+     WHERE p.active = 1 AND (vis.hidden IS NULL OR vis.hidden = 0)`
   );
   return rows.map((r: any) => ({
     playerId: String(r.playerId),
@@ -127,7 +133,7 @@ export function buildPlayerAggregates(rows: StatRow[]): PlayerAggregate[] {
     });
 
     const totalSum = categories.reduce((s, c) => s + c.total, 0);
-    const overall = categories.length > 1 ? totalSum / (categories.length - 1) : totalSum;
+    const overall = categories.length > 0 ? totalSum / categories.length : 0;
 
     players.push({
       id: playerId,

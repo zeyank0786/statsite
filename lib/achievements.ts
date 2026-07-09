@@ -49,10 +49,10 @@ export function computeAchievements(
       },
       {
         id: 'perfect',
-        name: 'Perfect Ten',
-        description: 'Max out a stat at 10/10',
+        name: 'Double Digits',
+        description: 'Push any stat to 10+',
         icon: 'crown',
-        earned: allStats.some((s) => s.value === 10),
+        earned: allStats.some((s) => s.value >= 10),
       },
       {
         id: 'master',

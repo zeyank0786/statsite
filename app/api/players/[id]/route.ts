@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { queryOne, queryAll, query } from '@/lib/db';
+import { computeLocksForPlayer } from '@/lib/locks';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export async function GET(
     const { id } = await params;
 
     const player = await queryOne(
-      'SELECT p.id, p.username, p.createdAt, u.email FROM Player p LEFT JOIN User u ON p.id = u.playerId WHERE p.id = ?',
+      'SELECT p.id, p.username, p.active, p.archivedAt, p.createdAt, u.email FROM Player p LEFT JOIN User u ON p.id = u.playerId WHERE p.id = ?',
       [id]
     );
 
@@ -20,6 +21,7 @@ export async function GET(
       return NextResponse.json({ error: 'Player not found' }, { status: 404 });
     }
 
+    // Stats visible for this player (StatVisibility row with hidden=1 excludes)
     const stats = await queryAll(
       `SELECT
         s.id as statId,
@@ -27,28 +29,30 @@ export async function GET(
         s.label,
         c.code as categoryCode,
         c.label as categoryLabel,
-        COALESCE(sv.value, 0) as value
+        COALESCE(sv.value, 0) as value,
+        (sv.id IS NULL) as missingValue
       FROM Stat s
       JOIN Category c ON s.categoryId = c.id
       LEFT JOIN StatValue sv ON s.id = sv.statId AND sv.playerId = ?
+      LEFT JOIN StatVisibility vis ON vis.statId = s.id AND vis.playerId = ?
+      WHERE (vis.hidden IS NULL OR vis.hidden = 0)
       ORDER BY c.id, s.id`,
-      [id]
+      [id, id]
     );
 
-    const existingStatIds = new Set(
-      (await queryAll('SELECT statId FROM StatValue WHERE playerId = ?', [id]))
-        .map((sv: any) => sv.statId)
-    );
-
-    for (const row of stats) {
-      if (!existingStatIds.has(row.statId) && row.value === 0) {
+    // Lazily create missing StatValue rows at the default of 5
+    for (const row of stats as any[]) {
+      if (Number(row.missingValue)) {
         const now = new Date().toISOString();
         await query(
           'INSERT INTO StatValue (id, statId, playerId, value, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
           [uuid(), row.statId, id, 5, now, now]
         );
+        row.value = 5;
       }
     }
+
+    const locks = await computeLocksForPlayer(id);
 
     const statMap: Record<string, any> = {};
     for (const row of stats as any[]) {
@@ -60,11 +64,15 @@ export async function GET(
           stats: [],
         };
       }
+      const lock = locks.get(String(row.statId));
       statMap[categoryCode].stats.push({
         id: String(row.statId),
         code: String(row.code),
         label: String(row.label),
         value: Number(row.value),
+        locked: lock?.locked || false,
+        lockSource: lock?.source || null,
+        lockReasons: lock?.reasons || [],
       });
     }
 
@@ -73,7 +81,7 @@ export async function GET(
       cat.stats.reduce((sum: number, s: any) => sum + s.value, 0)
     );
     const totalSum = categoryTotals.reduce((sum: number, total: number) => sum + total, 0);
-    const overallScore = categories.length > 1 ? (totalSum / (categories.length - 1)).toFixed(1) : 0;
+    const overallScore = categories.length > 0 ? (totalSum / categories.length).toFixed(1) : 0;
 
     const history = await queryAll(
       `SELECT sh.oldValue, sh.newValue, s.code, s.label, sh.createdAt, p2.username as changedBy
@@ -99,7 +107,7 @@ export async function GET(
     );
 
     const otherPlayers = await queryAll(
-      'SELECT id, username FROM Player WHERE id != ? ORDER BY username ASC',
+      'SELECT id, username FROM Player WHERE id != ? AND active = 1 ORDER BY username ASC',
       [id]
     );
 
@@ -107,6 +115,8 @@ export async function GET(
       player: {
         id: player.id,
         username: player.username,
+        active: Boolean(Number(player.active)),
+        archivedAt: player.archivedAt || null,
         email: player.email || 'No email set',
         createdAt: player.createdAt,
       },

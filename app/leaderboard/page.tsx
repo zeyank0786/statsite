@@ -88,7 +88,7 @@ export default function LeaderboardPage() {
           style={{ background: 'linear-gradient(120deg, #fbbf24, #f97316)' }}
         />
         <div className="relative z-10">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:repeat(auto-fill,minmax(220px,1fr))] gap-4">
             {ranked.map((player, idx) => {
               const hex = getUserColorHex(player.id);
               const isYou = player.id === currentPlayerId;
@@ -180,9 +180,20 @@ export default function LeaderboardPage() {
       {/* ===== Category crowns ===== */}
       <section className="mb-6 animate-rise animate-rise-2">
         <h2 className="font-display text-xl font-bold text-white mb-4">Category Crowns</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-          {CATEGORY_ORDER.map((code) => {
-            const meta = getCategoryMeta(code);
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:repeat(auto-fill,minmax(160px,1fr))] gap-3">
+          {(() => {
+            // Dynamic category list: canonical first, then admin-created ones
+            const codes = new Set<string>();
+            for (const p of players) for (const c of p.categories) codes.add(c.code);
+            const ordered = [
+              ...CATEGORY_ORDER.filter((c) => codes.has(c)),
+              ...[...codes].filter((c) => !(CATEGORY_ORDER as readonly string[]).includes(c)),
+            ];
+            return ordered.map((code) => {
+            const catLabel = players
+              .flatMap((p) => p.categories)
+              .find((c) => c.code === code)?.label;
+            const meta = getCategoryMeta(code, catLabel);
             const standings = [...players]
               .map((p) => ({
                 player: p,
@@ -214,13 +225,14 @@ export default function LeaderboardPage() {
                       {tied ? 'Tied' : leader.player.username}
                     </p>
                     <p className="text-xs font-bold" style={{ color: meta.hex }}>
-                      {leader.avg.toFixed(1)}/10
+                      {leader.avg.toFixed(1)} avg
                     </p>
                   </div>
                 </div>
               </div>
             );
-          })}
+            });
+          })()}
         </div>
       </section>
 
