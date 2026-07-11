@@ -49,7 +49,7 @@ interface CatalogData {
   players: { id: string; username: string; active: number }[];
 }
 
-type Tab = 'roster' | 'catalog' | 'gating' | 'danger';
+type Tab = 'roster' | 'catalog' | 'gating' | 'editstats' | 'danger';
 
 export default function AdminPage() {
   const { status, data: session } = useSession();
@@ -167,6 +167,7 @@ export default function AdminPage() {
             { key: 'roster', label: 'Roster' },
             { key: 'catalog', label: 'Categories & Stats' },
             { key: 'gating', label: 'Locks & Prereqs' },
+            { key: 'editstats', label: 'Edit Stats' },
             { key: 'danger', label: 'Danger Zone' },
           ] as const
         ).map((t) => (
@@ -190,6 +191,7 @@ export default function AdminPage() {
       {tab === 'roster' && <RosterTab roster={roster} busy={busy} call={call} />}
       {tab === 'catalog' && catalog && <CatalogTab catalog={catalog} busy={busy} call={call} />}
       {tab === 'gating' && catalog && <GatingTab catalog={catalog} busy={busy} call={call} />}
+      {tab === 'editstats' && <StatEditTab roster={roster} flash={flash} />}
       {tab === 'danger' && <DangerTab />}
     </AppShell>
   );
@@ -1076,6 +1078,238 @@ function GatingTab({
             </div>
           </section>
         </>
+      )}
+    </div>
+  );
+}
+
+/* ============================== Edit Stats ============================== */
+
+interface EditableStat {
+  statId: string;
+  code: string;
+  label: string;
+  categoryId: string;
+  categoryCode: string;
+  categoryLabel: string;
+  value: number;
+  hidden: boolean;
+}
+
+function StatEditTab({
+  roster,
+  flash,
+}: {
+  roster: AdminPlayer[];
+  flash: (kind: 'ok' | 'err', text: string) => void;
+}) {
+  const [selectedPlayerId, setSelectedPlayerId] = useState('');
+  const [stats, setStats] = useState<EditableStat[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+
+  const selectedPlayer = roster.find((p) => p.id === selectedPlayerId);
+
+  const loadStats = async (playerId: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/stat-value?playerId=${playerId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data.stats || []);
+        setDrafts(Object.fromEntries((data.stats || []).map((s: EditableStat) => [s.statId, String(s.value)])));
+      } else {
+        const err = await res.json();
+        flash('err', err.error || 'Failed to load stats');
+      }
+    } catch (e: any) {
+      flash('err', e.message || 'Failed to load stats');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pickPlayer = (id: string) => {
+    setSelectedPlayerId(id);
+    setStats([]);
+    setDrafts({});
+    if (id) loadStats(id);
+  };
+
+  const saveStat = async (stat: EditableStat) => {
+    const raw = drafts[stat.statId];
+    const value = Math.max(0, Math.floor(Number(raw)));
+    if (!Number.isFinite(value)) {
+      flash('err', 'Enter a valid number');
+      return;
+    }
+    setSavingId(stat.statId);
+    try {
+      const res = await fetch('/api/admin/stat-value', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: selectedPlayerId, statId: stat.statId, value, reason: reason.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStats((prev) => prev.map((s) => (s.statId === stat.statId ? { ...s, value: data.newValue } : s)));
+        setDrafts((prev) => ({ ...prev, [stat.statId]: String(data.newValue) }));
+        flash('ok', `${stat.label}: ${data.oldValue} → ${data.newValue}`);
+      } else {
+        flash('err', [data.error, data.details].filter(Boolean).join(' — ') || 'Failed to save');
+      }
+    } catch (e: any) {
+      flash('err', e.message || 'Failed to save');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const categories = orderCategories(
+    Array.from(
+      new Map(stats.map((s) => [s.categoryId, { id: s.categoryId, code: s.categoryCode, label: s.categoryLabel }])).values()
+    )
+  );
+
+  return (
+    <div className="space-y-5 animate-rise">
+      <section
+        className="glass p-4 text-sm flex items-start gap-2.5"
+        style={{ borderColor: 'rgba(251,191,36,0.4)', color: 'var(--text-secondary)' }}
+      >
+        <span style={{ color: 'var(--accent-yellow)' }} className="shrink-0 mt-0.5">
+          <WarningIcon size={16} />
+        </span>
+        <p>
+          <span className="font-semibold" style={{ color: 'var(--accent-yellow)' }}>
+            This bypasses the suggestion &amp; vote flow.
+          </span>{' '}
+          Use it only for extenuating circumstances — corrections, resets, fixing a mistake. Every
+          change is logged to the History page as an <span className="font-semibold">Admin edit</span> with
+          your name. No tier-up announcements fire.
+        </p>
+      </section>
+
+      {/* Player picker */}
+      <section className="glass card-shadow p-5">
+        <h2 className="font-display text-lg font-bold text-white mb-3">Whose stats?</h2>
+        <div className="flex flex-wrap gap-2">
+          {roster.map((p) => {
+            const active = selectedPlayerId === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => pickPlayer(p.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition ${
+                  active ? 'text-white' : 'text-neutral-300 hover:text-white'
+                }`}
+                style={{
+                  borderColor: active ? 'var(--accent-cyan)' : 'var(--surface-border)',
+                  background: active ? 'rgba(34,211,238,0.12)' : 'transparent',
+                }}
+              >
+                <Avatar id={p.id} name={p.username} size={22} />
+                <span className={p.active ? '' : 'line-through opacity-60'}>{p.username}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {selectedPlayer && (
+        <section className="glass card-shadow p-5">
+          <div className="flex items-end gap-3 mb-4 flex-wrap">
+            <div className="flex-1 min-w-[220px]">
+              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                Reason (optional — saved to the audit log)
+              </label>
+              <input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. correcting a mis-vote, season reset"
+                className="field"
+              />
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="h-40 rounded-xl animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }} />
+          ) : (
+            <div className="space-y-6">
+              {categories.map((cat) => {
+                const meta = getCategoryMeta(cat.code, cat.label);
+                const catStats = orderStats(stats.filter((s) => s.categoryId === cat.id));
+                return (
+                  <div key={cat.id}>
+                    <p className="text-[11px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: meta.hex }}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.hex }} />
+                      {cat.label}
+                    </p>
+                    <div className="space-y-1.5">
+                      {catStats.map((stat) => {
+                        const draft = drafts[stat.statId] ?? String(stat.value);
+                        const changed = draft !== String(stat.value) && draft.trim() !== '';
+                        return (
+                          <div
+                            key={stat.statId}
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl border flex-wrap"
+                            style={{ borderColor: 'var(--surface-border)', background: 'rgba(255,255,255,0.015)' }}
+                          >
+                            <span className="text-[10px] font-bold uppercase tracking-wider w-14 shrink-0" style={{ color: meta.hex }}>
+                              {stat.code}
+                            </span>
+                            <span className="flex-1 text-sm text-white min-w-[140px] flex items-center gap-2">
+                              {stat.label}
+                              {stat.hidden && (
+                                <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded" style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--accent-red)' }}>
+                                  hidden
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-xs shrink-0" style={{ color: 'var(--text-secondary)' }}>
+                              now <span className="font-bold text-white">{stat.value}</span>
+                            </span>
+                            <button
+                              onClick={() => setDrafts((prev) => ({ ...prev, [stat.statId]: String(Math.max(0, Number(draft || stat.value) - 1)) }))}
+                              className="w-7 h-7 rounded-lg border text-neutral-300 hover:text-white transition shrink-0"
+                              style={{ borderColor: 'var(--surface-border)' }}
+                              title="-1"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              value={draft}
+                              onChange={(e) => setDrafts((prev) => ({ ...prev, [stat.statId]: e.target.value }))}
+                              className="field w-20 py-1.5 text-center shrink-0"
+                            />
+                            <button
+                              onClick={() => setDrafts((prev) => ({ ...prev, [stat.statId]: String(Math.max(0, Number(draft || stat.value) + 1)) }))}
+                              className="w-7 h-7 rounded-lg border text-neutral-300 hover:text-white transition shrink-0"
+                              style={{ borderColor: 'var(--surface-border)' }}
+                              title="+1"
+                            >
+                              +
+                            </button>
+                            <button
+                              onClick={() => saveStat(stat)}
+                              disabled={!changed || savingId === stat.statId}
+                              className="btn-primary py-1.5 px-3 text-xs shrink-0 disabled:opacity-40"
+                            >
+                              <CheckIcon size={13} /> {savingId === stat.statId ? 'Saving' : 'Save'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
