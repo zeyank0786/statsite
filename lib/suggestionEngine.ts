@@ -1,4 +1,5 @@
 import { query, queryOne, queryAll } from './db';
+import { announceStatMilestones } from './milestones';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -128,4 +129,12 @@ async function applyApproval(suggestion: any, now: string) {
      VALUES (?, ?, ?, ?, ?, ?, 'suggestion', ?)`,
     [uuid(), String(statValue.id), oldValue, newValue, String(suggestion.reason), String(suggestion.proposedById), now]
   );
+
+  // Celebrate tier-ups / category milestones on the board — never let a
+  // failure here undo the approved stat change.
+  try {
+    await announceStatMilestones({ playerId, statId, oldValue, newValue, delta });
+  } catch (e) {
+    console.error('Milestone announcement failed (stat change still applied):', e);
+  }
 }

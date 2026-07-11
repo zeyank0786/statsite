@@ -221,6 +221,20 @@ input[type="range"] {
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
+/* Native <select> popups inherit the OS palette — on Windows that's a white
+   list, so light option text became invisible. color-scheme tells the browser
+   to paint the whole control dark, and the explicit option colors are the
+   fallback for engines that ignore it. */
+select.field {
+  color-scheme: dark;
+}
+
+.field option,
+.field optgroup {
+  background-color: #14141b;
+  color: var(--foreground);
+}
+
 .field::placeholder {
   color: rgba(255, 255, 255, 0.3);
 }

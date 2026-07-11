@@ -1,9 +1,61 @@
 import { NextResponse } from 'next/server';
 import { queryOne, queryAll, query } from '@/lib/db';
 import { computeLocksForPlayer } from '@/lib/locks';
+import { getNextTier } from '@/lib/categories';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
+
+const RANKUP_WINDOW_DAYS = 60;
+
+/**
+ * "At your recent pace you'll hit <next tier> in ~N weeks" for the stats
+ * climbing fastest toward their next tier. Velocity = net gain over the last
+ * RANKUP_WINDOW_DAYS, expressed per week; purely derived from StatHistory.
+ */
+async function computeRankUp(
+  playerId: string,
+  currentStats: { statId: string; code: string; label: string; value: number; locked: boolean }[]
+) {
+  const since = new Date(Date.now() - RANKUP_WINDOW_DAYS * 86400000).toISOString();
+  const rows = await queryAll(
+    `SELECT sv.statId as statId, SUM(sh.newValue - sh.oldValue) as netChange
+     FROM StatHistory sh
+     JOIN StatValue sv ON sh.statValueId = sv.id
+     WHERE sv.playerId = ? AND sh.createdAt >= ?
+     GROUP BY sv.statId`,
+    [playerId, since]
+  );
+  const netByStat = new Map<string, number>();
+  for (const r of rows as any[]) netByStat.set(String(r.statId), Number(r.netChange));
+
+  const projections = currentStats
+    .filter((s) => !s.locked)
+    .map((s) => {
+      const net = netByStat.get(s.statId) ?? 0;
+      const perWeek = (net / RANKUP_WINDOW_DAYS) * 7;
+      const nextTier = getNextTier(s.value);
+      if (!nextTier || perWeek <= 0) return null;
+      const ptsToGo = nextTier.min - s.value;
+      if (ptsToGo <= 0) return null;
+      const weeks = Math.ceil(ptsToGo / perWeek);
+      return {
+        statId: s.statId,
+        code: s.code,
+        label: s.label,
+        current: s.value,
+        nextTier: nextTier.name,
+        nextTierHex: nextTier.hex,
+        ptsToGo,
+        weeks,
+      };
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null && p.weeks <= 104) // hide >2yr noise
+    .sort((a, b) => a.weeks - b.weeks)
+    .slice(0, 3);
+
+  return projections;
+}
 
 export async function GET(
   request: Request,
@@ -111,6 +163,18 @@ export async function GET(
       [id]
     );
 
+    // Rank-up ETA over the visible, unlocked stats
+    const flatStats = (categories as any[]).flatMap((cat) =>
+      cat.stats.map((s: any) => ({
+        statId: String(s.id),
+        code: String(s.code),
+        label: String(s.label),
+        value: Number(s.value),
+        locked: Boolean(s.locked),
+      }))
+    );
+    const rankUp = await computeRankUp(id, flatStats);
+
     return NextResponse.json({
       player: {
         id: player.id,
@@ -125,6 +189,7 @@ export async function GET(
       history,
       recentReviews,
       otherPlayers,
+      rankUp,
     });
   } catch (error: any) {
     console.error('Error fetching player:', error);

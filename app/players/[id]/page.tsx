@@ -67,6 +67,9 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [overallScore, setOverallScore] = useState<number | string>(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [recentReviews, setRecentReviews] = useState<ReviewSession[]>([]);
+  const [rankUp, setRankUp] = useState<
+    { statId: string; code: string; label: string; current: number; nextTier: string; nextTierHex: string; ptsToGo: number; weeks: number }[]
+  >([]);
   const [achievements, setAchievements] = useState<AchievementData[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
@@ -114,6 +117,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
       setOverallScore(data.overallScore);
       setHistory(data.history || []);
       setRecentReviews(data.recentReviews || []);
+      setRankUp(data.rankUp || []);
       setNewName(data.player.username);
 
       if (changesRes.ok) {
@@ -351,6 +355,36 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
           </div>
         </div>
       </section>
+
+      {/* ===== Rank-up ETA ===== */}
+      {rankUp.length > 0 && (
+        <section className="glass card-shadow p-5 mb-6 animate-rise">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendUpIcon size={16} />
+            <h2 className="font-display text-lg font-bold text-white">Rank-up ETA</h2>
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              at the last 60 days&apos; pace
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {rankUp.map((r) => (
+              <div
+                key={r.statId}
+                className="rounded-xl border p-3.5"
+                style={{ borderColor: `${r.nextTierHex}55`, background: `${r.nextTierHex}0f` }}
+              >
+                <p className="text-sm font-semibold text-white truncate">{r.label}</p>
+                <p className="text-[15px] font-bold mt-1" style={{ color: r.nextTierHex }}>
+                  {r.weeks === 1 ? '~1 week' : `~${r.weeks} weeks`} to {r.nextTier}
+                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                  {r.current} pts now · {r.ptsToGo} to go
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ===== Stats controls ===== */}
       <div className="flex items-center justify-between gap-3 flex-wrap mb-5">

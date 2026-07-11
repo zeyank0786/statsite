@@ -40,6 +40,13 @@ interface Message {
   reactions: Reaction[];
   mentions: Mention[];
   evidenceRefs?: EvidenceRef[];
+  milestone?: {
+    kind: 'tier' | 'category';
+    label: string;
+    tier?: string;
+    value: number;
+    hex: string;
+  } | null;
   referencedStatId?: string | null;
   referencedPlayerId?: string | null;
   statCode?: string;
@@ -779,6 +786,37 @@ function MessagesContent() {
                         >
                           Cancel
                         </button>
+                      </div>
+                    </div>
+                  ) : message.milestone ? (
+                    <div
+                      className="rounded-xl border p-4 flex items-center gap-3.5"
+                      style={{
+                        borderColor: `${message.milestone.hex}66`,
+                        background: `linear-gradient(120deg, ${message.milestone.hex}22, ${message.milestone.hex}0a)`,
+                      }}
+                    >
+                      <span className="text-3xl shrink-0">
+                        {message.milestone.kind === 'tier' ? '🏆' : '🚀'}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: message.milestone.hex }}>
+                          {message.milestone.kind === 'tier' ? 'Tier Up' : 'Category Milestone'}
+                        </p>
+                        <p className="text-[15px] font-bold text-white leading-snug">
+                          {message.milestone.kind === 'tier' ? (
+                            <>
+                              {message.authorName}&apos;s {message.milestone.label} reached{' '}
+                              <span style={{ color: message.milestone.hex }}>{message.milestone.tier}</span>{' '}
+                              <span className="font-medium opacity-70">({message.milestone.value} pts)</span>
+                            </>
+                          ) : (
+                            <>
+                              {message.authorName}&apos;s {message.milestone.label} broke{' '}
+                              <span style={{ color: message.milestone.hex }}>{message.milestone.value} points</span>
+                            </>
+                          )}
+                        </p>
                       </div>
                     </div>
                   ) : (

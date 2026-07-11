@@ -58,6 +58,17 @@ export async function GET(request: Request) {
           [message.id]
         );
 
+        // Structured milestone (tier-up / category) for a celebratory card
+        let milestone: any = null;
+        for (const mention of mentions as any[]) {
+          if (String(mention.type) !== 'milestone') continue;
+          try {
+            milestone = JSON.parse(String(mention.targetId));
+          } catch {
+            /* malformed — fall back to plain content */
+          }
+        }
+
         // Enrich evidence mentions so the board can render embeds directly
         const evidenceRefs: any[] = [];
         for (const mention of mentions as any[]) {
@@ -91,6 +102,7 @@ export async function GET(request: Request) {
           reactions,
           mentions,
           evidenceRefs,
+          milestone,
         };
       })
     );
