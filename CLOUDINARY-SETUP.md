@@ -16,20 +16,23 @@ caption-only mode.
    - **Preset name**: `4ward-evidence` (or anything — you'll copy it into the env var)
    - **Signing mode**: **Unsigned** ← the important one
    - **Folder**: `4ward` (optional, keeps the media library tidy)
-4. Under the preset's **Transformations → Incoming transformation**, click *Edit* and paste this raw transformation:
-   ```
-   c_limit,w_1600,h_1600,q_auto:good
-   ```
-   This auto-shrinks big photos on upload (max 1600px, compressed) so a phone
-   photo lands around 200–400 KB instead of 8 MB.
-5. Under **Upload control** (same preset page):
-   - **Max file size**: `10000000` (10 MB — this is the pre-compression limit; videos need headroom)
-   - **Max video duration**: `20` (seconds) — if your plan/UI shows it under *Media analysis / video limits*; if the field isn't there, the incoming transformation below covers practical size.
-6. Save the preset.
+4. Leave **Transformations → Incoming transformation** empty. Do **not** put a
+   resize/compress transformation there — see the warning below.
+5. Save the preset.
 
-> Videos: the free tier auto-transcodes; with `q_auto` delivery they stream
-> compressed. The app also requests `resource_type=auto` so images and videos
-> both work through the same preset.
+> **Don't set an incoming transformation.** It sounded like a good idea
+> (auto-shrink photos on upload) but Cloudinary processes incoming
+> transformations *synchronously*, during the upload call itself — and for
+> anything but a short video that's too slow, so Cloudinary rejects it with
+> "video too large to process synchronously, please use eager transformation
+> with eager_async = true". If your preset currently has one set (from an
+> earlier version of this guide), open it and clear that field — this fixes
+> video uploads immediately, no code change or redeploy needed.
+>
+> Compression instead happens **at delivery time** (`lib/cloudinary.ts` —
+> `cldImage`/`cldThumb`/`cldVideoThumb`), which Cloudinary generates on first
+> view and caches from then on. It never hits this synchronous limit, works
+> for both images and videos, and needs zero preset configuration.
 
 ## 3. Wire it into the app
 Add to `stats-app/.env` (local) **and** your hosting env vars (Vercel → Project → Settings → Environment Variables):

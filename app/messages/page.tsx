@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getUserColorHex, getUserColorBg } from '@/lib/userColors';
 import { CATEGORY_ORDER, getCategoryMeta, orderStats } from '@/lib/categories';
+import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import {
   XIcon,
   PencilIcon,
@@ -441,9 +442,9 @@ function MessagesContent() {
               >
                 {attachedEvidence.mediaUrl &&
                   (attachedEvidence.mediaType === 'video' ? (
-                    <video src={attachedEvidence.mediaUrl} className="w-12 h-12 rounded-lg object-cover shrink-0" muted />
+                    <img src={cldVideoThumb(attachedEvidence.mediaUrl, 48)} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
                   ) : (
-                    <img src={attachedEvidence.mediaUrl} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                    <img src={cldThumb(attachedEvidence.mediaUrl, 48)} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
                   ))}
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-cyan)' }}>
@@ -798,9 +799,9 @@ function MessagesContent() {
                             >
                               {ev.mediaUrl &&
                                 (ev.mediaType === 'video' ? (
-                                  <video src={ev.mediaUrl} className="w-16 h-16 rounded-lg object-cover shrink-0" muted />
+                                  <img src={cldVideoThumb(ev.mediaUrl, 64)} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
                                 ) : (
-                                  <img src={ev.mediaUrl} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+                                  <img src={cldThumb(ev.mediaUrl, 64)} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
                                 ))}
                               <div className="min-w-0">
                                 <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-cyan)' }}>

@@ -34,6 +34,43 @@ export function fileTooLargeError(file: File): string | null {
   }`;
 }
 
+/**
+ * Delivery-time transforms, inserted into the URL after "/upload/". These
+ * are generated on first request and cached from then on — unlike
+ * incoming/eager transforms (applied during the upload call itself), they
+ * never hit Cloudinary's "too large to process synchronously" limit. This
+ * is why optimization happens here, at render time, and NOT via an incoming
+ * transformation on the upload preset (see CLOUDINARY-SETUP.md).
+ */
+function insertTransform(url: string, transform: string): string {
+  const marker = '/upload/';
+  const i = url.indexOf(marker);
+  if (i === -1) return url;
+  const insertAt = i + marker.length;
+  return url.slice(0, insertAt) + transform + '/' + url.slice(insertAt);
+}
+
+/** Full-size optimized image (evidence board posts, lightboxes). */
+export function cldImage(url: string, maxSize = 1600): string {
+  return insertTransform(url, `c_limit,w_${maxSize},h_${maxSize},q_auto,f_auto`);
+}
+
+/** Small square image thumbnail (grids, lists). */
+export function cldThumb(url: string, size = 96): string {
+  return insertTransform(url, `c_fill,w_${size},h_${size},q_auto,f_auto`);
+}
+
+/**
+ * Still-frame JPG of a video, sized as a thumbnail — for small preview
+ * slots where loading/seeking a whole video just to show an icon would be
+ * wasteful. Swapping the extension to .jpg on a /video/upload/ URL tells
+ * Cloudinary to hand back a frame instead of the video itself.
+ */
+export function cldVideoThumb(url: string, size = 96): string {
+  const withTransform = insertTransform(url, `c_fill,w_${size},h_${size},q_auto,f_auto`);
+  return withTransform.replace(/\.\w+($|\?)/, '.jpg$1');
+}
+
 export interface CloudinaryUploadResult {
   url: string;
   publicId: string;

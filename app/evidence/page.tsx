@@ -9,7 +9,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, orderCategories } from '@/lib/categories';
-import { cloudinaryConfigured, uploadToCloudinary, fileTooLargeError, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '@/lib/cloudinary';
+import { cloudinaryConfigured, uploadToCloudinary, fileTooLargeError, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, cldImage } from '@/lib/cloudinary';
 import {
   UploadIcon,
   XIcon,
@@ -421,9 +421,9 @@ export default function EvidenceBoardPage() {
                     {post.mediaUrl && (
                       <div className="bg-black/40">
                         {post.mediaType === 'video' ? (
-                          <video src={post.mediaUrl} className="w-full max-h-72 object-contain" controls playsInline />
+                          <video src={post.mediaUrl!} className="w-full max-h-72 object-contain" controls playsInline />
                         ) : (
-                          <img src={post.mediaUrl} alt={post.caption || 'Evidence'} className="w-full max-h-72 object-contain" loading="lazy" />
+                          <img src={cldImage(post.mediaUrl!)} alt={post.caption || 'Evidence'} className="w-full max-h-72 object-contain" loading="lazy" />
                         )}
                       </div>
                     )}

@@ -8,6 +8,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getCategoryMeta } from '@/lib/categories';
+import { cldImage, cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import { PlusIcon, CheckIcon, XIcon, ImageIcon } from '@/components/icons';
 
 interface EvidenceRef {
@@ -261,9 +262,14 @@ export default function SuggestionsPage() {
                       >
                         {ev.mediaUrl ? (
                           ev.mediaType === 'video' ? (
-                            <video src={ev.mediaUrl} className="w-full h-full object-cover" muted />
+                            <>
+                              <img src={cldVideoThumb(ev.mediaUrl, 64)} alt="" className="w-full h-full object-cover" />
+                              <span className="absolute inset-0 flex items-center justify-center text-white/90 bg-black/20 text-[10px]">
+                                ▶
+                              </span>
+                            </>
                           ) : (
-                            <img src={ev.mediaUrl} alt="" className="w-full h-full object-cover" />
+                            <img src={cldThumb(ev.mediaUrl, 64)} alt="" className="w-full h-full object-cover" />
                           )
                         ) : (
                           <span className="w-full h-full flex items-center justify-center text-neutral-500">
@@ -374,7 +380,7 @@ export default function SuggestionsPage() {
               (lightbox.mediaType === 'video' ? (
                 <video src={lightbox.mediaUrl} className="w-full max-h-[70vh] object-contain rounded-2xl" controls autoPlay />
               ) : (
-                <img src={lightbox.mediaUrl} alt="" className="w-full max-h-[70vh] object-contain rounded-2xl" />
+                <img src={cldImage(lightbox.mediaUrl)} alt="" className="w-full max-h-[70vh] object-contain rounded-2xl" />
               ))}
             <div className="flex items-start justify-between gap-3 mt-3">
               <div>

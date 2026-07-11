@@ -10,6 +10,7 @@ import Avatar from '@/components/Avatar';
 import LockBadge from '@/components/LockBadge';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
+import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import TierBadge from '@/components/TierBadge';
 import { ChevronLeftIcon, CheckIcon, ImageIcon, XIcon } from '@/components/icons';
 
@@ -295,9 +296,14 @@ function NewSuggestionContent() {
                     >
                       {post.mediaUrl ? (
                         post.mediaType === 'video' ? (
-                          <video src={post.mediaUrl} className="w-full h-24 object-cover" muted />
+                          <div className="relative">
+                            <img src={cldVideoThumb(post.mediaUrl, 160)} alt="" className="w-full h-24 object-cover" />
+                            <span className="absolute inset-0 flex items-center justify-center text-white/90 bg-black/20">
+                              ▶
+                            </span>
+                          </div>
                         ) : (
-                          <img src={post.mediaUrl} alt="" className="w-full h-24 object-cover" />
+                          <img src={cldThumb(post.mediaUrl, 160)} alt="" className="w-full h-24 object-cover" />
                         )
                       ) : (
                         <div className="w-full h-24 flex items-center justify-center bg-white/[0.03] text-neutral-500">
