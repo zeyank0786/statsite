@@ -42,6 +42,15 @@ interface SubjectStat {
   categoryLabel: string;
 }
 
+interface Preset {
+  id: string;
+  name: string;
+  reason: string;
+  createdByName: string;
+  canManage: boolean;
+  changes: { statId: string; delta: number; label: string; code: string }[];
+}
+
 const DELTAS = [
   { value: -2, label: '-2', note: 'exceptional drop' },
   { value: -1, label: '-1', note: 'step back' },
@@ -58,6 +67,8 @@ function NewSuggestionContent() {
   const [evidence, setEvidence] = useState<EvidencePost[]>([]);
   const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [presetNote, setPresetNote] = useState('');
 
   const [subjectId, setSubjectId] = useState('');
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
@@ -85,12 +96,14 @@ function NewSuggestionContent() {
 
   const loadBase = async () => {
     try {
-      const [playersRes, evidenceRes] = await Promise.all([
+      const [playersRes, evidenceRes, presetsRes] = await Promise.all([
         fetch('/api/players'),
         fetch('/api/evidence'),
+        fetch('/api/suggestions/presets'),
       ]);
       if (playersRes.ok) setPlayers(await playersRes.json());
       if (evidenceRes.ok) setEvidence(await evidenceRes.json());
+      if (presetsRes.ok) setPresets(await presetsRes.json());
     } catch (error) {
       console.error('Failed to load:', error);
     }
@@ -140,7 +153,7 @@ function NewSuggestionContent() {
     };
   }, [subjectId]);
 
-  const MIN_TESTIMONY = 20;
+  const MIN_TESTIMONY = 1;
   const eligibleSubjects = players.filter((p) => p.id !== currentPlayerId);
   const subjectEvidence = evidence.filter((e) => e.playerId === subjectId);
   const testimonyReady = testimony.trim().length >= MIN_TESTIMONY;
@@ -157,6 +170,7 @@ function NewSuggestionContent() {
     setTestimony('');
     setChanges({});
     setError('');
+    setPresetNote('');
   };
 
   const toggleEvidence = (id: string) => {
@@ -172,6 +186,65 @@ function NewSuggestionContent() {
       else next[statId] = 1;
       return next;
     });
+  };
+
+  // Prefill from a preset — the preset itself is never mutated by a use;
+  // everything stays editable from here (add/remove stats, tweak deltas, etc.)
+  const applyPreset = (preset: Preset) => {
+    const available = new Set(subjectStats.filter((s) => !s.locked).map((s) => s.id));
+    const applied: Record<string, number> = {};
+    let skipped = 0;
+    for (const change of preset.changes) {
+      if (available.has(change.statId)) applied[change.statId] = change.delta;
+      else skipped++;
+    }
+    setChanges(applied);
+    setReason(preset.reason);
+    setPresetNote(
+      skipped > 0
+        ? `"${preset.name}" applied — ${skipped} stat${skipped > 1 ? 's' : ''} skipped (hidden, locked or deleted for this player)`
+        : `"${preset.name}" applied — tweak anything below before submitting`
+    );
+  };
+
+  const savePreset = async () => {
+    const name = prompt('Name this preset (e.g. "Gym session"):');
+    if (!name?.trim()) return;
+    try {
+      const res = await fetch('/api/suggestions/presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          reason: reason.trim(),
+          changes: Object.entries(changes).map(([statId, delta]) => ({ statId, delta })),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPresetNote(`Preset "${name.trim()}" saved — it'll be one tap next time`);
+        const refreshed = await fetch('/api/suggestions/presets');
+        if (refreshed.ok) setPresets(await refreshed.json());
+      } else {
+        setError(data.error || 'Failed to save preset');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to save preset');
+    }
+  };
+
+  const deletePreset = async (preset: Preset) => {
+    if (!confirm(`Delete the preset "${preset.name}"? (Past suggestions made from it are unaffected.)`)) return;
+    try {
+      const res = await fetch('/api/suggestions/presets', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presetId: preset.id }),
+      });
+      if (res.ok) setPresets((prev) => prev.filter((p) => p.id !== preset.id));
+    } catch (err) {
+      console.error('Failed to delete preset:', err);
+    }
   };
 
   const setStatDelta = (statId: string, delta: number) => {
@@ -267,6 +340,54 @@ function NewSuggestionContent() {
             You can't suggest about yourself — post evidence and let the crew call it.
           </p>
         </section>
+
+        {/* Quick start: presets (crew-made templates for regular hand-outs) */}
+        {subjectId && presets.length > 0 && (
+          <section className="glass card-shadow p-5 animate-rise">
+            <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent-purple)' }}>
+              Quick start
+            </p>
+            <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+              Tap a preset to prefill the stats and reason — everything stays editable, and the
+              preset itself never changes.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {presets.map((preset) => (
+                <span key={preset.id} className="relative inline-flex">
+                  <button
+                    onClick={() => applyPreset(preset)}
+                    disabled={loadingStats}
+                    className="text-left px-3 py-2 rounded-xl border text-sm transition hover:bg-white/[0.04] disabled:opacity-50"
+                    style={{ borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.07)' }}
+                    title={`by ${preset.createdByName} — "${preset.reason}"`}
+                  >
+                    <span className="block font-semibold text-white">{preset.name}</span>
+                    <span className="block text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                      {preset.changes
+                        .map((c) => `${c.delta > 0 ? '+' : ''}${c.delta} ${c.label}`)
+                        .join(' · ')}
+                    </span>
+                  </button>
+                  {preset.canManage && (
+                    <button
+                      onClick={() => deletePreset(preset)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/80 border text-neutral-400 hover:text-red-400 hover:border-red-500/50 transition flex items-center justify-center"
+                      style={{ borderColor: 'var(--surface-border-strong)' }}
+                      title="Delete preset"
+                    >
+                      <XIcon size={10} />
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+            {presetNote && (
+              <p className="text-xs mt-3" style={{ color: 'var(--accent-cyan)' }}>
+                {presetNote}
+              </p>
+            )}
+          </section>
+        )}
 
         {/* Step 2: evidence or witness testimony */}
         {subjectId && (
@@ -543,6 +664,14 @@ function NewSuggestionContent() {
               {submitting
                 ? 'Submitting...'
                 : `Submit ${changeCount > 1 ? `${changeCount} suggestions` : 'suggestion'} — your yes vote on each`}
+            </button>
+            <button
+              onClick={savePreset}
+              disabled={submitting || !reason.trim() || changeCount === 0}
+              className="btn-ghost w-full py-2.5 mt-2 text-sm"
+              title="Save these stats + reason as a reusable preset (subject not included)"
+            >
+              Save as preset for next time
             </button>
           </section>
         )}

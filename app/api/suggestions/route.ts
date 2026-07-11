@@ -138,7 +138,7 @@ export async function GET() {
  * seen in real life with no media) — and the stat must be visible and
  * unlocked for the subject.
  */
-const MIN_TESTIMONY_LENGTH = 20;
+const MIN_TESTIMONY_LENGTH = 1;
 
 export async function POST(request: Request) {
   const proposerId = await getSessionPlayerId();

@@ -27,8 +27,10 @@ export async function GET() {
       queryAll('SELECT * FROM Category'),
       queryAll('SELECT id, code, label, categoryId FROM Stat ORDER BY code ASC'),
       queryAll('SELECT id, statId, playerId, hidden FROM StatVisibility'),
+      // pr.* — groupId/groupLabel are added lazily on first lock-group use,
+      // so naming them here would 500 until then.
       queryAll(
-        `SELECT pr.id, pr.statId, pr.requiredStatId, pr.requiredCategoryId, pr.comparator, pr.thresholdValue,
+        `SELECT pr.*,
                 rs.label as requiredStatLabel, rc.label as requiredCategoryLabel
          FROM StatPrerequisite pr
          LEFT JOIN Stat rs ON pr.requiredStatId = rs.id
@@ -57,11 +59,17 @@ export async function GET() {
   }
 }
 
+/**
+ * Category codes must be a single hyphen-free token: stat codes are
+ * `<categoryCode>-<letter>` and everything that parses them treats the LAST
+ * hyphen as the separator. A hyphenated category code used to make the stat
+ * code generator re-issue the same letter forever (UNIQUE violation on the
+ * second stat of any multi-word category).
+ */
 function slugify(label: string): string {
   return label
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/[^a-z0-9]+/g, '')
     .slice(0, 12);
 }
 
@@ -71,8 +79,17 @@ async function nextStatCode(categoryId: string): Promise<string> {
   const catCode = String(cat.code).toLowerCase();
 
   const existing = await queryAll('SELECT code FROM Stat WHERE categoryId = ?', [categoryId]);
+  // Letter suffix = everything after the category-code prefix (NOT split('-')[1],
+  // which breaks for categories that already have hyphenated codes in the DB).
   const letters = new Set(
-    (existing as any[]).map((s) => String(s.code).split('-')[1]?.toLowerCase()).filter(Boolean)
+    (existing as any[])
+      .map((s) => {
+        const code = String(s.code).toLowerCase();
+        return code.startsWith(`${catCode}-`)
+          ? code.slice(catCode.length + 1)
+          : code.split('-').pop();
+      })
+      .filter(Boolean)
   );
   // a..z, then aa, ab...
   for (let i = 0; i < 26; i++) {

@@ -74,6 +74,17 @@ export function getCategoryMeta(code: string | undefined | null, label?: string)
   return dynamicCategoryMeta(code.toLowerCase(), label);
 }
 
+/**
+ * The category-code half of a stat code ("mtl-a" → "mtl"). Everything before
+ * the LAST hyphen, so category codes that themselves contain hyphens
+ * (older admin-created ones) still resolve correctly.
+ */
+export function categoryCodeOfStat(statCode: string | undefined | null): string {
+  if (!statCode) return '';
+  const i = statCode.lastIndexOf('-');
+  return i === -1 ? statCode : statCode.slice(0, i);
+}
+
 /** Sort categories (objects with a `code` field) into canonical order. */
 export function orderCategories<T extends { code: string }>(categories: T[]): T[] {
   return [...categories].sort((a, b) => {
@@ -90,7 +101,9 @@ export function orderCategories<T extends { code: string }>(categories: T[]): T[
  */
 export function orderStats<T extends { code: string }>(stats: T[]): T[] {
   const rank = (code: string) => {
-    const letter = code?.split('-')[1]?.toLowerCase() || '';
+    // Letter suffix sits after the LAST hyphen — category codes themselves
+    // may contain hyphens (older admin-created ones), so split('-')[1] is wrong.
+    const letter = code?.split('-').pop()?.toLowerCase() || '';
     const idx = STAT_LETTER_ORDER.indexOf(letter as any);
     return idx === -1 ? 100 + (letter.charCodeAt(0) || 0) : idx;
   };

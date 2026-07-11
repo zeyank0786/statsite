@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { XIcon } from './icons';
-import { getCategoryMeta } from '@/lib/categories';
+import { getCategoryMeta, categoryCodeOfStat } from '@/lib/categories';
 
 interface StatDescriptionModalProps {
   statCode: string;
@@ -16,7 +16,7 @@ export default function StatDescriptionModal({
   description,
 }: StatDescriptionModalProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const meta = getCategoryMeta(statCode?.split('-')[0]);
+  const meta = getCategoryMeta(categoryCodeOfStat(statCode));
 
   return (
     <>

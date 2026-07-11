@@ -42,6 +42,8 @@ interface CatalogData {
     thresholdValue: number;
     requiredStatLabel: string | null;
     requiredCategoryLabel: string | null;
+    groupId?: string | null;
+    groupLabel?: string | null;
   }[];
   overrides: { id: string; statId: string; playerId: string; forcedState: string }[];
   players: { id: string; username: string; active: number }[];
@@ -306,6 +308,8 @@ function RosterTab({
 
 /* ============================== Catalog ============================== */
 
+const EMOJI_QUICK_PICKS = ['🧠', '💪', '📚', '🌃', '♟️', '🛠️', '⚡', '🔥', '💰', '🎯', '🧘', '🗣️', '❤️', '🏃', '🎨', '🍳'];
+
 function CatalogTab({
   catalog,
   busy,
@@ -319,7 +323,7 @@ function CatalogTab({
   const [newCatEmoji, setNewCatEmoji] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [newStatLabel, setNewStatLabel] = useState('');
-  const [editing, setEditing] = useState<{ kind: 'cat' | 'stat'; id: string; label: string } | null>(null);
+  const [editing, setEditing] = useState<{ kind: 'cat' | 'stat'; id: string; label: string; emoji?: string } | null>(null);
 
   const orderedCategories = orderCategories(catalog.categories);
   const activePlayers = catalog.players.filter((p) => Number(p.active));
@@ -339,19 +343,21 @@ function CatalogTab({
             placeholder="Label (e.g. Discipline)"
             className="field flex-1 min-w-[180px]"
           />
+          {/* No maxLength — composite emojis are 4+ UTF-16 units and were
+              getting truncated into broken characters. Type/paste any emoji
+              (the phone emoji keyboard works here) or tap a quick pick. */}
           <input
             value={newCatEmoji}
             onChange={(e) => setNewCatEmoji(e.target.value)}
             placeholder="Emoji"
-            className="field w-20 text-center"
-            maxLength={4}
+            className="field w-24 text-center"
           />
           <button
             onClick={async () => {
               const ok = await call('/api/admin/catalog', 'POST', {
                 action: 'createCategory',
                 label: newCatLabel,
-                emoji: newCatEmoji || '⭐',
+                emoji: newCatEmoji.trim() || '⭐',
               });
               if (ok) {
                 setNewCatLabel('');
@@ -363,6 +369,20 @@ function CatalogTab({
           >
             <PlusIcon size={16} /> Add
           </button>
+        </div>
+        <div className="flex gap-1 mt-2.5 flex-wrap">
+          {EMOJI_QUICK_PICKS.map((e) => (
+            <button
+              key={e}
+              onClick={() => setNewCatEmoji(e)}
+              className={`w-9 h-9 rounded-lg text-lg transition hover:bg-white/10 ${
+                newCatEmoji === e ? 'bg-white/15' : 'bg-white/[0.04]'
+              }`}
+              title="Use this emoji"
+            >
+              {e}
+            </button>
+          ))}
         </div>
       </section>
 
@@ -381,12 +401,18 @@ function CatalogTab({
               <span className="w-1.5 h-8 rounded-full shrink-0" style={{ background: meta.hex }} />
               <span className="text-xl">{cat.emoji}</span>
               {editing?.kind === 'cat' && editing.id === cat.id ? (
-                <span className="flex gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                <span className="flex gap-2 flex-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
                   <input
                     value={editing.label}
                     onChange={(e) => setEditing({ ...editing, label: e.target.value })}
                     className="field py-1.5 max-w-[240px]"
                     autoFocus
+                  />
+                  <input
+                    value={editing.emoji ?? ''}
+                    onChange={(e) => setEditing({ ...editing, emoji: e.target.value })}
+                    placeholder="Emoji"
+                    className="field py-1.5 w-20 text-center"
                   />
                   <button
                     onClick={async () => {
@@ -394,6 +420,7 @@ function CatalogTab({
                         action: 'updateCategory',
                         categoryId: cat.id,
                         label: editing.label,
+                        emoji: editing.emoji?.trim() || undefined,
                       });
                       if (ok) setEditing(null);
                     }}
@@ -415,9 +442,9 @@ function CatalogTab({
               )}
               <span className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                 <button
-                  onClick={() => setEditing({ kind: 'cat', id: cat.id, label: cat.label })}
+                  onClick={() => setEditing({ kind: 'cat', id: cat.id, label: cat.label, emoji: cat.emoji })}
                   className="p-2 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition"
-                  title="Rename category"
+                  title="Rename category / change emoji"
                 >
                   <PencilIcon size={14} />
                 </button>
@@ -629,6 +656,14 @@ function GatingTab({
   const [ruleTargetId, setRuleTargetId] = useState('');
   const [threshold, setThreshold] = useState(15);
 
+  // Lock-group form state
+  const [groupLabel, setGroupLabel] = useState('');
+  const [groupTargetCats, setGroupTargetCats] = useState<string[]>([]);
+  const [groupTargetStats, setGroupTargetStats] = useState<string[]>([]);
+  const [groupReqType, setGroupReqType] = useState<'stat' | 'category'>('category');
+  const [groupReqId, setGroupReqId] = useState('');
+  const [groupThreshold, setGroupThreshold] = useState(75);
+
   const orderedCategories = orderCategories(catalog.categories);
   const statById = new Map(catalog.stats.map((s) => [s.id, s]));
   const activePlayers = catalog.players.filter((p) => Number(p.active));
@@ -641,10 +676,221 @@ function GatingTab({
     ...catalog.overrides.map((o) => o.statId),
   ]);
 
+  // Existing lock groups (rows sharing a groupId)
+  const lockGroups = new Map<string, { label: string; rules: typeof catalog.prereqs }>();
+  for (const rule of catalog.prereqs) {
+    if (!rule.groupId) continue;
+    const key = String(rule.groupId);
+    if (!lockGroups.has(key)) lockGroups.set(key, { label: rule.groupLabel || 'Unnamed lock', rules: [] });
+    lockGroups.get(key)!.rules.push(rule);
+  }
+
+  const submitLockGroup = async () => {
+    const ok = await call('/api/admin/gating', 'POST', {
+      action: 'addLockGroup',
+      label: groupLabel,
+      targetStatIds: groupTargetStats,
+      targetCategoryIds: groupTargetCats,
+      requiredStatId: groupReqType === 'stat' ? groupReqId : undefined,
+      requiredCategoryId: groupReqType === 'category' ? groupReqId : undefined,
+      thresholdValue: groupThreshold,
+    });
+    if (ok) {
+      setGroupLabel('');
+      setGroupTargetCats([]);
+      setGroupTargetStats([]);
+      setGroupReqId('');
+    }
+  };
+
   return (
     <div className="space-y-5 animate-rise">
+      {/* ===== Named lock groups ===== */}
       <section className="glass card-shadow p-5">
-        <h2 className="font-display text-lg font-bold text-white mb-1">Stat locking</h2>
+        <h2 className="font-display text-lg font-bold text-white mb-1 flex items-center gap-2">
+          <LockIcon size={16} />
+          Lock groups
+        </h2>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+          Lock many stats — or whole categories — behind one requirement, managed as a single unit.
+        </p>
+
+        {/* Existing groups */}
+        {lockGroups.size > 0 && (
+          <div className="space-y-2 mb-5">
+            {[...lockGroups.entries()].map(([gid, group]) => {
+              const first = group.rules[0];
+              return (
+                <div
+                  key={gid}
+                  className="flex items-start justify-between gap-3 px-3.5 py-3 rounded-xl border flex-wrap"
+                  style={{ borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white">🔒 {group.label}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      Locks {group.rules.length} stat{group.rules.length !== 1 ? 's' : ''} until{' '}
+                      <span className="text-white font-medium">
+                        {first.requiredStatLabel || first.requiredCategoryLabel} {first.comparator}{' '}
+                        {first.thresholdValue}
+                      </span>
+                    </p>
+                    <p className="text-[11px] mt-1 break-words" style={{ color: 'var(--text-secondary)' }}>
+                      {group.rules
+                        .map((r) => statById.get(r.statId)?.label || r.statId)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remove the whole "${group.label}" lock (${group.rules.length} stats)?`)) {
+                        call('/api/admin/gating', 'POST', { action: 'deleteLockGroup', groupId: gid });
+                      }
+                    }}
+                    disabled={busy}
+                    className="p-2 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition shrink-0"
+                    title="Delete the whole lock group"
+                  >
+                    <TrashIcon size={15} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Create group */}
+        <div className="space-y-3">
+          <input
+            value={groupLabel}
+            onChange={(e) => setGroupLabel(e.target.value)}
+            placeholder='Lock name (e.g. "Advanced tier")'
+            className="field max-w-md"
+          />
+
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+              Lock whole categories
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {orderedCategories.map((c) => {
+                const on = groupTargetCats.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() =>
+                      setGroupTargetCats((prev) =>
+                        on ? prev.filter((id) => id !== c.id) : [...prev, c.id]
+                      )
+                    }
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition ${
+                      on ? 'text-white' : 'text-neutral-400 hover:text-white'
+                    }`}
+                    style={{
+                      borderColor: on ? 'rgba(251,191,36,0.6)' : 'var(--surface-border)',
+                      background: on ? 'rgba(251,191,36,0.12)' : 'transparent',
+                    }}
+                  >
+                    {c.emoji} {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+              And / or individual stats
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {groupTargetStats.map((sid) => (
+                <button
+                  key={sid}
+                  onClick={() => setGroupTargetStats((prev) => prev.filter((id) => id !== sid))}
+                  className="px-2 py-1 rounded-lg text-[11px] font-semibold border text-white transition hover:border-red-500/50 hover:text-red-300"
+                  style={{ borderColor: 'rgba(251,191,36,0.5)', background: 'rgba(251,191,36,0.1)' }}
+                  title="Remove"
+                >
+                  {statById.get(sid)?.label || sid} ✕
+                </button>
+              ))}
+              <select
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v && !groupTargetStats.includes(v)) setGroupTargetStats((prev) => [...prev, v]);
+                }}
+                className="field w-auto py-1.5 text-xs"
+              >
+                <option value="">+ Add a stat...</option>
+                {orderedCategories.map((cat) => (
+                  <optgroup key={cat.id} label={cat.label}>
+                    {orderStats(catalog.stats.filter((s) => s.categoryId === cat.id))
+                      .filter((s) => !groupTargetStats.includes(s.id))
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label} ({s.code})
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+              Locked until
+            </span>
+            <select
+              value={groupReqType}
+              onChange={(e) => {
+                setGroupReqType(e.target.value as any);
+                setGroupReqId('');
+              }}
+              className="field w-auto py-2"
+            >
+              <option value="category">Category total</option>
+              <option value="stat">Single stat</option>
+            </select>
+            <select value={groupReqId} onChange={(e) => setGroupReqId(e.target.value)} className="field flex-1 min-w-[180px] py-2">
+              <option value="">Pick {groupReqType === 'stat' ? 'a stat' : 'a category'}...</option>
+              {groupReqType === 'category'
+                ? orderedCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))
+                : catalog.stats.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label} ({s.code})
+                    </option>
+                  ))}
+            </select>
+            <span className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>
+              ≥
+            </span>
+            <input
+              type="number"
+              value={groupThreshold}
+              onChange={(e) => setGroupThreshold(Number(e.target.value))}
+              className="field w-24 py-2 text-center"
+            />
+            <button
+              onClick={submitLockGroup}
+              disabled={
+                busy || !groupLabel.trim() || !groupReqId || (groupTargetCats.length === 0 && groupTargetStats.length === 0)
+              }
+              className="btn-gradient py-2 shrink-0"
+            >
+              <LockIcon size={14} /> Create lock
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="glass card-shadow p-5">
+        <h2 className="font-display text-lg font-bold text-white mb-1">Single-stat locking</h2>
         <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
           Pick a stat, then add prerequisite rules ("locked until X reaches N" — AND logic) or set
           per-player manual overrides. Locked stats can't receive suggestions but stay visible so
@@ -686,6 +932,11 @@ function GatingTab({
                       {rule.requiredStatId ? 'Stat' : 'Category'}{' '}
                       <strong>{rule.requiredStatLabel || rule.requiredCategoryLabel}</strong>{' '}
                       {rule.comparator} {rule.thresholdValue}
+                      {rule.groupLabel && (
+                        <span className="text-[10px] font-bold uppercase ml-2 px-1.5 py-0.5 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--accent-yellow)' }}>
+                          🔒 {rule.groupLabel}
+                        </span>
+                      )}
                     </span>
                     <button
                       onClick={() => call('/api/admin/gating', 'POST', { action: 'deletePrereq', prereqId: rule.id })}

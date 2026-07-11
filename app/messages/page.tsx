@@ -8,7 +8,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getUserColorHex, getUserColorBg } from '@/lib/userColors';
-import { CATEGORY_ORDER, getCategoryMeta, orderStats } from '@/lib/categories';
+import { CATEGORY_ORDER, getCategoryMeta, orderStats, categoryCodeOfStat } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import {
   XIcon,
@@ -708,7 +708,7 @@ function MessagesContent() {
         ) : (
           getSortedAndFilteredMessages().map((message) => {
             const hex = getUserColorHex(message.authorId);
-            const refMeta = message.statCode ? getCategoryMeta(message.statCode.split('-')[0]) : null;
+            const refMeta = message.statCode ? getCategoryMeta(categoryCodeOfStat(message.statCode)) : null;
             return (
               <article
                 key={message.id}

@@ -8,7 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 import StatDescriptionModal from '@/components/StatDescriptionModal';
-import { getCategoryMeta, orderCategories, orderStats, scaleMax } from '@/lib/categories';
+import { getCategoryMeta, orderCategories, orderStats, scaleMax, categoryCodeOfStat } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
 import { SearchIcon, XIcon, CheckIcon, TargetIcon } from '@/components/icons';
 
@@ -231,7 +231,7 @@ export default function TargetsPage() {
                   {targets.length > 0 ? (
                     targets.map((target) => {
                       const value = playerStatValues[target.statCode] ?? 0;
-                      const meta = getCategoryMeta(target.statCode.split('-')[0]);
+                      const meta = getCategoryMeta(categoryCodeOfStat(target.statCode));
                       return (
                         <div
                           key={target.id}
@@ -299,7 +299,7 @@ export default function TargetsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           {selectedTargets.map((target, idx) => {
             const currentValue = playerStats[target.code] ?? 0;
-            const meta = getCategoryMeta(target.code.split('-')[0]);
+            const meta = getCategoryMeta(categoryCodeOfStat(target.code));
             return (
               <div
                 key={target.code}
@@ -418,7 +418,7 @@ export default function TargetsPage() {
             const isSelected = !!selectedTargets.find((t) => t.code === stat.code);
             const isDisabled = !isSelected && selectedTargets.length >= 3;
             const currentValue = playerStats[stat.code] ?? 0;
-            const meta = getCategoryMeta(stat.code.split('-')[0]);
+            const meta = getCategoryMeta(categoryCodeOfStat(stat.code));
 
             return (
               <button

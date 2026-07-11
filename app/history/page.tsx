@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
-import { getCategoryMeta } from '@/lib/categories';
+import { getCategoryMeta, categoryCodeOfStat } from '@/lib/categories';
 import { TrendUpIcon, TrendDownIcon } from '@/components/icons';
 
 interface HistoryEntry {
@@ -116,7 +116,7 @@ export default function HistoryPage() {
             {filtered.map((entry) => {
               const source = SOURCE_META[entry.source] || { label: entry.source, color: 'var(--accent-cyan)' };
               const isIncrease = entry.newValue > entry.oldValue;
-              const catMeta = getCategoryMeta(entry.statCode?.split('-')[0]);
+              const catMeta = getCategoryMeta(categoryCodeOfStat(entry.statCode));
 
               return (
                 <div key={entry.id} className="relative">
