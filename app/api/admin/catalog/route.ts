@@ -17,6 +17,38 @@ export const dynamic = 'force-dynamic';
  *   deleteStat     { statId }                (destroys that stat's history — UI double-confirms)
  */
 
+/**
+ * Older production DBs (seeded before these columns existed) are missing
+ * Category.emoji / Category.createdAt / Stat.createdAt. Adding them lazily —
+ * nullable, idempotent via try/catch — lets category/stat creation succeed
+ * without a manual Turso migration. This is why createCategory used to fall
+ * back to an emoji-less insert (dropping the emoji) and createStat errored:
+ * the createdAt columns simply weren't there.
+ */
+async function columnExists(table: string, column: string): Promise<boolean> {
+  const cols = await queryAll(`PRAGMA table_info(${table})`);
+  return (cols as any[]).some((c) => String(c.name) === column);
+}
+
+async function ensureCatalogColumns() {
+  const wanted: [string, string][] = [
+    ['Category', 'emoji'],
+    ['Category', 'createdAt'],
+    ['Stat', 'createdAt'],
+  ];
+  for (const [table, column] of wanted) {
+    // Check first so this no-ops silently once healed (runs on every catalog
+    // action) instead of throwing a caught "duplicate column" every time.
+    if (!(await columnExists(table, column))) {
+      try {
+        await query(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+      } catch {
+        /* raced with a concurrent add — fine */
+      }
+    }
+  }
+}
+
 export async function GET() {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
@@ -116,28 +148,25 @@ export async function POST(request: Request) {
       case 'createCategory': {
         const { label, emoji } = body;
         if (!label?.trim()) return NextResponse.json({ error: 'Label is required' }, { status: 400 });
+        await ensureCatalogColumns();
         let code = slugify(label);
         const clash = await queryOne('SELECT id FROM Category WHERE code = ?', [code]);
-        if (clash) code = `${code}-${Math.random().toString(36).slice(2, 5)}`;
+        if (clash) code = `${code}${Math.random().toString(36).slice(2, 5)}`;
         const id = uuid();
-        try {
-          await query('INSERT INTO Category (id, code, label, emoji, createdAt) VALUES (?, ?, ?, ?, ?)', [
-            id,
-            code,
-            label.trim(),
-            emoji || '⭐',
-            now,
-          ]);
-        } catch {
-          // Older prod tables may lack emoji/createdAt columns.
-          await query('INSERT INTO Category (id, code, label) VALUES (?, ?, ?)', [id, code, label.trim()]);
-        }
+        await query('INSERT INTO Category (id, code, label, emoji, createdAt) VALUES (?, ?, ?, ?, ?)', [
+          id,
+          code,
+          label.trim(),
+          emoji || '⭐',
+          now,
+        ]);
         return NextResponse.json({ success: true, id, code });
       }
 
       case 'updateCategory': {
         const { categoryId, label, emoji } = body;
         if (!categoryId) return NextResponse.json({ error: 'categoryId required' }, { status: 400 });
+        await ensureCatalogColumns();
         if (label?.trim()) await query('UPDATE Category SET label = ? WHERE id = ?', [label.trim(), categoryId]);
         if (emoji) await query('UPDATE Category SET emoji = ? WHERE id = ?', [emoji, categoryId]);
         return NextResponse.json({ success: true });
@@ -163,6 +192,7 @@ export async function POST(request: Request) {
         if (!categoryId || !label?.trim()) {
           return NextResponse.json({ error: 'categoryId and label are required' }, { status: 400 });
         }
+        await ensureCatalogColumns();
         const code = await nextStatCode(categoryId);
         const id = uuid();
         await query('INSERT INTO Stat (id, code, label, categoryId, createdAt) VALUES (?, ?, ?, ?, ?)', [

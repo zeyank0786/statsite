@@ -101,7 +101,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        flash('err', data.error || 'Action failed');
+        flash('err', [data.error, data.details].filter(Boolean).join(' — ') || 'Action failed');
         return false;
       }
       await refresh();
