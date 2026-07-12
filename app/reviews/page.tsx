@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getUserColorHex } from '@/lib/userColors';
 import { PencilIcon, EyeIcon, XIcon, PlusIcon } from '@/components/icons';
+import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 
 interface ReviewSession {
   id: string;
@@ -27,6 +28,7 @@ interface Player {
 export default function ReviewsPage() {
   const { status, data: sessionData } = useSession();
   const router = useRouter();
+  const myLockouts = useMyLockouts(status === 'authenticated');
   const [sessions, setSessions] = useState<ReviewSession[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,6 +180,8 @@ export default function ReviewsPage() {
         eyebrow="Live Sessions"
         eyebrowColor="var(--accent-pink)"
       />
+
+      <LockoutBanner locks={myLockouts} feature="reviews" />
 
       {(error || createError || joinError) && (
         <div className="glass p-4 mb-6 flex items-start justify-between gap-3" style={{ borderColor: 'rgba(239,68,68,0.4)' }}>

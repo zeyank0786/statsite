@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getCategoryMeta } from '@/lib/categories';
 import { cldImage, cldThumb, cldVideoThumb } from '@/lib/cloudinary';
+import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 import { PlusIcon, CheckIcon, XIcon, ImageIcon } from '@/components/icons';
 
 interface EvidenceRef {
@@ -51,6 +52,7 @@ interface Suggestion {
 export default function SuggestionsPage() {
   const { status } = useSession();
   const router = useRouter();
+  const myLockouts = useMyLockouts(status === 'authenticated');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'pending' | 'resolved'>('pending');
@@ -125,12 +127,17 @@ export default function SuggestionsPage() {
         eyebrow="Crew Votes"
         eyebrowColor="var(--accent-purple)"
         actions={
-          <Link href="/suggestions/new" className="btn-gradient text-sm">
-            <PlusIcon size={16} />
-            New suggestion
-          </Link>
+          'suggest' in myLockouts ? undefined : (
+            <Link href="/suggestions/new" className="btn-gradient text-sm">
+              <PlusIcon size={16} />
+              New suggestion
+            </Link>
+          )
         }
       />
+
+      <LockoutBanner locks={myLockouts} feature="vote" />
+      <LockoutBanner locks={myLockouts} feature="suggest" />
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl border w-fit mb-6" style={{ borderColor: 'var(--surface-border)' }}>

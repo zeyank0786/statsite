@@ -3,6 +3,7 @@ import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { resolveSuggestion } from '@/lib/suggestionEngine';
+import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!voter || !Number(voter.active)) {
       return NextResponse.json({ error: 'Only active players can vote' }, { status: 403 });
     }
+
+    const lockMsg = await featureLockMessage(String(voterId), 'vote');
+    if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
     const now = new Date().toISOString();
     const existing = await queryOne('SELECT id FROM Vote WHERE suggestionId = ? AND userId = ?', [id, voterId]);

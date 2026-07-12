@@ -10,6 +10,7 @@ import Avatar from '@/components/Avatar';
 import { getUserColorHex, getUserColorBg } from '@/lib/userColors';
 import { CATEGORY_ORDER, getCategoryMeta, orderStats, categoryCodeOfStat } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
+import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 import {
   XIcon,
   PencilIcon,
@@ -103,6 +104,8 @@ function MessagesContent() {
   const [attachedEvidence, setAttachedEvidence] = useState<EvidenceRef | null>(null);
 
   const currentPlayerId = (session?.user as any)?.playerId;
+  const myLockouts = useMyLockouts(status === 'authenticated');
+  const messagesLocked = 'messages' in myLockouts;
   const evidenceRefParam = searchParams.get('evidenceRef');
 
   // "Reference in message" from the evidence board lands here with ?evidenceRef=
@@ -358,6 +361,8 @@ function MessagesContent() {
         eyebrowColor="var(--accent-purple)"
       />
 
+      <LockoutBanner locks={myLockouts} feature="messages" />
+
       {/* Guidelines */}
       {!dismissGuidelines && (
         <div
@@ -494,7 +499,7 @@ function MessagesContent() {
                 )}
                 <button
                   onClick={handlePostMessage}
-                  disabled={posting || !messageContent.trim()}
+                  disabled={posting || !messageContent.trim() || messagesLocked}
                   className="btn-gradient text-sm py-2"
                 >
                   <SendIcon size={15} />

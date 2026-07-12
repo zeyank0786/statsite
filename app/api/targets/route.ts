@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -52,6 +53,9 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
+
+    const lockMsg = await featureLockMessage(String(currentPlayerId), 'targets');
+    if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
     // Validate max 3 targets
     if (!Array.isArray(selectedTargets) || selectedTargets.length > 3) {

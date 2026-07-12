@@ -30,7 +30,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: (p: { size?: number; className?: string }) => React.ReactNode;
-  badge?: 'messages' | 'evidence';
+  badge?: 'messages' | 'evidence' | 'suggestions';
   adminOnly?: boolean;
 }
 
@@ -39,7 +39,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: '/players', label: 'Players', icon: UsersIcon },
   { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/evidence', label: 'Evidence', icon: CameraIcon, badge: 'evidence' },
-  { href: '/suggestions', label: 'Suggestions', icon: LightbulbIcon },
+  { href: '/suggestions', label: 'Suggestions', icon: LightbulbIcon, badge: 'suggestions' },
   { href: '/messages', label: 'Messages', icon: MessageIcon, badge: 'messages' },
 ];
 
@@ -55,7 +55,7 @@ const MORE_NAV: NavItem[] = [
 const MOBILE_TABS: NavItem[] = [
   { href: '/', label: 'Home', icon: HomeIcon },
   { href: '/evidence', label: 'Evidence', icon: CameraIcon, badge: 'evidence' },
-  { href: '/suggestions', label: 'Suggest', icon: LightbulbIcon },
+  { href: '/suggestions', label: 'Suggest', icon: LightbulbIcon, badge: 'suggestions' },
   { href: '/messages', label: 'Board', icon: MessageIcon, badge: 'messages' },
 ];
 
@@ -87,6 +87,7 @@ export default function AppShell({
   const { data: session, status } = useSession();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadEvidence, setUnreadEvidence] = useState(0);
+  const [unvotedSuggestions, setUnvotedSuggestions] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [, setRosterTick] = useState(0);
@@ -100,9 +101,10 @@ export default function AppShell({
 
     const load = async () => {
       try {
-        const [messagesRes, evidenceRes] = await Promise.all([
+        const [messagesRes, evidenceRes, unvotedRes] = await Promise.all([
           fetch('/api/messages/unread'),
           fetch('/api/evidence/unread'),
+          fetch('/api/suggestions/unvoted'),
         ]);
         if (messagesRes.ok) {
           const data = await messagesRes.json();
@@ -111,6 +113,10 @@ export default function AppShell({
         if (evidenceRes.ok) {
           const data = await evidenceRes.json();
           setUnreadEvidence(data.unreadCount || 0);
+        }
+        if (unvotedRes.ok) {
+          const data = await unvotedRes.json();
+          setUnvotedSuggestions(data.unvotedCount || 0);
         }
       } catch {
         /* silent */
@@ -148,14 +154,17 @@ export default function AppShell({
   const maxW =
     width === 'narrow' ? 'max-w-3xl' : width === 'wide' ? 'max-w-[90rem]' : 'max-w-7xl';
 
-  const badge = (kind: 'messages' | 'evidence' | undefined) => {
+  const badge = (kind: 'messages' | 'evidence' | 'suggestions' | undefined) => {
     if (!kind) return null;
-    const count = kind === 'messages' ? unreadCount : unreadEvidence;
+    const count =
+      kind === 'messages' ? unreadCount : kind === 'evidence' ? unreadEvidence : unvotedSuggestions;
     if (count <= 0) return null;
     const gradient =
       kind === 'messages'
         ? 'bg-gradient-to-r from-pink-500 to-red-500'
-        : 'bg-gradient-to-r from-orange-500 to-amber-500';
+        : kind === 'evidence'
+        ? 'bg-gradient-to-r from-orange-500 to-amber-500'
+        : 'bg-gradient-to-r from-purple-500 to-violet-500';
     return (
       <span
         className={`absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full ${gradient} text-white text-[10px] font-bold flex items-center justify-center`}

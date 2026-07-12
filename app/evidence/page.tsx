@@ -10,6 +10,7 @@ import Avatar from '@/components/Avatar';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, orderCategories } from '@/lib/categories';
 import { cloudinaryConfigured, uploadToCloudinary, fileTooLargeError, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, cldImage } from '@/lib/cloudinary';
+import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 import {
   UploadIcon,
   XIcon,
@@ -72,6 +73,8 @@ export default function EvidenceBoardPage() {
   const [editingCaption, setEditingCaption] = useState('');
 
   const currentPlayerId = (session?.user as any)?.playerId;
+  const myLockouts = useMyLockouts(status === 'authenticated');
+  const evidenceLocked = 'evidence' in myLockouts;
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -253,6 +256,8 @@ export default function EvidenceBoardPage() {
         eyebrowColor="var(--accent-orange)"
       />
 
+      <LockoutBanner locks={myLockouts} feature="evidence" />
+
       {!cloudinaryConfigured && (
         <div
           className="glass p-4 mb-5 text-sm animate-rise"
@@ -290,7 +295,7 @@ export default function EvidenceBoardPage() {
                     {playerPosts.length} post{playerPosts.length !== 1 ? 's' : ''}
                   </p>
                 </div>
-                {isOwn && (
+                {isOwn && !evidenceLocked && (
                   <button
                     onClick={() => setComposerOpen(!composerOpen)}
                     className="btn-gradient text-xs py-1.5 px-3"
@@ -298,6 +303,11 @@ export default function EvidenceBoardPage() {
                     <CameraIcon size={14} />
                     Post
                   </button>
+                )}
+                {isOwn && evidenceLocked && (
+                  <span className="text-xs font-bold text-red-400" title="Locked out by the admin">
+                    🚫 Locked
+                  </span>
                 )}
               </div>
 

@@ -9,6 +9,8 @@ import {
   daysAgo,
 } from '@/lib/serverStats';
 import { computeAchievements } from '@/lib/achievements';
+import { computeStreakWeeks } from '@/lib/streaks';
+import { queryAll } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +28,19 @@ export async function GET() {
 
     const cutoff90 = daysAgo(90);
     const cutoff30 = daysAgo(30);
+
+    // Evidence posts also count toward activity streaks
+    let evidenceDatesByPlayer = new Map<string, string[]>();
+    try {
+      const evidenceRows = await queryAll('SELECT playerId, createdAt FROM Evidence');
+      for (const r of evidenceRows as any[]) {
+        const pid = String(r.playerId);
+        if (!evidenceDatesByPlayer.has(pid)) evidenceDatesByPlayer.set(pid, []);
+        evidenceDatesByPlayer.get(pid)!.push(String(r.createdAt));
+      }
+    } catch {
+      /* streaks degrade to history-only */
+    }
 
     const payload = players.map((p) => {
       const ph = history.filter((h) => h.playerId === p.id);
@@ -56,6 +71,10 @@ export async function GET() {
             : null,
         achievementsEarned: (achievements[p.id] || []).filter((a) => a.earned).length,
         achievementsTotal: (achievements[p.id] || []).length,
+        streakWeeks: computeStreakWeeks([
+          ...ph.map((h) => h.createdAt),
+          ...(evidenceDatesByPlayer.get(p.id) || []),
+        ]),
       };
     });
 

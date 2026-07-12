@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
+import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -108,6 +109,9 @@ export async function POST(request: Request) {
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    const lockMsg = await featureLockMessage(actor.playerId, 'suggest');
+    if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
+
     const { name, reason, changes } = await request.json();
     if (!name?.trim()) return NextResponse.json({ error: 'Give the preset a name' }, { status: 400 });
     if (!reason?.trim()) return NextResponse.json({ error: 'Preset needs a reason' }, { status: 400 });

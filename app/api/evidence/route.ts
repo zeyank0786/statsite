@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { destroyCloudinaryAsset } from '@/lib/cloudinaryServer';
+import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -75,6 +76,9 @@ export async function POST(request: Request) {
   if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    const lockMsg = await featureLockMessage(playerId, 'evidence');
+    if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
+
     const { mediaUrl, mediaType, cloudinaryPublicId, caption, categoryIds } = await request.json();
 
     if (!Array.isArray(categoryIds) || categoryIds.length === 0) {
@@ -129,6 +133,9 @@ export async function PATCH(request: Request) {
   if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    const lockMsg = await featureLockMessage(playerId, 'evidence');
+    if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
+
     const { evidenceId, caption, captionHidden, categoryIds } = await request.json();
     if (!evidenceId) return NextResponse.json({ error: 'evidenceId required' }, { status: 400 });
 
@@ -173,6 +180,9 @@ export async function DELETE(request: Request) {
   if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    const lockMsg = await featureLockMessage(playerId, 'evidence');
+    if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
+
     const { evidenceId } = await request.json();
     if (!evidenceId) return NextResponse.json({ error: 'evidenceId required' }, { status: 400 });
 

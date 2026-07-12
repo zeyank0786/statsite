@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
-import { resolveSuggestion } from '@/lib/suggestionEngine';
+import { resolveSuggestion, expireStaleSuggestions } from '@/lib/suggestionEngine';
+import { featureLockMessage, getPlayersLockedFrom } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,13 @@ export async function GET() {
   if (!currentPlayerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    // Lazy housekeeping: resolve week-old pending suggestions by votes cast
+    try {
+      await expireStaleSuggestions();
+    } catch (e) {
+      console.error('Stale-suggestion expiry failed (listing continues):', e);
+    }
+
     const suggestions = await queryAll(
       `SELECT sg.*,
               subject.username as subjectName, subject.active as subjectActive,
@@ -71,7 +79,12 @@ export async function GET() {
     }
 
     const activePlayers = await queryAll('SELECT id FROM Player WHERE active = 1');
-    const activeIds = new Set((activePlayers as any[]).map((p) => String(p.id)));
+    const voteLocked = await getPlayersLockedFrom('vote');
+    // Vote-locked players don't exist for vote math (their cast votes stop
+    // counting on pending suggestions while the lock stands)
+    const activeIds = new Set(
+      (activePlayers as any[]).map((p) => String(p.id)).filter((id) => !voteLocked.has(id))
+    );
 
     const payload = (suggestions as any[]).map((sg) => {
       const id = String(sg.id);
@@ -145,6 +158,9 @@ export async function POST(request: Request) {
   if (!proposerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    const lockMsg = await featureLockMessage(proposerId, 'suggest');
+    if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
+
     const { subjectPlayerId, changes, reason, evidenceIds, testimony } = await request.json();
 
     if (!subjectPlayerId || !reason?.trim()) {

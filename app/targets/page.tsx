@@ -11,6 +11,7 @@ import StatDescriptionModal from '@/components/StatDescriptionModal';
 import { getCategoryMeta, orderCategories, orderStats, scaleMax, categoryCodeOfStat } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
 import { SearchIcon, XIcon, CheckIcon, TargetIcon } from '@/components/icons';
+import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 
 interface Target {
   id: string;
@@ -28,6 +29,7 @@ interface StatOption {
 export default function TargetsPage() {
   const { status, data: session } = useSession();
   const router = useRouter();
+  const myLockouts = useMyLockouts(status === 'authenticated');
   const [selectedTargets, setSelectedTargets] = useState<StatOption[]>([]);
   const [allTargets, setAllTargets] = useState<Target[]>([]);
   const [availableStats, setAvailableStats] = useState<StatOption[]>([]);
@@ -200,6 +202,8 @@ export default function TargetsPage() {
         eyebrow="Focus"
         eyebrowColor="var(--accent-green)"
       />
+
+      <LockoutBanner locks={myLockouts} feature="targets" />
 
       {/* Crew targets */}
       <section className="mb-10 animate-rise">

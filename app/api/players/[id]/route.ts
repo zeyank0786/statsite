@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { queryOne, queryAll, query } from '@/lib/db';
 import { computeLocksForPlayer } from '@/lib/locks';
 import { getNextTier } from '@/lib/categories';
+import { computeStreakWeeks } from '@/lib/streaks';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -175,6 +176,18 @@ export async function GET(
     );
     const rankUp = await computeRankUp(id, flatStats);
 
+    // Activity streak: consecutive weeks with a stat change or evidence post
+    const [changeDates, evidenceDates] = await Promise.all([
+      queryAll(
+        `SELECT sh.createdAt FROM StatHistory sh JOIN StatValue sv ON sh.statValueId = sv.id WHERE sv.playerId = ?`,
+        [id]
+      ),
+      queryAll('SELECT createdAt FROM Evidence WHERE playerId = ?', [id]),
+    ]);
+    const streakWeeks = computeStreakWeeks(
+      [...(changeDates as any[]), ...(evidenceDates as any[])].map((r) => String(r.createdAt))
+    );
+
     return NextResponse.json({
       player: {
         id: player.id,
@@ -190,6 +203,7 @@ export async function GET(
       recentReviews,
       otherPlayers,
       rankUp,
+      streakWeeks,
     });
   } catch (error: any) {
     console.error('Error fetching player:', error);

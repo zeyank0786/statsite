@@ -70,6 +70,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [rankUp, setRankUp] = useState<
     { statId: string; code: string; label: string; current: number; nextTier: string; nextTierHex: string; ptsToGo: number; weeks: number }[]
   >([]);
+  const [streakWeeks, setStreakWeeks] = useState(0);
   const [achievements, setAchievements] = useState<AchievementData[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
@@ -118,6 +119,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
       setHistory(data.history || []);
       setRecentReviews(data.recentReviews || []);
       setRankUp(data.rankUp || []);
+      setStreakWeeks(data.streakWeeks || 0);
       setNewName(data.player.username);
 
       if (changesRes.ok) {
@@ -298,6 +300,17 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                   {overallScore}
                 </p>
               </div>
+              {streakWeeks > 0 && (
+                <div className="pb-1">
+                  <span
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold border"
+                    style={{ borderColor: 'rgba(249,115,22,0.5)', background: 'rgba(249,115,22,0.1)', color: 'var(--accent-orange)' }}
+                    title="Consecutive weeks with a stat change or evidence post"
+                  >
+                    🔥 {streakWeeks}-week streak
+                  </span>
+                </div>
+              )}
               <div className="flex gap-2 pb-1 flex-wrap">
                 {!isOwnProfile && (
                   <Link href={`/compare?a=${currentPlayerId}&b=${playerId}`} className="btn-gradient text-sm">

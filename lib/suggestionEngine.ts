@@ -1,5 +1,6 @@
 import { query, queryOne, queryAll } from './db';
 import { announceStatMilestones } from './milestones';
+import { getPlayersLockedFrom } from './featureLocks';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -19,6 +20,53 @@ import { v4 as uuid } from 'uuid';
 
 const IMPOSSIBLE_CHECK = true;
 
+/** Pending suggestions older than this auto-resolve with whatever votes exist. */
+const STALE_AFTER_DAYS = 7;
+
+/**
+ * Resolve pending suggestions older than STALE_AFTER_DAYS by majority of the
+ * votes actually cast (eligible voters only): yes > no approves, anything
+ * else — tie or no eligible votes — rejects. Called lazily from the
+ * suggestions GET so no cron is needed; a failure never breaks the listing.
+ */
+export async function expireStaleSuggestions(): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 86400000).toISOString();
+  const stale = await queryAll(
+    "SELECT id, playerId, proposedById, statId, delta, reason, status FROM Suggestion WHERE status = 'pending' AND createdAt < ?",
+    [cutoff]
+  );
+  let resolved = 0;
+  for (const suggestion of stale as any[]) {
+    const eligibleIds = new Set(await getEligibleVoterIds(String(suggestion.playerId)));
+    const votes = await queryAll('SELECT userId, choice FROM Vote WHERE suggestionId = ?', [String(suggestion.id)]);
+    let yes = 0;
+    let no = 0;
+    for (const vote of votes as any[]) {
+      if (!eligibleIds.has(String(vote.userId))) continue;
+      if (String(vote.choice) === 'yes') yes++;
+      else no++;
+    }
+
+    const now = new Date().toISOString();
+    if (yes > no) {
+      await applyApproval(suggestion, now);
+      await query("UPDATE Suggestion SET status = 'approved', resolvedAt = ?, updatedAt = ? WHERE id = ?", [
+        now,
+        now,
+        String(suggestion.id),
+      ]);
+    } else {
+      await query("UPDATE Suggestion SET status = 'rejected', resolvedAt = ?, updatedAt = ? WHERE id = ?", [
+        now,
+        now,
+        String(suggestion.id),
+      ]);
+    }
+    resolved++;
+  }
+  return resolved;
+}
+
 export interface ResolutionResult {
   status: 'pending' | 'approved' | 'rejected';
   yesVotes: number;
@@ -29,7 +77,10 @@ export interface ResolutionResult {
 
 export async function getEligibleVoterIds(subjectPlayerId: string): Promise<string[]> {
   const rows = await queryAll('SELECT id FROM Player WHERE active = 1 AND id != ?', [subjectPlayerId]);
-  return rows.map((r: any) => String(r.id));
+  // A vote-locked player doesn't exist for vote math: majorities shrink and
+  // their already-cast votes on pending suggestions stop counting while locked.
+  const voteLocked = await getPlayersLockedFrom('vote');
+  return rows.map((r: any) => String(r.id)).filter((id) => !voteLocked.has(id));
 }
 
 /**

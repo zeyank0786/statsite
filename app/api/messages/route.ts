@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { queryAll, query, queryOne } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -137,6 +138,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const lockMsg = await featureLockMessage(String(authorId), 'messages');
+    if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
     const messageId = uuid();
     const now = new Date().toISOString();

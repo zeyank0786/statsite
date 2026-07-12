@@ -24,6 +24,7 @@ interface LeaderboardPlayer {
   bestStat: { code: string; label: string; value: number; categoryCode: string } | null;
   achievementsEarned: number;
   achievementsTotal: number;
+  streakWeeks?: number;
 }
 
 export default function LeaderboardPage() {
@@ -132,6 +133,15 @@ export default function LeaderboardPage() {
                   <p className="font-display text-4xl font-bold mt-2" style={{ color: hex }}>
                     {player.overall.toFixed(1)}
                   </p>
+                  {(player.streakWeeks ?? 0) > 0 && (
+                    <p
+                      className="mt-1.5 text-[11px] font-bold"
+                      style={{ color: 'var(--accent-orange)' }}
+                      title="Consecutive weeks with a stat change or evidence post"
+                    >
+                      🔥 {player.streakWeeks}-week streak
+                    </p>
+                  )}
                   <div className="flex items-center justify-center gap-1 mt-2 text-xs font-semibold">
                     {player.net90 !== 0 ? (
                       <span

@@ -12,6 +12,7 @@ import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import TierBadge from '@/components/TierBadge';
+import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 import { ChevronLeftIcon, CheckIcon, ImageIcon, XIcon } from '@/components/icons';
 
 interface Player {
@@ -81,6 +82,8 @@ function NewSuggestionContent() {
   const [successMessage, setSuccessMessage] = useState('');
 
   const currentPlayerId = (session?.user as any)?.playerId;
+  const myLockouts = useMyLockouts(status === 'authenticated');
+  const suggestLocked = 'suggest' in myLockouts;
   const paramSubject = searchParams.get('subject');
   const paramEvidence = searchParams.get('evidenceId');
 
@@ -310,7 +313,9 @@ function NewSuggestionContent() {
         eyebrowColor="var(--accent-purple)"
       />
 
-      <div className="space-y-5">
+      <LockoutBanner locks={myLockouts} feature="suggest" />
+
+      <div className="space-y-5" style={suggestLocked ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
         {/* Step 1: subject */}
         <section className="glass card-shadow p-5 animate-rise">
           <StepLabel n={1} title="Who is this about?" />

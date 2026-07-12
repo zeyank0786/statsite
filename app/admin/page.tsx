@@ -707,6 +707,9 @@ function GatingTab({
 
   return (
     <div className="space-y-5 animate-rise">
+      {/* ===== Per-player feature lockouts ===== */}
+      <LockoutSection players={activePlayers} />
+
       {/* ===== Named lock groups ===== */}
       <section className="glass card-shadow p-5">
         <h2 className="font-display text-lg font-bold text-white mb-1 flex items-center gap-2">
@@ -1080,6 +1083,171 @@ function GatingTab({
         </>
       )}
     </div>
+  );
+}
+
+/* ============================== Feature lockouts ============================== */
+
+interface LockableFeatureInfo {
+  key: string;
+  label: string;
+  description: string;
+}
+
+function LockoutSection({ players }: { players: { id: string; username: string }[] }) {
+  const [features, setFeatures] = useState<LockableFeatureInfo[]>([]);
+  const [locks, setLocks] = useState<{ playerId: string; feature: string; reason: string | null }[]>([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    try {
+      const res = await fetch('/api/admin/feature-locks');
+      if (res.ok) {
+        const data = await res.json();
+        setFeatures(data.features || []);
+        setLocks(data.locks || []);
+      }
+    } catch (e) {
+      console.error('Failed to load feature locks:', e);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const playerLocks = new Set(locks.filter((l) => l.playerId === selectedId).map((l) => l.feature));
+  const lockedPlayerIds = new Set(locks.map((l) => l.playerId));
+
+  const setLock = async (feature: string, locked: boolean) => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/feature-locks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: selectedId, feature, locked, reason: reason.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError([data.error, data.details].filter(Boolean).join(' — ') || 'Failed');
+      }
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="glass card-shadow p-5">
+      <h2 className="font-display text-lg font-bold text-white mb-1 flex items-center gap-2">
+        <EyeOffIcon size={16} />
+        Feature lockouts
+      </h2>
+      <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+        Bar a player from participating in a feature — they can still view everything, and their
+        stats stay fully suggestable. A vote-locked player leaves the eligible-voter pool, so
+        majorities shrink accordingly.
+      </p>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        {players.map((p) => {
+          const active = selectedId === p.id;
+          const hasLocks = lockedPlayerIds.has(p.id);
+          return (
+            <button
+              key={p.id}
+              onClick={() => setSelectedId(active ? '' : p.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition ${
+                active ? 'text-white' : 'text-neutral-300 hover:text-white'
+              }`}
+              style={{
+                borderColor: active ? 'var(--accent-red)' : hasLocks ? 'rgba(239,68,68,0.4)' : 'var(--surface-border)',
+                background: active ? 'rgba(239,68,68,0.12)' : 'transparent',
+              }}
+            >
+              <Avatar id={p.id} name={p.username} size={22} />
+              {p.username}
+              {hasLocks && <span title="Has lockouts">🚫</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedId && (
+        <div className="space-y-3">
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason shown to them (optional, applies to locks you set from now)"
+            className="field max-w-lg"
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {features.map((f) => {
+              const locked = playerLocks.has(f.key);
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setLock(f.key, !locked)}
+                  disabled={busy}
+                  className={`text-left px-3.5 py-3 rounded-xl border transition ${
+                    locked ? '' : 'hover:bg-white/[0.03]'
+                  }`}
+                  style={{
+                    borderColor: locked ? 'rgba(239,68,68,0.55)' : 'var(--surface-border)',
+                    background: locked ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.015)',
+                  }}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className={`text-sm font-semibold ${locked ? 'text-red-300' : 'text-white'}`}>
+                      {locked ? '🚫 ' : ''}
+                      {f.label}
+                    </span>
+                    <span
+                      className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded"
+                      style={{
+                        background: locked ? 'rgba(239,68,68,0.2)' : 'rgba(52,211,153,0.12)',
+                        color: locked ? 'var(--accent-red)' : 'var(--accent-green)',
+                      }}
+                    >
+                      {locked ? 'Locked' : 'Allowed'}
+                    </span>
+                  </span>
+                  <span className="block text-[11px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    {f.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setLock('all', true)}
+              disabled={busy}
+              className="px-3 py-2 rounded-xl border text-xs font-semibold text-red-300 border-red-500/40 bg-red-500/10 hover:bg-red-500/20 transition"
+            >
+              Lock everything
+            </button>
+            <button
+              onClick={() => setLock('all', false)}
+              disabled={busy}
+              className="px-3 py-2 rounded-xl border text-xs font-semibold text-emerald-300 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 transition"
+            >
+              Clear all lockouts
+            </button>
+          </div>
+
+          {error && <p className="text-xs text-red-400">{error}</p>}
+        </div>
+      )}
+    </section>
   );
 }
 
