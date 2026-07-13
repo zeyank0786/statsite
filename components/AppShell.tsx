@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import Logo from './Logo';
 import Avatar from './Avatar';
+import NotificationCenter from './NotificationCenter';
 import { setKnownRoster } from '@/lib/userColors';
 import {
   HomeIcon,
@@ -256,6 +257,7 @@ export default function AppShell({
 
               {/* Right actions */}
               <div className="flex items-center gap-1.5">
+                {status === 'authenticated' && playerId && <NotificationCenter />}
                 <Link
                   href="/settings"
                   className={`hidden md:flex p-2.5 rounded-xl transition ${

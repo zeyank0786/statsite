@@ -323,6 +323,28 @@ select.field {
   cursor: not-allowed;
 }
 
+/* ---------- Celebration confetti ---------- */
+.confetti-piece {
+  position: absolute;
+  top: -12px;
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0.9;
+    transform: translateY(105vh) rotate(var(--spin, 720deg));
+  }
+}
+
 /* ---------- Safe areas (mobile bottom nav) ---------- */
 /* Home-indicator inset when present, but never less than a small breather —
    some launchers report 0 and the bar ends up flush with the screen edge. */
