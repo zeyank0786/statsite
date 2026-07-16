@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { XIcon } from './icons';
 import { getCategoryMeta, categoryCodeOfStat } from '@/lib/categories';
 
@@ -16,6 +17,9 @@ export default function StatDescriptionModal({
   description,
 }: StatDescriptionModalProps) {
   const [isOpen, setIsOpen] = useState(false);
+  // Portal target only exists client-side
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const meta = getCategoryMeta(categoryCodeOfStat(statCode));
 
   return (
@@ -32,14 +36,23 @@ export default function StatDescriptionModal({
         ?
       </button>
 
-      {isOpen && (
+      {/* Portaled to <body>: stat cards sit inside animated/blurred containers
+          that create CSS containing blocks — without the portal this "fixed"
+          overlay anchors to the card and lands at the bottom of the category. */}
+      {isOpen &&
+        mounted &&
+        createPortal(
         <div
           className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:p-4"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(false);
+          }}
         >
           <div
             className="card-shadow-lg border rounded-t-3xl sm:rounded-3xl p-6 md:p-7 max-w-md w-full animate-rise"
             style={{ background: '#13131b', borderColor: 'var(--surface-border)' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -64,7 +77,8 @@ export default function StatDescriptionModal({
               Got it
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

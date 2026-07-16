@@ -76,7 +76,15 @@ export interface ResolutionResult {
 }
 
 export async function getEligibleVoterIds(subjectPlayerId: string): Promise<string[]> {
-  const rows = await queryAll('SELECT id FROM Player WHERE active = 1 AND id != ?', [subjectPlayerId]);
+  // JOIN User: a player who has never claimed an account can't sign in to
+  // vote, so counting them toward majorities stalls suggestions forever.
+  // They join the pool the moment they claim a profile.
+  const rows = await queryAll(
+    `SELECT DISTINCT p.id FROM Player p
+     JOIN User u ON u.playerId = p.id
+     WHERE p.active = 1 AND p.id != ?`,
+    [subjectPlayerId]
+  );
   // A vote-locked player doesn't exist for vote math: majorities shrink and
   // their already-cast votes on pending suggestions stop counting while locked.
   const voteLocked = await getPlayersLockedFrom('vote');

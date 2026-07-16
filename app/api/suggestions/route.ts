@@ -78,12 +78,22 @@ export async function GET() {
       });
     }
 
-    const activePlayers = await queryAll('SELECT id FROM Player WHERE active = 1');
+    // Eligible pool = active AND claimed (has a login) AND not vote-locked.
+    // Unclaimed players can't sign in to vote — counting them stalls
+    // suggestions forever. Must match lib/suggestionEngine.getEligibleVoterIds.
+    const activePlayers = await queryAll(
+      `SELECT DISTINCT p.id, p.username FROM Player p
+       JOIN User u ON u.playerId = p.id
+       WHERE p.active = 1`
+    );
     const voteLocked = await getPlayersLockedFrom('vote');
-    // Vote-locked players don't exist for vote math (their cast votes stop
-    // counting on pending suggestions while the lock stands)
     const activeIds = new Set(
       (activePlayers as any[]).map((p) => String(p.id)).filter((id) => !voteLocked.has(id))
+    );
+    const eligibleNameById = new Map(
+      (activePlayers as any[])
+        .filter((p) => activeIds.has(String(p.id)))
+        .map((p) => [String(p.id), String(p.username)])
     );
 
     const payload = (suggestions as any[]).map((sg) => {
@@ -97,9 +107,19 @@ export async function GET() {
       const yesVotes = eligibleVotes.filter((v) => String(v.choice) === 'yes').length;
       const noVotes = eligibleVotes.filter((v) => String(v.choice) === 'no').length;
       const myVote = suggestionVotes.find((v) => String(v.userId) === currentPlayerId);
+      // Who could still vote but hasn't — makes stalls self-explanatory
+      const votedIds = new Set(eligibleVotes.map((v) => String(v.userId)));
+      const waitingOn =
+        String(sg.status) === 'pending'
+          ? [...eligibleNameById.entries()]
+              .filter(([pid]) => pid !== subjectId && !votedIds.has(pid))
+              .map(([, name]) => name)
+          : [];
 
       return {
         id,
+        batchId: sg.batchId ? String(sg.batchId) : null,
+        waitingOn,
         subjectId,
         subjectName: String(sg.subjectName),
         proposerId: String(sg.proposedById),
@@ -252,10 +272,12 @@ export async function POST(request: Request) {
     }
 
     // Auto-split: one Suggestion row per stat change, all sharing the same
-    // reason / testimony / evidence links. The crew votes on each separately.
+    // reason / testimony / evidence links AND a batchId so the UI can group
+    // them under a single card. The crew still votes on each independently.
     const now = new Date().toISOString();
     const created: { id: string; statId: string; resolution: any }[] = [];
-    let testimonyColumnEnsured = false;
+    const batchId = uuid();
+    let columnsEnsured = false;
 
     for (const change of changes) {
       const id = uuid();
@@ -267,19 +289,29 @@ export async function POST(request: Request) {
         Number(change.delta),
         reason.trim(),
         cleanTestimony || null,
+        batchId,
         now,
         now,
       ];
-      const insertSql = `INSERT INTO Suggestion (id, playerId, proposedById, statId, delta, reason, testimony, status, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`;
+      const insertSql = `INSERT INTO Suggestion (id, playerId, proposedById, statId, delta, reason, testimony, batchId, status, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`;
       try {
         await query(insertSql, insertArgs);
       } catch (e: any) {
-        // Self-healing migration: the testimony column is additive, so create it
-        // on first use instead of requiring a manual Turso migration.
-        if (testimonyColumnEnsured || !/no column named testimony|no such column/i.test(String(e?.message))) throw e;
-        await query('ALTER TABLE Suggestion ADD COLUMN testimony TEXT');
-        testimonyColumnEnsured = true;
+        // Self-healing migration: testimony/batchId are additive columns —
+        // create them on first use instead of requiring a manual migration.
+        if (columnsEnsured || !/no column named|no such column/i.test(String(e?.message))) throw e;
+        for (const alter of [
+          'ALTER TABLE Suggestion ADD COLUMN testimony TEXT',
+          'ALTER TABLE Suggestion ADD COLUMN batchId TEXT',
+        ]) {
+          try {
+            await query(alter);
+          } catch {
+            /* already exists */
+          }
+        }
+        columnsEnsured = true;
         await query(insertSql, insertArgs);
       }
       for (const evidenceId of uniqueEvidenceIds) {

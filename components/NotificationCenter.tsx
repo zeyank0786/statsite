@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { BellIcon, XIcon } from './icons';
 
@@ -78,7 +79,12 @@ export default function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [modalQueue, setModalQueue] = useState<Celebration[]>([]);
   const [toasts, setToasts] = useState<Celebration[]>([]);
+  // Portals only render client-side after mount (SSR has no document)
+  const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   const load = async () => {
     try {
@@ -119,11 +125,14 @@ export default function NotificationCenter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Close the panel on outside click
+  // Close the panel on outside click (panel is portaled, so check both trees)
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      const inPanel = panelRef.current?.contains(t);
+      const inBell = wrapRef.current?.contains(t);
+      if (!inPanel && !inBell) setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
@@ -145,7 +154,7 @@ export default function NotificationCenter() {
   const currentModal = modalQueue[0] || null;
 
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative" ref={wrapRef}>
       <button
         onClick={toggleOpen}
         className={`relative p-2.5 rounded-xl transition ${
@@ -162,11 +171,15 @@ export default function NotificationCenter() {
         )}
       </button>
 
-      {/* Feed panel */}
-      {open && (
+      {/* Feed panel — portaled to <body>: the blurred header creates a CSS
+          containing block that would otherwise trap/clip fixed overlays */}
+      {open &&
+        mounted &&
+        createPortal(
         <div
-          className="absolute right-0 mt-2 w-[min(92vw,380px)] max-h-[70vh] overflow-y-auto rounded-2xl border backdrop-blur-xl z-[70] animate-rise"
-          style={{ backgroundColor: 'rgba(14,14,20,0.97)', borderColor: 'var(--surface-border-strong)' }}
+          ref={panelRef}
+          className="fixed top-[4.5rem] inset-x-3 sm:inset-x-auto sm:right-4 sm:w-[380px] max-h-[70vh] overflow-y-auto rounded-2xl border z-[70] animate-rise card-shadow-lg"
+          style={{ backgroundColor: 'rgba(14,14,20,0.98)', borderColor: 'var(--surface-border-strong)' }}
         >
           <div
             className="sticky top-0 px-4 py-3 border-b flex items-center justify-between backdrop-blur-xl"
@@ -215,72 +228,79 @@ export default function NotificationCenter() {
               ))}
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Celebration modal (one at a time) */}
-      {currentModal && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
-          <Confetti />
-          <div
-            className="relative w-full max-w-sm rounded-3xl border-2 p-8 text-center animate-rise"
-            style={{
-              borderColor: `${currentModal.hex}88`,
-              background: `linear-gradient(160deg, ${currentModal.hex}26, rgba(14,14,20,0.98) 55%)`,
-              boxShadow: `0 0 80px ${currentModal.hex}44`,
-            }}
-          >
-            <p className="text-5xl mb-4">{currentModal.kind === 'achievement' ? '🎖️' : '🏆'}</p>
-            <p
-              className="font-display text-2xl font-bold uppercase tracking-wide mb-2"
-              style={{ color: currentModal.hex }}
-            >
-              {currentModal.title}
-            </p>
-            <p className="text-[15px] text-neutral-200 leading-snug">{currentModal.subtitle}</p>
-            <button
-              onClick={() => setModalQueue((prev) => prev.slice(1))}
-              className="btn-gradient w-full py-3 mt-6"
-            >
-              {modalQueue.length > 1 ? `Next (${modalQueue.length - 1} more)` : "Let's go"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Stat-change toasts */}
-      {toasts.length > 0 && (
-        <div className="fixed bottom-24 md:bottom-6 right-4 z-[80] space-y-2 w-[min(88vw,320px)]">
-          {toasts.map((t) => (
+      {/* Celebration modal (one at a time) — portaled for true fullscreen */}
+      {currentModal &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[90] flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
+            <Confetti />
             <div
-              key={t.id}
-              className="rounded-xl border px-3.5 py-2.5 backdrop-blur-xl animate-rise flex items-center gap-2.5"
+              className="relative w-full max-w-sm rounded-3xl border-2 p-8 text-center animate-rise"
               style={{
-                backgroundColor: 'rgba(14,14,20,0.95)',
-                borderColor: `${t.hex}66`,
+                borderColor: `${currentModal.hex}88`,
+                background: `linear-gradient(160deg, ${currentModal.hex}26, rgba(14,14,20,0.98) 55%)`,
+                boxShadow: `0 0 80px ${currentModal.hex}44`,
               }}
             >
-              <span style={{ color: t.hex }} className="text-lg shrink-0">
-                {t.hex === '#ef4444' ? '⬇' : '⬆'}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-semibold text-white truncate">
-                  {t.title.replace(/^[^·]*· /, '')}
-                </span>
-                <span className="block text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                  {t.subtitle}
-                </span>
-              </span>
-              <button
-                onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
-                className="ml-auto text-neutral-500 hover:text-white transition shrink-0"
+              <p className="text-5xl mb-4">{currentModal.kind === 'achievement' ? '🎖️' : '🏆'}</p>
+              <p
+                className="font-display text-2xl font-bold uppercase tracking-wide mb-2"
+                style={{ color: currentModal.hex }}
               >
-                <XIcon size={13} />
+                {currentModal.title}
+              </p>
+              <p className="text-[15px] text-neutral-200 leading-snug">{currentModal.subtitle}</p>
+              <button
+                onClick={() => setModalQueue((prev) => prev.slice(1))}
+                className="btn-gradient w-full py-3 mt-6"
+              >
+                {modalQueue.length > 1 ? `Next (${modalQueue.length - 1} more)` : "Let's go"}
               </button>
             </div>
-          ))}
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
+
+      {/* Stat-change toasts — bottom-center, above the mobile tab bar */}
+      {toasts.length > 0 &&
+        mounted &&
+        createPortal(
+          <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-[80] space-y-2 w-[min(92vw,340px)]">
+            {toasts.map((t) => (
+              <div
+                key={t.id}
+                className="rounded-xl border px-3.5 py-2.5 backdrop-blur-xl animate-rise flex items-center gap-2.5 card-shadow"
+                style={{
+                  backgroundColor: 'rgba(14,14,20,0.96)',
+                  borderColor: `${t.hex}66`,
+                }}
+              >
+                <span style={{ color: t.hex }} className="text-lg shrink-0">
+                  {t.hex === '#ef4444' ? '⬇' : '⬆'}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-semibold text-white truncate">
+                    {t.title.replace(/^[^·]*· /, '')}
+                  </span>
+                  <span className="block text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                    {t.subtitle}
+                  </span>
+                </span>
+                <button
+                  onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
+                  className="ml-auto text-neutral-500 hover:text-white transition shrink-0"
+                >
+                  <XIcon size={13} />
+                </button>
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -487,7 +487,9 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                   return (
                     <div
                       key={stat.id}
-                      className="rounded-2xl p-4 border transition hover:bg-white/[0.03]"
+                      onClick={() => router.push(`/players/${playerId}/stats/${stat.id}`)}
+                      className="rounded-2xl p-4 border transition hover:bg-white/[0.03] cursor-pointer"
+                      title={`${stat.label} — history & details`}
                       style={{
                         borderColor: colorCodeEnabled ? valueColor : 'var(--surface-border)',
                         background: 'rgba(255,255,255,0.02)',
@@ -563,7 +565,10 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                                   </div>
                                   {currentPlayerId === note.reviewerId && (
                                     <button
-                                      onClick={() => handleDeleteNote(note.id, note.sessionId)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteNote(note.id, note.sessionId);
+                                      }}
                                       disabled={deletingNoteId === note.id}
                                       className="text-neutral-500 hover:text-red-400 transition shrink-0"
                                       title="Delete note"
