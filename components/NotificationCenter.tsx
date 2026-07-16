@@ -178,8 +178,18 @@ export default function NotificationCenter() {
         createPortal(
         <div
           ref={panelRef}
-          className="fixed top-[4.5rem] inset-x-3 sm:inset-x-auto sm:right-4 sm:w-[380px] max-h-[70vh] overflow-y-auto rounded-2xl border z-[70] animate-rise card-shadow-lg"
-          style={{ backgroundColor: 'rgba(14,14,20,0.98)', borderColor: 'var(--surface-border-strong)' }}
+          className="fixed max-h-[70vh] overflow-y-auto rounded-2xl border z-[70] animate-rise card-shadow-lg"
+          style={{
+            backgroundColor: 'rgba(14,14,20,0.98)',
+            borderColor: 'var(--surface-border-strong)',
+            // Right-anchored with a viewport-capped width: left edge can never
+            // leave the screen regardless of breakpoint, zoom, scrollbars or
+            // notch safe-areas ("100%" of a fixed element = the real layout
+            // viewport, unlike 100vw which overhangs scrollbars).
+            top: 'calc(4rem + max(env(safe-area-inset-top, 0px), 0.5rem))',
+            right: 'max(0.75rem, env(safe-area-inset-right, 0px))',
+            width: 'min(380px, calc(100% - 1.5rem))',
+          }}
         >
           <div
             className="sticky top-0 px-4 py-3 border-b flex items-center justify-between backdrop-blur-xl"
