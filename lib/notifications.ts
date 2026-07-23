@@ -32,7 +32,8 @@ export interface FeedEvent {
     | 'suggestion_open'
     | 'evidence'
     | 'lockout'
-    | 'nudge';
+    | 'nudge'
+    | 'commitment';
   at: string;
   playerId: string;
   playerName: string;
@@ -249,6 +250,60 @@ export async function buildFeed(currentPlayerId: string): Promise<{
       href: '/evidence',
       hex: '#f97316',
     });
+  }
+
+  // Commitments — made, resolved, or awaiting a verdict
+  try {
+    const commitments = await queryAll(
+      `SELECT id, playerId, title, status, createdAt, resolvedAt, deadline
+       FROM Commitment ORDER BY COALESCE(resolvedAt, createdAt) DESC LIMIT ${SOURCE_LIMIT}`
+    );
+    for (const c of commitments as any[]) {
+      const pid = String(c.playerId);
+      const status = String(c.status);
+      const title = String(c.title);
+      if (status === 'kept' || status === 'missed' || status === 'withdrawn') {
+        const icon = status === 'kept' ? '✅' : status === 'missed' ? '❌' : '⏸️';
+        events.push({
+          id: `cmt-r:${c.id}`,
+          type: 'commitment',
+          at: String(c.resolvedAt || c.createdAt),
+          playerId: pid,
+          playerName: nameOf(pid),
+          title: `${icon} ${nameOf(pid)} ${status} "${title}"`,
+          href: `/commitments/${c.id}`,
+          hex: status === 'kept' ? '#34d399' : status === 'missed' ? '#ef4444' : '#9ca3af',
+        });
+      } else if (status === 'awaiting_verdict' || status === 'withdraw_pending') {
+        events.push({
+          id: `cmt-v:${c.id}`,
+          type: 'commitment',
+          at: String(c.deadline),
+          playerId: pid,
+          playerName: nameOf(pid),
+          title:
+            status === 'withdraw_pending'
+              ? `⏸️ ${nameOf(pid)} asked to withdraw "${title}"`
+              : `⚖️ ${nameOf(pid)}'s "${title}" needs a verdict`,
+          body: pid !== currentPlayerId ? 'Did they do it?' : undefined,
+          href: `/commitments/${c.id}`,
+          hex: '#a855f7',
+        });
+      } else {
+        events.push({
+          id: `cmt:${c.id}`,
+          type: 'commitment',
+          at: String(c.createdAt),
+          playerId: pid,
+          playerName: nameOf(pid),
+          title: `📌 ${nameOf(pid)} committed to "${title}"`,
+          href: `/commitments/${c.id}`,
+          hex: '#22d3ee',
+        });
+      }
+    }
+  } catch {
+    /* commitments table may not exist yet */
   }
 
   // Nudges sent to you

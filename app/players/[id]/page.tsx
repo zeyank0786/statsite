@@ -11,7 +11,7 @@ import AchievementBadge, { AchievementData } from '@/components/AchievementBadge
 import StatDescriptionModal from '@/components/StatDescriptionModal';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
 import { getUserColorHex } from '@/lib/userColors';
-import { orderCategories, getCategoryMeta, getValueColor, scaleMax } from '@/lib/categories';
+import { orderCategories, getCategoryMeta, getValueColor, scaleMax, categoryRadarValue } from '@/lib/categories';
 import LockBadge from '@/components/LockBadge';
 import TierBadge from '@/components/TierBadge';
 import NudgeButton from '@/components/NudgeButton';
@@ -224,7 +224,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const radarLabels = orderedCategories.map((c) => getCategoryMeta(c.code).short);
   const radarColors = orderedCategories.map((c) => getCategoryMeta(c.code).hex);
   // Category totals as ratios — the strongest category defines the outer edge
-  const radarValues = orderedCategories.map((c) => c.stats.reduce((s, st) => s + st.value, 0));
+  const radarValues = orderedCategories.map((c) => categoryRadarValue(c.stats));
 
   return (
     <AppShell>

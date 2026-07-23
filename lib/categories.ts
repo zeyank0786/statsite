@@ -169,6 +169,26 @@ export function computeOverallScore(categories: { stats: { value: number }[] }[]
   return totalSum / categories.length;
 }
 
+/**
+ * Radar/spider axis value for a category, normalised to a "per 10 stats"
+ * scale: average × 10.
+ *
+ * Raw totals made the chart unreadable across unevenly-sized categories — a
+ * 1-stat category would have to reach 100 to look equal to ten stats
+ * averaging 10. Normalising means a category can never score higher purely
+ * for containing more stats; only the average matters.
+ *
+ * Deliberately radar-only: overall score and category totals elsewhere still
+ * use real sums.
+ */
+export const RADAR_STAT_BASELINE = 10;
+
+export function categoryRadarValue(stats: { value: number }[]): number {
+  if (!stats || stats.length === 0) return 0;
+  const total = stats.reduce((sum, s) => sum + (s.value || 0), 0);
+  return (total / stats.length) * RADAR_STAT_BASELINE;
+}
+
 export function categoryAvg(stats: { value: number }[]): number {
   if (!stats || stats.length === 0) return 0;
   return stats.reduce((s, st) => s + st.value, 0) / stats.length;

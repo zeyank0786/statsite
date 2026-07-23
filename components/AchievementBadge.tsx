@@ -16,6 +16,7 @@ import {
   CameraIcon,
   LightbulbIcon,
   MessageIcon,
+  HandIcon,
 } from './icons';
 
 export interface AchievementData {
@@ -43,6 +44,8 @@ const ICON_MAP: Record<string, { Icon: (p: any) => React.ReactNode; rgb: string 
   camera: { Icon: CameraIcon, rgb: '249, 115, 22' },
   lightbulb: { Icon: LightbulbIcon, rgb: '168, 85, 247' },
   message: { Icon: MessageIcon, rgb: '34, 211, 238' },
+  hand: { Icon: HandIcon, rgb: '52, 211, 153' },
+  check: { Icon: CheckIcon, rgb: '52, 211, 153' },
 };
 
 export default function AchievementBadge({

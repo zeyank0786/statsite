@@ -7,7 +7,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import RadarChart from '@/components/RadarChart';
-import { orderCategories, getCategoryMeta, computeOverallScore, scaleMax } from '@/lib/categories';
+import { orderCategories, getCategoryMeta, computeOverallScore, scaleMax, categoryRadarValue } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
 
 interface Player {
@@ -101,8 +101,11 @@ function CompareContent() {
     ...catsA,
     ...catsB.filter((cb) => !catsA.some((ca) => ca.code === cb.code)),
   ]);
-  const categoryTotal = (cats: typeof catsA, code: string) =>
-    cats.find((c) => c.code === code)?.stats.reduce((s, st) => s + st.value, 0) ?? 0;
+  // Normalised per-10-stats value, so categories of different sizes compare fairly
+  const categoryTotal = (cats: typeof catsA, code: string) => {
+    const cat = cats.find((c) => c.code === code);
+    return cat ? categoryRadarValue(cat.stats) : 0;
+  };
 
   const labels = unionCats.map((c) => getCategoryMeta(c.code).short);
   const labelColors = unionCats.map((c) => getCategoryMeta(c.code).hex);

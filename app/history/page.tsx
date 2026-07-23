@@ -23,6 +23,7 @@ interface HistoryEntry {
 const SOURCE_META: Record<string, { label: string; color: string }> = {
   admin_edit: { label: 'Admin edit', color: 'var(--accent-cyan)' },
   suggestion: { label: 'Suggestion', color: 'var(--accent-purple)' },
+  commitment: { label: 'Commitment', color: 'var(--accent-green)' },
   review_cycle: { label: 'Review', color: 'var(--accent-orange)' },
 };
 

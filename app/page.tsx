@@ -13,6 +13,7 @@ import {
   getCategoryMeta,
   computeOverallScore,
   scaleMax,
+  categoryRadarValue,
   CATEGORY_ORDER,
 } from '@/lib/categories';
 import {
@@ -112,10 +113,8 @@ export default function Dashboard() {
 
   const radarLabels = orderedCategories.map((c: any) => getCategoryMeta(c.code).short);
   const radarColors = orderedCategories.map((c: any) => getCategoryMeta(c.code).hex);
-  // Category totals as ratios — the strongest category defines the outer edge
-  const radarValues = orderedCategories.map((c: any) =>
-    c.stats.reduce((s: number, st: any) => s + st.value, 0)
-  );
+  // Normalised to a per-10-stats scale so uneven category sizes compare fairly
+  const radarValues = orderedCategories.map((c: any) => categoryRadarValue(c.stats));
 
   return (
     <AppShell>

@@ -38,6 +38,7 @@ interface StatDetail {
 
 const SOURCE_LABELS: Record<string, string> = {
   suggestion: 'Suggestion',
+  commitment: 'Commitment',
   admin_edit: 'Admin edit',
   review_cycle: 'Review',
 };

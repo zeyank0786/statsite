@@ -23,6 +23,20 @@ async function fetchSocialCounts(): Promise<Record<string, SocialCounts>> {
     for (const r of evidence as any[]) ensure(String(r.id)).evidencePosts = Number(r.c);
     for (const r of approved as any[]) ensure(String(r.id)).approvedProposals = Number(r.c);
     for (const r of votes as any[]) ensure(String(r.id)).votesCast = Number(r.c);
+
+    // Commitments may not exist yet on an older database
+    try {
+      const commitments = await queryAll(
+        "SELECT playerId as id, status, COUNT(*) as c FROM Commitment WHERE status IN ('kept','missed') GROUP BY playerId, status"
+      );
+      for (const r of commitments as any[]) {
+        const bucket = ensure(String(r.id));
+        if (String(r.status) === 'kept') bucket.commitmentsKept = Number(r.c);
+        else bucket.commitmentsMissed = Number(r.c);
+      }
+    } catch {
+      /* no commitments table yet */
+    }
   } catch (e) {
     console.error('Social counts unavailable (achievements degrade gracefully):', e);
   }

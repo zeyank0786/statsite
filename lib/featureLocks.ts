@@ -17,6 +17,7 @@ export const LOCKABLE_FEATURES = [
   { key: 'suggest', label: 'Suggesting', description: 'Creating suggestions and presets' },
   { key: 'vote', label: 'Voting', description: 'Voting on suggestions (leaves the eligible-voter pool)' },
   { key: 'evidence', label: 'Evidence', description: 'Posting or editing evidence' },
+  { key: 'commit', label: 'Commitments', description: 'Making commitments and checking in on them' },
   { key: 'messages', label: 'Messages', description: 'Posting, replying and reacting on the board' },
   { key: 'reviews', label: 'Reviews', description: 'Joining review sessions' },
   { key: 'targets', label: 'Targets', description: 'Setting or changing targets' },

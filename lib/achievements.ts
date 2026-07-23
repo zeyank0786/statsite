@@ -15,6 +15,9 @@ export interface Achievement {
 
 /** Per-player counts that live outside stats/history (all optional). */
 export interface SocialCounts {
+  /** Commitments the crew judged as kept / missed */
+  commitmentsKept?: number;
+  commitmentsMissed?: number;
   evidencePosts: number;
   approvedProposals: number;
   votesCast: number;
@@ -71,6 +74,9 @@ export function computeAchievements(
     const improvingCount = allStats.filter((s) => s.value >= improving.min).length;
     const cats100 = player.categories.filter((c) => c.total >= 100);
     const myCounts = social[player.id] || { evidencePosts: 0, approvedProposals: 0, votesCast: 0 };
+    const kept = myCounts.commitmentsKept || 0;
+    const missedCommitments = myCounts.commitmentsMissed || 0;
+    const judged = kept + missedCommitments;
     const myTopCat = Math.max(...player.categories.map((c) => c.total), 0);
     const myTopStat = bestStat?.value ?? 0;
 
@@ -295,6 +301,41 @@ export function computeAchievements(
         group: 'Community',
         earned: myCounts.approvedProposals >= 5,
         detail: myCounts.approvedProposals > 0 ? `${myCounts.approvedProposals} approved` : undefined,
+      },
+      // ── Commitments — promises made and kept ──────────────────────────
+      {
+        id: 'first-promise',
+        name: 'Said It Out Loud',
+        description: 'Keep your first commitment',
+        icon: 'hand',
+        group: 'Commitments',
+        earned: kept >= 1,
+      },
+      {
+        id: 'good-for-it',
+        name: 'Good For It',
+        description: 'Keep 5 commitments',
+        icon: 'check',
+        group: 'Commitments',
+        earned: kept >= 5,
+        detail: kept > 0 ? `${kept} kept` : undefined,
+      },
+      {
+        id: 'iron-word',
+        name: 'Iron Word',
+        description: 'Keep 15 commitments',
+        icon: 'shield-check',
+        group: 'Commitments',
+        earned: kept >= 15,
+      },
+      {
+        id: 'perfect-record',
+        name: 'Perfect Record',
+        description: 'Keep 5 or more commitments without missing one',
+        icon: 'crown',
+        group: 'Commitments',
+        earned: kept >= 5 && missedCommitments === 0,
+        detail: judged > 0 ? `${kept}/${judged} kept` : undefined,
       },
       {
         id: 'democracy',

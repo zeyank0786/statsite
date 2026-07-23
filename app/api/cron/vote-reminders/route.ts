@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { query, queryAll, queryOne } from '@/lib/db';
 import { getEligibleVoterIds } from '@/lib/suggestionEngine';
 import { sendPushToPlayers } from '@/lib/push';
+import { runCommitmentUpkeep } from '@/lib/commitments';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,15 @@ export async function GET(request: Request) {
     }
   }
 
+  // Commitments upkeep rides along with this job — Vercel's Hobby plan allows
+  // very few cron entries, and a failure here must not stop vote reminders.
+  let commitments: { swept: number; nudged: number; chased: number } | null = null;
+  try {
+    commitments = await runCommitmentUpkeep();
+  } catch (e) {
+    console.error('Commitment upkeep failed (vote reminders continue):', e);
+  }
+
   try {
     await ensureTable();
     const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
@@ -49,7 +59,7 @@ export async function GET(request: Request) {
       [cutoff]
     );
     if (pending.length === 0) {
-      return NextResponse.json({ ok: true, stale: 0, reminded: 0 });
+      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments });
     }
 
     const votes = await queryAll('SELECT suggestionId, userId FROM Vote');
@@ -107,6 +117,7 @@ export async function GET(request: Request) {
       stale: pending.length,
       owed: owedBy.size,
       reminded,
+      commitments,
     });
   } catch (error: any) {
     console.error('Vote reminder cron failed:', error);
