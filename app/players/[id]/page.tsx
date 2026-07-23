@@ -14,6 +14,7 @@ import { getUserColorHex } from '@/lib/userColors';
 import { orderCategories, getCategoryMeta, getValueColor, scaleMax } from '@/lib/categories';
 import LockBadge from '@/components/LockBadge';
 import TierBadge from '@/components/TierBadge';
+import NudgeButton from '@/components/NudgeButton';
 import {
   CompareIcon,
   PencilIcon,
@@ -313,10 +314,13 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
               )}
               <div className="flex gap-2 pb-1 flex-wrap">
                 {!isOwnProfile && (
-                  <Link href={`/compare?a=${currentPlayerId}&b=${playerId}`} className="btn-gradient text-sm">
-                    <CompareIcon size={15} />
-                    Compare with you
-                  </Link>
+                  <>
+                    <Link href={`/compare?a=${currentPlayerId}&b=${playerId}`} className="btn-gradient text-sm">
+                      <CompareIcon size={15} />
+                      Compare with you
+                    </Link>
+                    <NudgeButton targetPlayerId={playerId} targetName={playerName} />
+                  </>
                 )}
                 {isOwnProfile && (
                   <Link href="/targets" className="btn-ghost text-sm">

@@ -399,3 +399,12 @@ export const BellIcon = (p: IconProps) => (
     <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
   </Base>
 );
+
+export const HandIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M18 11V6a1.5 1.5 0 0 0-3 0v5" />
+    <path d="M15 11V4.5a1.5 1.5 0 0 0-3 0V11" />
+    <path d="M12 11V6a1.5 1.5 0 0 0-3 0v7" />
+    <path d="M9 13v-1.5a1.5 1.5 0 0 0-3 0V14a7 7 0 0 0 7 7h1a6 6 0 0 0 6-6v-4" />
+  </Base>
+);

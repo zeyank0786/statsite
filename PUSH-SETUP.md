@@ -14,7 +14,13 @@ Vercel → your project → **Settings** → **Environment Variables**. Add all 
 VAPID_PUBLIC_KEY=BCABrj1xsQpTCwMCTqyjfYXptYxo0uRQ3wXzfF_FcIOH_A3c3nxkZkwjmMwmiLHRIbe8cM36pVS8ryC3AaVi5S8
 VAPID_PRIVATE_KEY=09_eAy3IAU3_uyvhWNTPf6AN5KNQoOUNDFRvSwt8Mes
 VAPID_SUBJECT=mailto:itzzedk@gmail.com
+CRON_SECRET=OAtV3Jc_01ocQyAvTixV0_qtvEmXohfo
 ```
+
+`CRON_SECRET` protects the daily vote-reminder job — Vercel sends it
+automatically as a bearer token on scheduled runs, and the endpoint returns
+401 to anyone else. Without it set, the job still runs but anyone who knows
+the URL could trigger it (worst case: a duplicate reminder).
 
 Then **redeploy** (env changes only take effect on a new deployment).
 
@@ -54,6 +60,8 @@ This is per-device — enabling it on a phone doesn't enable it on a laptop.
 | Your stat changed after an approved suggestion | The subject |
 | You crossed a tier (e.g. into Elite) | The subject, with a louder headline |
 | Someone posted evidence | Everyone except the poster |
+| Someone nudges you | The person nudged |
+| A suggestion has sat unvoted 48h+ | Whoever still owes a vote — one daily push listing the count, never one per suggestion |
 
 Tapping a notification opens the relevant page, focusing the app if it's
 already open.

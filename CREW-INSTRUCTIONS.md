@@ -14,7 +14,7 @@ can send notifications. Takes 2 minutes.
 ⚠️ FIRST — heads up
 If you already have 4WARD on your home screen, you need to DELETE it and add
 it again. This will log you out, so make sure you know your password before
-you start. If you've forgotten it, message Zeyan first.
+you start. If you've forgotten it, message me first.
 
 📱 IPHONE
 1. Delete the old 4WARD icon if you have one (hold it, Remove App)

@@ -3,6 +3,7 @@ import { getStatTier } from './categories';
 import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from './serverStats';
 import { computeAchievements, SocialCounts } from './achievements';
 import { getAllLocks } from './featureLocks';
+import { getNudgesFor, NUDGE_KINDS } from './nudges';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -23,7 +24,15 @@ import { v4 as uuid } from 'uuid';
 
 export interface FeedEvent {
   id: string;
-  type: 'stat_change' | 'tier_up' | 'achievement' | 'suggestion_resolved' | 'suggestion_open' | 'evidence' | 'lockout';
+  type:
+    | 'stat_change'
+    | 'tier_up'
+    | 'achievement'
+    | 'suggestion_resolved'
+    | 'suggestion_open'
+    | 'evidence'
+    | 'lockout'
+    | 'nudge';
   at: string;
   playerId: string;
   playerName: string;
@@ -240,6 +249,26 @@ export async function buildFeed(currentPlayerId: string): Promise<{
       href: '/evidence',
       hex: '#f97316',
     });
+  }
+
+  // Nudges sent to you
+  try {
+    for (const n of await getNudgesFor(currentPlayerId, SOURCE_LIMIT)) {
+      const meta = NUDGE_KINDS.find((k) => k.key === n.kind);
+      events.push({
+        id: `nudge:${n.id}`,
+        type: 'nudge',
+        at: n.createdAt,
+        playerId: currentPlayerId,
+        playerName: nameOf(currentPlayerId),
+        title: `👉 ${n.fromName} ${meta?.title || 'nudged you'}`,
+        body: meta?.body,
+        href: meta?.url || '/',
+        hex: '#fbbf24',
+      });
+    }
+  } catch {
+    /* nudges degrade gracefully */
   }
 
   // Lockouts — only your own appear in your feed (getAllLocks self-creates the table)
