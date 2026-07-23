@@ -2,6 +2,9 @@
 
 Everything is built. The only outstanding step is pasting two keys into Vercel.
 
+> Instructions to send the crew live in **CREW-INSTRUCTIONS.md** — plain-text,
+> copy/paste straight into the group chat, covers iPhone and Android.
+
 ## 1. Add the VAPID keys to Vercel
 
 Vercel → your project → **Settings** → **Environment Variables**. Add all three
