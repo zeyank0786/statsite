@@ -11,16 +11,35 @@ Vercel → your project → **Settings** → **Environment Variables**. Add all 
 (Production, Preview and Development):
 
 ```
-VAPID_PUBLIC_KEY=BCABrj1xsQpTCwMCTqyjfYXptYxo0uRQ3wXzfF_FcIOH_A3c3nxkZkwjmMwmiLHRIbe8cM36pVS8ryC3AaVi5S8
-VAPID_PRIVATE_KEY=09_eAy3IAU3_uyvhWNTPf6AN5KNQoOUNDFRvSwt8Mes
+VAPID_PUBLIC_KEY=<public key>
+VAPID_PRIVATE_KEY=<private key>
 VAPID_SUBJECT=mailto:itzzedk@gmail.com
-CRON_SECRET=OAtV3Jc_01ocQyAvTixV0_qtvEmXohfo
+CRON_SECRET=<random string>
+```
+
+> ⚠️ **Never paste the real values into this file, or any other tracked file.**
+> This repo is public. The live values belong in exactly two places: Vercel's
+> environment variables, and your local `stats-app/.env` (which is gitignored).
+
+To generate a fresh set locally:
+
+```bash
+# VAPID keypair
+npx web-push generate-vapid-keys
+
+# CRON_SECRET (any random string works)
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
 ```
 
 `CRON_SECRET` protects the daily vote-reminder job — Vercel sends it
 automatically as a bearer token on scheduled runs, and the endpoint returns
 401 to anyone else. Without it set, the job still runs but anyone who knows
 the URL could trigger it (worst case: a duplicate reminder).
+
+**If the VAPID keys are ever rotated, everyone must re-enable notifications.**
+Push subscriptions are cryptographically bound to the public key they were
+created with, so old subscriptions stop working. The server prunes them
+automatically as they fail; each person just re-runs step 3.
 
 Then **redeploy** (env changes only take effect on a new deployment).
 
