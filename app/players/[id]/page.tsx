@@ -23,6 +23,7 @@ import {
   ChevronLeftIcon,
   TrendUpIcon,
   TrendDownIcon,
+  HandIcon,
 } from '@/components/icons';
 
 interface Stat {
@@ -72,6 +73,13 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
     { statId: string; code: string; label: string; current: number; nextTier: string; nextTierHex: string; ptsToGo: number; weeks: number }[]
   >([]);
   const [streakWeeks, setStreakWeeks] = useState(0);
+  const [commitments, setCommitments] = useState<{
+    open: { id: string; title: string; deadline: string; status: string; cadence: string }[];
+    kept: number;
+    missed: number;
+    withdrawn: number;
+    rate: number | null;
+  }>({ open: [], kept: 0, missed: 0, withdrawn: 0, rate: null });
   const [achievements, setAchievements] = useState<AchievementData[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
@@ -121,6 +129,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
       setRecentReviews(data.recentReviews || []);
       setRankUp(data.rankUp || []);
       setStreakWeeks(data.streakWeeks || 0);
+      if (data.commitments) setCommitments(data.commitments);
       setNewName(data.player.username);
 
       if (changesRes.ok) {
@@ -372,6 +381,65 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
           </div>
         </div>
       </section>
+
+      {/* ===== Commitments ===== */}
+      {(commitments.open.length > 0 || commitments.kept + commitments.missed > 0) && (
+        <section className="glass card-shadow p-5 mb-6 animate-rise">
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h2 className="font-display text-lg font-bold text-white flex items-center gap-2">
+              <HandIcon size={17} />
+              Commitments
+            </h2>
+            <div className="flex items-center gap-3">
+              {commitments.rate !== null && (
+                <span className="text-sm">
+                  <span className="font-bold" style={{ color: 'var(--accent-green)' }}>
+                    {Math.round(commitments.rate * 100)}%
+                  </span>{' '}
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    kept ({commitments.kept}/{commitments.kept + commitments.missed})
+                  </span>
+                </span>
+              )}
+              <Link href="/commitments" className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent-green)' }}>
+                All →
+              </Link>
+            </div>
+          </div>
+
+          {commitments.open.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Nothing live right now.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {commitments.open.map((c) => {
+                const overdue = new Date(c.deadline).getTime() < Date.now();
+                const hex =
+                  c.status === 'awaiting_verdict' ? '#a855f7' : c.status === 'withdraw_pending' ? '#fbbf24' : '#22d3ee';
+                return (
+                  <Link
+                    key={c.id}
+                    href={`/commitments/${c.id}`}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border transition hover:bg-white/[0.03]"
+                    style={{ borderColor: `${hex}44`, background: `${hex}0d` }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: hex }} />
+                    <span className="text-sm text-white flex-1 min-w-0 truncate">{c.title}</span>
+                    <span className="text-[11px] shrink-0" style={{ color: overdue ? 'var(--accent-yellow)' : 'var(--text-secondary)' }}>
+                      {c.status === 'awaiting_verdict'
+                        ? 'awaiting verdict'
+                        : c.status === 'withdraw_pending'
+                        ? 'withdrawal pending'
+                        : `due ${new Date(c.deadline).toLocaleDateString()}`}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ===== Rank-up ETA ===== */}
       {rankUp.length > 0 && (

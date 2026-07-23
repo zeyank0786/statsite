@@ -164,6 +164,42 @@ export async function GET(
       [id]
     );
 
+    // Commitments: what they've promised, and how often they deliver
+    let commitments: any = { open: [], kept: 0, missed: 0, withdrawn: 0, rate: null };
+    try {
+      const [openRows, recordRows] = await Promise.all([
+        queryAll(
+          `SELECT id, title, deadline, status, cadence FROM Commitment
+           WHERE playerId = ? AND status IN ('active','awaiting_verdict','withdraw_pending')
+           ORDER BY deadline ASC LIMIT 5`,
+          [id]
+        ),
+        queryAll(
+          `SELECT status, COUNT(*) as n FROM Commitment
+           WHERE playerId = ? AND status IN ('kept','missed','withdrawn') GROUP BY status`,
+          [id]
+        ),
+      ]);
+      const record: Record<string, number> = { kept: 0, missed: 0, withdrawn: 0 };
+      for (const r of recordRows as any[]) record[String(r.status)] = Number(r.n);
+      const judged = record.kept + record.missed;
+      commitments = {
+        open: (openRows as any[]).map((c) => ({
+          id: String(c.id),
+          title: String(c.title),
+          deadline: String(c.deadline),
+          status: String(c.status),
+          cadence: String(c.cadence),
+        })),
+        kept: record.kept,
+        missed: record.missed,
+        withdrawn: record.withdrawn,
+        rate: judged === 0 ? null : record.kept / judged,
+      };
+    } catch {
+      /* commitments table may not exist yet */
+    }
+
     // Rank-up ETA over the visible, unlocked stats
     const flatStats = (categories as any[]).flatMap((cat) =>
       cat.stats.map((s: any) => ({
@@ -203,6 +239,7 @@ export async function GET(
       recentReviews,
       otherPlayers,
       rankUp,
+      commitments,
       streakWeeks,
     });
   } catch (error: any) {

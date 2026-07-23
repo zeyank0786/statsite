@@ -1485,6 +1485,86 @@ function StatEditTab({
 
 /* ============================== Danger ============================== */
 
+/**
+ * Download a full JSON backup. Tables are discovered server-side, so this
+ * keeps working as new ones are added without touching this component.
+ */
+function BackupSection() {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+
+  const download = async (includeSecrets: boolean) => {
+    setBusy(true);
+    setNote('');
+    try {
+      const res = await fetch(`/api/admin/export${includeSecrets ? '?includeSecrets=1' : ''}`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setNote(d.error || 'Export failed');
+        return;
+      }
+      const blob = await res.blob();
+      const filename =
+        res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || '4ward-backup.json';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setNote(`Downloaded ${filename}`);
+    } catch (e: any) {
+      setNote(e?.message || 'Export failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="glass card-shadow p-6 md:p-8 mb-5 animate-rise">
+      <h3 className="font-display text-xl font-bold text-white mb-1">Backup &amp; export</h3>
+      <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+        Downloads every table as JSON — players, stats, history, suggestions, evidence, commitments,
+        the lot. Tables are detected automatically, so anything added later is included without this
+        page needing an update.
+      </p>
+
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => download(false)} disabled={busy} className="btn-gradient text-sm">
+          {busy ? 'Preparing…' : 'Download backup'}
+        </button>
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                'Include password hashes and push keys?\n\nOnly do this if you need a restore-complete backup — store the file somewhere safe and never commit it to the repo.'
+              )
+            ) {
+              download(true);
+            }
+          }}
+          disabled={busy}
+          className="btn-ghost text-sm"
+        >
+          Include credentials
+        </button>
+      </div>
+
+      <p className="text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
+        The standard download redacts password hashes and push subscription keys.
+      </p>
+
+      {note && (
+        <div className="rounded-xl px-4 py-3 text-sm text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 mt-4">
+          {note}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function DangerTab() {
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -1520,7 +1600,9 @@ function DangerTab() {
   };
 
   return (
-    <div
+    <>
+      <BackupSection />
+      <div
       className="rounded-3xl border-2 p-6 md:p-8 animate-rise"
       style={{ borderColor: 'rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.05)' }}
     >
@@ -1570,6 +1652,7 @@ function DangerTab() {
           {seeding ? 'Seeding...' : 'Reset database & seed data'}
         </button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
