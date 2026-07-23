@@ -408,3 +408,23 @@ export const HandIcon = (p: IconProps) => (
     <path d="M9 13v-1.5a1.5 1.5 0 0 0-3 0V14a7 7 0 0 0 7 7h1a6 6 0 0 0 6-6v-4" />
   </Base>
 );
+
+export const FilterIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" />
+  </Base>
+);
+
+export const ListIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M8 6h13M8 12h13M8 18h13" />
+    <path d="M3 6h.01M3 12h.01M3 18h.01" />
+  </Base>
+);
+
+export const ColumnsIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3" y="4" width="6" height="16" rx="1.5" />
+    <rect x="15" y="4" width="6" height="16" rx="1.5" />
+  </Base>
+);
