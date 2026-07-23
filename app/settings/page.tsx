@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
+import PushToggle from '@/components/PushToggle';
 import { EyeIcon, EyeOffIcon, CheckIcon } from '@/components/icons';
 
 function PasswordField({
@@ -196,6 +197,8 @@ export default function SettingsPage() {
           </button>
         </form>
       </div>
+
+      <PushToggle />
     </AppShell>
   );
 }

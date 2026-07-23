@@ -1,6 +1,8 @@
 import { query, queryOne, queryAll } from './db';
 import { announceStatMilestones } from './milestones';
 import { getPlayersLockedFrom } from './featureLocks';
+import { getStatTier } from './categories';
+import { firePush } from './push';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -195,5 +197,25 @@ async function applyApproval(suggestion: any, now: string) {
     await announceStatMilestones({ playerId, statId, oldValue, newValue, delta });
   } catch (e) {
     console.error('Milestone announcement failed (stat change still applied):', e);
+  }
+
+  // Tell the subject their stat moved (fire-and-forget; a tier-up gets the
+  // louder headline since it's the rarer moment).
+  try {
+    const stat = await queryOne('SELECT label FROM Stat WHERE id = ?', [statId]);
+    const label = stat ? String(stat.label) : 'A stat';
+    const oldTier = getStatTier(oldValue);
+    const newTier = getStatTier(newValue);
+    const rankedUp = newValue > oldValue && newTier.name !== oldTier.name;
+    firePush([playerId], {
+      title: rankedUp ? `🏆 ${newTier.name}!` : `${label} ${delta > 0 ? '+' : ''}${delta}`,
+      body: rankedUp
+        ? `${label} reached ${newTier.name} — now ${newValue} pts.`
+        : `${oldValue} → ${newValue} pts, approved by the crew.`,
+      url: `/players/${playerId}`,
+      tag: `stat-${statId}`,
+    });
+  } catch (e) {
+    console.error('Stat-change push failed (ignored):', e);
   }
 }

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { destroyCloudinaryAsset } from '@/lib/cloudinaryServer';
+import { firePush } from '@/lib/push';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
@@ -118,6 +119,23 @@ export async function POST(request: Request) {
 
     for (const categoryId of uniqueCatIds) {
       await query('INSERT INTO EvidenceCategory (evidenceId, categoryId) VALUES (?, ?)', [id, categoryId]);
+    }
+
+    // Nudge the rest of the crew — receipts are only useful if someone sees them
+    try {
+      const others = await queryAll('SELECT id FROM Player WHERE active = 1 AND id != ?', [playerId]);
+      const poster = await queryOne('SELECT username FROM Player WHERE id = ?', [playerId]);
+      firePush(
+        (others as any[]).map((p) => String(p.id)),
+        {
+          title: `📸 ${String(poster?.username || 'Someone')} posted evidence`,
+          body: caption?.trim() ? String(caption).slice(0, 120) : 'New receipt on the evidence board.',
+          url: '/evidence',
+          tag: 'evidence',
+        }
+      );
+    } catch (e) {
+      console.error('Evidence push failed (ignored):', e);
     }
 
     return NextResponse.json({ success: true, id });

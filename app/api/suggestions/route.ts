@@ -3,8 +3,9 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
-import { resolveSuggestion, expireStaleSuggestions } from '@/lib/suggestionEngine';
+import { resolveSuggestion, expireStaleSuggestions, getEligibleVoterIds } from '@/lib/suggestionEngine';
 import { featureLockMessage, getPlayersLockedFrom } from '@/lib/featureLocks';
+import { firePush } from '@/lib/push';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -330,6 +331,32 @@ export async function POST(request: Request) {
       // A 2-player roster means 1 eligible voter — the proposal itself is already a majority
       const resolution = await resolveSuggestion(id);
       created.push({ id, statId: String(change.statId), resolution });
+    }
+
+    // One push per batch (not per stat) to everyone who still needs to vote —
+    // the proposer already auto-voted, and anything already resolved is moot.
+    try {
+      const stillPending = created.filter((c) => c.resolution?.status === 'pending');
+      if (stillPending.length > 0) {
+        const voters = (await getEligibleVoterIds(String(subjectPlayerId))).filter((id) => id !== proposerId);
+        if (voters.length > 0) {
+          const [proposerRow, subjectRow] = await Promise.all([
+            queryOne('SELECT username FROM Player WHERE id = ?', [proposerId]),
+            queryOne('SELECT username FROM Player WHERE id = ?', [subjectPlayerId]),
+          ]);
+          const n = stillPending.length;
+          firePush(voters, {
+            title: 'A suggestion needs your vote',
+            body: `${String(proposerRow?.username || 'Someone')} proposed ${
+              n > 1 ? `${n} stat changes` : 'a stat change'
+            } for ${String(subjectRow?.username || 'a player')}.`,
+            url: '/suggestions',
+            tag: 'vote-needed',
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Vote-needed push failed (ignored):', e);
     }
 
     return NextResponse.json({ success: true, created, count: created.length });
