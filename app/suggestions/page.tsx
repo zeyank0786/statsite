@@ -33,6 +33,8 @@ interface Suggestion {
   categoryCode: string;
   categoryLabel: string;
   currentValue: number;
+  appliedOldValue: number | null;
+  appliedNewValue: number | null;
   delta: number;
   reason: string;
   testimony: string | null;
@@ -55,6 +57,29 @@ interface Suggestion {
 interface Batch {
   key: string;
   items: Suggestion[];
+}
+
+/**
+ * What numbers to show for a suggestion.
+ *
+ * Pending  → live value → what it would become (the live value is what the
+ *            delta will actually apply to, so it's the honest preview).
+ * Approved → the real before/after recorded when it was applied. Never
+ *            recompute from the live value: that already includes this change,
+ *            so "current + delta" double counts it.
+ * Rejected → no before/after at all. Nothing happened, and the value it was
+ *            proposed against is long stale — showing numbers would imply a
+ *            change that never occurred.
+ */
+function valueDisplay(sg: Suggestion): { from: number; to: number } | null {
+  if (sg.status === 'approved') {
+    if (sg.appliedOldValue === null || sg.appliedNewValue === null) return null;
+    return { from: sg.appliedOldValue, to: sg.appliedNewValue };
+  }
+  if (sg.status === 'pending') {
+    return { from: sg.currentValue, to: Math.max(0, sg.currentValue + sg.delta) };
+  }
+  return null;
 }
 
 function groupByBatch(list: Suggestion[]): Batch[] {
@@ -635,7 +660,7 @@ function StatVoteRow({
 }) {
   const meta = getCategoryMeta(sg.categoryCode, sg.categoryLabel);
   const dc = sg.delta > 0 ? 'var(--accent-green)' : 'var(--accent-red)';
-  const projected = Math.max(0, sg.currentValue + sg.delta);
+  const values = valueDisplay(sg);
   const votable = sg.status === 'pending' && sg.canVote;
 
   return (
@@ -656,14 +681,16 @@ function StatVoteRow({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-sm font-bold text-neutral-400">{sg.currentValue}</span>
+          {values && <span className="text-sm font-bold text-neutral-400">{values.from}</span>}
           <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{ background: `color-mix(in srgb, ${dc} 18%, transparent)`, color: dc }}>
             {sg.delta > 0 ? '+' : ''}
             {sg.delta}
           </span>
-          <span className="text-sm font-bold" style={{ color: dc }}>
-            → {projected}
-          </span>
+          {values && (
+            <span className="text-sm font-bold" style={{ color: dc }}>
+              → {values.to}
+            </span>
+          )}
           {sg.status !== 'pending' && <StatusChip status={sg.status} />}
         </div>
       </div>
@@ -701,7 +728,7 @@ function SingleSuggestionBody({
 }) {
   const meta = getCategoryMeta(sg.categoryCode, sg.categoryLabel);
   const dc = sg.delta > 0 ? 'var(--accent-green)' : 'var(--accent-red)';
-  const projected = Math.max(0, sg.currentValue + sg.delta);
+  const values = valueDisplay(sg);
   const votable = sg.status === 'pending' && sg.canVote && sg.yourVote === null;
 
   return (
@@ -722,7 +749,7 @@ function SingleSuggestionBody({
           </div>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
-          <span className="text-lg font-bold text-neutral-400">{sg.currentValue}</span>
+          {values && <span className="text-lg font-bold text-neutral-400">{values.from}</span>}
           <span
             className="px-2 py-0.5 rounded-lg text-sm font-bold"
             style={{ background: `color-mix(in srgb, ${dc} 18%, transparent)`, color: dc }}
@@ -730,9 +757,16 @@ function SingleSuggestionBody({
             {sg.delta > 0 ? '+' : ''}
             {sg.delta}
           </span>
-          <span className="text-lg font-bold" style={{ color: dc }}>
-            → {projected}
-          </span>
+          {values && (
+            <span className="text-lg font-bold" style={{ color: dc }}>
+              → {values.to}
+            </span>
+          )}
+          {sg.status === 'rejected' && (
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              not applied
+            </span>
+          )}
         </div>
       </div>
 

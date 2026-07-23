@@ -48,6 +48,27 @@ export async function GET() {
        ORDER BY (sg.status = 'pending') DESC, COALESCE(sg.resolvedAt, sg.createdAt) DESC`
     );
 
+    // What an approved suggestion ACTUALLY moved the stat from/to.
+    // `currentValue` above is the live value, which for a resolved suggestion
+    // already includes this change — rendering "current + delta" would double
+    // count it. applyApproval() stamps the StatHistory row with the same
+    // timestamp it sets resolvedAt to, so statId+playerId+timestamp identifies
+    // the exact row (works retroactively; no migration needed).
+    const appliedRows = await queryAll(
+      `SELECT sv.statId as statId, sv.playerId as playerId,
+              sh.oldValue, sh.newValue, sh.createdAt
+       FROM StatHistory sh
+       JOIN StatValue sv ON sh.statValueId = sv.id
+       WHERE sh.source = 'suggestion'`
+    );
+    const appliedByKey = new Map<string, { oldValue: number; newValue: number }>();
+    for (const r of appliedRows as any[]) {
+      appliedByKey.set(`${String(r.statId)}:${String(r.playerId)}:${String(r.createdAt)}`, {
+        oldValue: Number(r.oldValue),
+        newValue: Number(r.newValue),
+      });
+    }
+
     const votes = await queryAll(
       `SELECT v.suggestionId, v.userId, v.choice, p.username
        FROM Vote v JOIN Player p ON v.userId = p.id`
@@ -108,6 +129,10 @@ export async function GET() {
       const yesVotes = eligibleVotes.filter((v) => String(v.choice) === 'yes').length;
       const noVotes = eligibleVotes.filter((v) => String(v.choice) === 'no').length;
       const myVote = suggestionVotes.find((v) => String(v.userId) === currentPlayerId);
+      const applied =
+        String(sg.status) === 'approved' && sg.resolvedAt
+          ? appliedByKey.get(`${String(sg.statId)}:${subjectId}:${String(sg.resolvedAt)}`) || null
+          : null;
       // Who could still vote but hasn't — makes stalls self-explanatory
       const votedIds = new Set(eligibleVotes.map((v) => String(v.userId)));
       const waitingOn =
@@ -131,6 +156,10 @@ export async function GET() {
         categoryCode: String(sg.categoryCode),
         categoryLabel: String(sg.categoryLabel),
         currentValue: Number(sg.currentValue),
+        // Non-null only for approved suggestions: the real before/after at the
+        // moment it was applied, so resolved cards don't re-add the delta.
+        appliedOldValue: applied ? applied.oldValue : null,
+        appliedNewValue: applied ? applied.newValue : null,
         delta: Number(sg.delta),
         reason: String(sg.reason),
         testimony: sg.testimony ? String(sg.testimony) : null,
