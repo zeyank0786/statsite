@@ -178,12 +178,19 @@ export default function AppShell({
   return (
     <div className="min-h-screen flex flex-col">
       {/* ===== Top header ===== */}
-      <header className="sticky top-0 z-50">
+      {/* The iOS status-bar style is black-translucent, so the web view runs
+          underneath the clock/battery. Pad the header by the top inset and
+          carry the blurred background up behind the status bar — the strip
+          stays dark (white status text readable) and the nav clears it. */}
+      <header
+        className="sticky top-0 z-50 backdrop-blur-xl"
+        style={{
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          backgroundColor: 'rgba(10, 10, 15, 0.8)',
+        }}
+      >
         <div className="brand-hairline" />
-        <div
-          className="border-b backdrop-blur-xl"
-          style={{ backgroundColor: 'rgba(10, 10, 15, 0.8)', borderColor: 'var(--surface-border)' }}
-        >
+        <div className="border-b" style={{ borderColor: 'var(--surface-border)' }}>
           <div className={`${maxW} mx-auto px-4 sm:px-6 lg:px-8`}>
             <div className="flex items-center justify-between h-16">
               <Logo size="sm" />

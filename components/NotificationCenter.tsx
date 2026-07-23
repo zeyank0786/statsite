@@ -186,7 +186,8 @@ export default function NotificationCenter() {
             // leave the screen regardless of breakpoint, zoom, scrollbars or
             // notch safe-areas ("100%" of a fixed element = the real layout
             // viewport, unlike 100vw which overhangs scrollbars).
-            top: 'calc(4rem + max(env(safe-area-inset-top, 0px), 0.5rem))',
+            // Clears the header (h-16 + its safe-area padding) with a small gap
+            top: 'calc(4.5rem + env(safe-area-inset-top, 0px))',
             right: 'max(0.75rem, env(safe-area-inset-right, 0px))',
             width: 'min(380px, calc(100% - 1.5rem))',
           }}
