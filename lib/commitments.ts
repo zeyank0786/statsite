@@ -54,13 +54,34 @@ export async function ensureCommitmentTables(): Promise<void> {
        deadline       TEXT NOT NULL,
        status         TEXT NOT NULL DEFAULT 'active',
        withdrawReason TEXT,
+       adjustedById   TEXT,
+       adjustedAt     TEXT,
+       adjustReason   TEXT,
        createdAt      TEXT NOT NULL,
        updatedAt      TEXT NOT NULL,
        resolvedAt     TEXT
      )`
   );
+  // Older databases predate the adjustment columns — add them lazily.
+  for (const col of ['adjustedById TEXT', 'adjustedAt TEXT', 'adjustReason TEXT']) {
+    try {
+      await query(`ALTER TABLE Commitment ADD COLUMN ${col}`);
+    } catch {
+      /* already exists */
+    }
+  }
   await query(
     `CREATE TABLE IF NOT EXISTS CommitmentStat (
+       commitmentId TEXT NOT NULL,
+       statId       TEXT NOT NULL,
+       delta        INTEGER NOT NULL,
+       PRIMARY KEY (commitmentId, statId)
+     )`
+  );
+  // What the subject originally asked for, kept separate so an adjusted
+  // reward can always be shown against the promise it replaced.
+  await query(
+    `CREATE TABLE IF NOT EXISTS CommitmentOriginalStat (
        commitmentId TEXT NOT NULL,
        statId       TEXT NOT NULL,
        delta        INTEGER NOT NULL,
@@ -175,6 +196,92 @@ export async function tallyVotes(
     voters,
     waitingOn,
   };
+}
+
+/* ============================ Adjustment ============================ */
+
+export const ALLOWED_DELTAS = [-2, -1, 1, 2];
+
+/**
+ * Revise the stat reward on a commitment that's awaiting a verdict.
+ *
+ * The subject sets their own reward when they commit, so without this the
+ * crew's only options are to approve an over-priced reward or call a
+ * genuinely-completed commitment "missed". Any eligible voter can re-price it.
+ *
+ * Adjusting CLEARS existing verdict votes: people voted on different terms,
+ * and silently re-interpreting those votes would put words in their mouths.
+ * Everyone re-votes on what's now on the table.
+ *
+ * The original reward is preserved (first adjustment snapshots it) so the
+ * change stays visible rather than rewriting history.
+ */
+export async function proposeAdjustment(params: {
+  commitmentId: string;
+  proposerId: string;
+  stats: { statId: string; delta: number }[];
+  reason?: string | null;
+}): Promise<void> {
+  const { commitmentId, proposerId, stats, reason } = params;
+  await ensureCommitmentTables();
+  const now = new Date().toISOString();
+
+  // Snapshot the original reward the first time it's touched
+  const alreadySnapshotted = await queryOne(
+    'SELECT commitmentId FROM CommitmentOriginalStat WHERE commitmentId = ? LIMIT 1',
+    [commitmentId]
+  );
+  if (!alreadySnapshotted) {
+    const current = await queryAll('SELECT statId, delta FROM CommitmentStat WHERE commitmentId = ?', [
+      commitmentId,
+    ]);
+    for (const s of current as any[]) {
+      await query(
+        'INSERT OR IGNORE INTO CommitmentOriginalStat (commitmentId, statId, delta) VALUES (?, ?, ?)',
+        [commitmentId, String(s.statId), Number(s.delta)]
+      );
+    }
+  }
+
+  await query('DELETE FROM CommitmentStat WHERE commitmentId = ?', [commitmentId]);
+  for (const s of stats) {
+    await query('INSERT INTO CommitmentStat (commitmentId, statId, delta) VALUES (?, ?, ?)', [
+      commitmentId,
+      s.statId,
+      s.delta,
+    ]);
+  }
+
+  // Everyone re-judges the new terms
+  await query("DELETE FROM CommitmentVote WHERE commitmentId = ? AND kind = 'verdict'", [commitmentId]);
+
+  await query(
+    'UPDATE Commitment SET adjustedById = ?, adjustedAt = ?, adjustReason = ?, updatedAt = ? WHERE id = ?',
+    [proposerId, now, reason?.trim() || null, now, commitmentId]
+  );
+
+  const c = await queryOne('SELECT playerId, title FROM Commitment WHERE id = ?', [commitmentId]);
+  const proposer = await queryOne('SELECT username FROM Player WHERE id = ?', [proposerId]);
+  if (c) {
+    const others = (await getEligibleVoterIds(String(c.playerId))).filter((id) => id !== proposerId);
+    firePush([String(c.playerId), ...others], {
+      title: 'Commitment reward adjusted',
+      body: `${String(proposer?.username || 'Someone')} re-priced "${String(c.title)}" — everyone needs to vote again.`,
+      url: `/commitments/${commitmentId}`,
+      tag: `commitment-adjust-${commitmentId}`,
+    });
+  }
+}
+
+/** The reward the subject originally asked for, if it's since been adjusted. */
+export async function getOriginalStats(
+  commitmentId: string
+): Promise<{ statId: string; delta: number }[]> {
+  await ensureCommitmentTables();
+  const rows = await queryAll('SELECT statId, delta FROM CommitmentOriginalStat WHERE commitmentId = ?', [
+    commitmentId,
+  ]);
+  return (rows as any[]).map((r) => ({ statId: String(r.statId), delta: Number(r.delta) }));
 }
 
 /* ============================ Resolution ============================ */

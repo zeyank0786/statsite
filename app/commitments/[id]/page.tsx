@@ -24,6 +24,10 @@ interface Detail {
   createdAt: string;
   resolvedAt: string | null;
   isSubject: boolean;
+  adjustedBy: string | null;
+  adjustedAt: string | null;
+  adjustReason: string | null;
+  originalStats: { statId: string; delta: number; code: string; label: string }[];
   stats: {
     statId: string;
     delta: number;
@@ -61,6 +65,9 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
   const [note, setNote] = useState('');
   const [myEvidence, setMyEvidence] = useState<any[]>([]);
   const [attachId, setAttachId] = useState<string | null>(null);
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjustDraft, setAdjustDraft] = useState<Record<string, number>>({});
+  const [adjustReason, setAdjustReason] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState('');
   const [error, setError] = useState('');
@@ -132,6 +139,30 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
       else {
         setNote('');
         setAttachId(null);
+        await load();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitAdjustment = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/commitments/${id}/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stats: Object.entries(adjustDraft).map(([statId, delta]) => ({ statId, delta })),
+          reason: adjustReason.trim() || null,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) setError(d.error || 'Failed to adjust');
+      else {
+        setAdjusting(false);
+        setAdjustReason('');
         await load();
       }
     } finally {
@@ -225,6 +256,22 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
         )}
       </section>
 
+      {/* Reward was re-priced by the crew */}
+      {c.adjustedBy && c.originalStats.length > 0 && (
+        <div className="glass p-4 mb-5 text-sm animate-rise" style={{ borderColor: 'rgba(251,191,36,0.4)' }}>
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--accent-yellow)' }}>
+            Reward adjusted by {c.adjustedBy}
+          </p>
+          <p className="mb-2" style={{ color: 'var(--text-secondary)' }}>
+            Originally asked for:{' '}
+            <span className="text-neutral-300">
+              {c.originalStats.map((o) => `${o.delta > 0 ? '+' : ''}${o.delta} ${o.label}`).join(' · ')}
+            </span>
+          </p>
+          {c.adjustReason && <p className="text-neutral-200 whitespace-pre-wrap break-words">{c.adjustReason}</p>}
+        </div>
+      )}
+
       {/* Withdrawal reason */}
       {c.status === 'withdraw_pending' && c.withdrawReason && (
         <div
@@ -287,6 +334,106 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
               >
                 <XIcon size={15} /> {c.tally.kind === 'withdrawal' ? 'Object' : 'They didn’t'}
               </button>
+            </div>
+          )}
+
+          {/* Re-price the reward: "you did it, but that's not worth +2" */}
+          {c.tally.canVote && c.tally.kind === 'verdict' && (
+            <div className="border-t mt-4 pt-4" style={{ borderColor: 'var(--surface-border)' }}>
+              {adjusting ? (
+                <>
+                  <p className="text-sm font-semibold text-white mb-1">Adjust the reward</p>
+                  <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+                    Set what you think it&apos;s actually worth. Everyone&apos;s votes reset so the crew
+                    judges the new terms — remove every stat if it shouldn&apos;t score at all.
+                  </p>
+                  <div className="space-y-2 mb-3">
+                    {c.stats.map((s) => {
+                      const cm = getCategoryMeta(s.categoryCode, s.categoryLabel);
+                      const current = adjustDraft[s.statId];
+                      const dropped = current === undefined;
+                      return (
+                        <div
+                          key={s.statId}
+                          className="rounded-xl border p-3"
+                          style={{
+                            borderColor: dropped ? 'var(--surface-border)' : `${cm.hex}44`,
+                            background: dropped ? 'transparent' : `${cm.hex}0d`,
+                            opacity: dropped ? 0.5 : 1,
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-sm font-semibold text-white truncate">{s.label}</span>
+                            <button
+                              onClick={() =>
+                                setAdjustDraft((prev) => {
+                                  const next = { ...prev };
+                                  if (dropped) next[s.statId] = s.delta;
+                                  else delete next[s.statId];
+                                  return next;
+                                })
+                              }
+                              className="text-[11px] font-semibold shrink-0 hover:underline"
+                              style={{ color: dropped ? 'var(--accent-green)' : 'var(--accent-red)' }}
+                            >
+                              {dropped ? 'include' : 'drop'}
+                            </button>
+                          </div>
+                          {!dropped && (
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {[-2, -1, 1, 2].map((opt) => {
+                                const on = current === opt;
+                                const color = opt > 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                                return (
+                                  <button
+                                    key={opt}
+                                    onClick={() => setAdjustDraft((prev) => ({ ...prev, [s.statId]: opt }))}
+                                    className={`py-1.5 rounded-lg border font-bold text-sm transition ${
+                                      on ? 'text-white' : 'text-neutral-400 hover:text-white'
+                                    }`}
+                                    style={{
+                                      borderColor: on ? color : 'var(--surface-border)',
+                                      background: on ? `color-mix(in srgb, ${color} 20%, transparent)` : 'transparent',
+                                    }}
+                                  >
+                                    {opt > 0 ? '+' : ''}
+                                    {opt}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <textarea
+                    value={adjustReason}
+                    onChange={(e) => setAdjustReason(e.target.value)}
+                    placeholder="Why? (optional — but it helps to explain)"
+                    className="field resize-none text-sm mb-2"
+                    rows={2}
+                  />
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={submitAdjustment} disabled={busy} className="btn-gradient text-sm py-2">
+                      Propose this reward
+                    </button>
+                    <button onClick={() => setAdjusting(false)} className="btn-ghost text-sm py-2">
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  onClick={() => {
+                    setAdjustDraft(Object.fromEntries(c.stats.map((s) => [s.statId, s.delta])));
+                    setAdjusting(true);
+                  }}
+                  className="btn-ghost text-sm py-2"
+                >
+                  They did it — but adjust the reward
+                </button>
+              )}
             </div>
           )}
         </section>

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { firePush } from '@/lib/push';
-import { ensureCommitmentTables, tallyVotes, resolveWithdrawal } from '@/lib/commitments';
+import { ensureCommitmentTables, tallyVotes, resolveWithdrawal, getOriginalStats } from '@/lib/commitments';
 import { getEligibleVoterIds } from '@/lib/suggestionEngine';
 
 export const dynamic = 'force-dynamic';
@@ -54,6 +54,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ),
     ]);
 
+    // If the reward was re-priced, show what it replaced
+    const originalStats = await getOriginalStats(id);
+    const statLabels = new Map(
+      (stats as any[]).map((s) => [String(s.statId), { label: String(s.label), code: String(s.code) }])
+    );
+    const originalResolved = await Promise.all(
+      originalStats.map(async (o) => {
+        const known = statLabels.get(o.statId);
+        if (known) return { ...o, ...known };
+        const row = await queryOne('SELECT code, label FROM Stat WHERE id = ?', [o.statId]);
+        return { ...o, code: row ? String(row.code) : '?', label: row ? String(row.label) : 'Unknown stat' };
+      })
+    );
+
+    let adjustedBy: string | null = null;
+    if (c.adjustedById) {
+      const p = await queryOne('SELECT username FROM Player WHERE id = ?', [String(c.adjustedById)]);
+      adjustedBy = p ? String(p.username) : null;
+    }
+
     let tally = null;
     if (status === 'awaiting_verdict' || status === 'withdraw_pending') {
       const kind = status === 'withdraw_pending' ? 'withdrawal' : 'verdict';
@@ -86,6 +106,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       createdAt: String(c.createdAt),
       resolvedAt: c.resolvedAt ? String(c.resolvedAt) : null,
       isSubject: subjectId === currentPlayerId,
+      adjustedBy,
+      adjustedAt: c.adjustedAt ? String(c.adjustedAt) : null,
+      adjustReason: c.adjustReason ? String(c.adjustReason) : null,
+      originalStats: originalResolved,
       stats: (stats as any[]).map((s) => ({
         statId: String(s.statId),
         delta: Number(s.delta),
