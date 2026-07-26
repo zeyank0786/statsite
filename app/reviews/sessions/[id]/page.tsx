@@ -8,6 +8,9 @@ import AppShell from '@/components/AppShell';
 import StatDescriptionModal from '@/components/StatDescriptionModal';
 import ScoringRubricModal from '@/components/ScoringRubricModal';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
+import MentionTextarea from '@/components/MentionTextarea';
+import MentionText from '@/components/MentionText';
+import { usePlayers } from '@/lib/usePlayers';
 import { CATEGORY_ORDER, getCategoryMeta, getValueColor } from '@/lib/categories';
 import {
   ChevronLeftIcon,
@@ -54,6 +57,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
   const [joiningRole, setJoiningRole] = useState<string | null>(null);
   const [changes, setChanges] = useState<Record<string, any>>({});
   const [targetPlayerId, setTargetPlayerId] = useState<string>('');
+  const mentionPlayers = usePlayers(status === 'authenticated');
   const [colorCodeEnabled, setColorCodeEnabled] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'total'>('default');
   const [sortAscending, setSortAscending] = useState(true);
@@ -596,10 +600,11 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                           Notes
                         </p>
                         <div className="mb-2.5">
-                          <textarea
+                          <MentionTextarea
                             value={noteInput[stat.statId] || ''}
-                            onChange={(e) => setNoteInput({ ...noteInput, [stat.statId]: e.target.value })}
-                            placeholder="Add a note..."
+                            onChange={(v) => setNoteInput({ ...noteInput, [stat.statId]: v })}
+                            players={mentionPlayers}
+                            placeholder="Add a note... @ to mention"
                             className="field resize-none text-xs py-1.5 px-2"
                             rows={2}
                           />
@@ -674,7 +679,7 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
                                         </div>
                                       )}
                                     </div>
-                                    <p className="text-neutral-400">{note.content}</p>
+                                    <MentionText content={note.content} players={mentionPlayers} className="text-neutral-400 block" />
                                     <p className="text-neutral-500 text-[9px] mt-1">
                                       {new Date(note.createdAt).toLocaleDateString()}{' '}
                                       {new Date(note.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

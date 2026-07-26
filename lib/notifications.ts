@@ -4,6 +4,7 @@ import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from './s
 import { computeAchievements, SocialCounts } from './achievements';
 import { getAllLocks } from './featureLocks';
 import { getNudgesFor, NUDGE_KINDS } from './nudges';
+import { getMentionsFor } from './mentionsServer';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -33,7 +34,8 @@ export interface FeedEvent {
     | 'evidence'
     | 'lockout'
     | 'nudge'
-    | 'commitment';
+    | 'commitment'
+    | 'mention';
   at: string;
   playerId: string;
   playerName: string;
@@ -324,6 +326,25 @@ export async function buildFeed(currentPlayerId: string): Promise<{
     }
   } catch {
     /* nudges degrade gracefully */
+  }
+
+  // @mentions of you, anywhere
+  try {
+    for (const m of await getMentionsFor(currentPlayerId, SOURCE_LIMIT)) {
+      events.push({
+        id: `mention:${m.id}`,
+        type: 'mention',
+        at: m.createdAt,
+        playerId: currentPlayerId,
+        playerName: nameOf(currentPlayerId),
+        title: `💬 ${m.byName} mentioned you`,
+        body: m.snippet || undefined,
+        href: m.url,
+        hex: '#22d3ee',
+      });
+    }
+  } catch {
+    /* mentions degrade gracefully */
   }
 
   // Lockouts — only your own appear in your feed (getAllLocks self-creates the table)

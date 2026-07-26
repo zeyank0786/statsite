@@ -6,6 +6,7 @@ import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
 import { resolveSuggestion, expireStaleSuggestions, getEligibleVoterIds } from '@/lib/suggestionEngine';
 import { featureLockMessage, getPlayersLockedFrom } from '@/lib/featureLocks';
 import { firePush } from '@/lib/push';
+import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -387,6 +388,16 @@ export async function POST(request: Request) {
     } catch (e) {
       console.error('Vote-needed push failed (ignored):', e);
     }
+
+    // @mentions in the reason
+    const proposerRow = await queryOne('SELECT username FROM Player WHERE id = ?', [proposerId]);
+    recordMentions({
+      content: reason.trim(),
+      byId: proposerId,
+      byName: String(proposerRow?.username || 'Someone'),
+      context: 'suggestion',
+      url: '/suggestions',
+    });
 
     return NextResponse.json({ success: true, created, count: created.length });
   } catch (error: any) {

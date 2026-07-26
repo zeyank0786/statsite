@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { queryAll, query } from '@/lib/db';
+import { queryAll, query, queryOne } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -70,6 +71,15 @@ export async function POST(
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [noteId, id, statId, reviewerId, content, now, now]
     );
+
+    const author = await queryOne('SELECT username FROM Player WHERE id = ?', [reviewerId]);
+    recordMentions({
+      content: String(content),
+      byId: String(reviewerId),
+      byName: String(author?.username || 'Someone'),
+      context: 'review',
+      url: `/reviews/sessions/${id}`,
+    });
 
     return NextResponse.json({
       success: true,

@@ -5,6 +5,7 @@ import { queryOne, queryAll } from '@/lib/db';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
 import { getEligibleVoterIds } from '@/lib/suggestionEngine';
+import { recordMentions } from '@/lib/mentionsServer';
 import { ensureCommitmentTables, proposeAdjustment, ALLOWED_DELTAS } from '@/lib/commitments';
 
 export const dynamic = 'force-dynamic';
@@ -102,6 +103,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       stats: parsed,
       reason: reason || null,
     });
+
+    if (reason?.trim()) {
+      const adjuster = await queryOne('SELECT username FROM Player WHERE id = ?', [voterId]);
+      recordMentions({
+        content: String(reason),
+        byId: String(voterId),
+        byName: String(adjuster?.username || 'Someone'),
+        context: 'commitment',
+        url: `/commitments/${id}`,
+      });
+    }
 
     return NextResponse.json({ success: true, adjusted: parsed.length });
   } catch (error: any) {

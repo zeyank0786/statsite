@@ -9,6 +9,9 @@ import Avatar from '@/components/Avatar';
 import { getCategoryMeta } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import { STATUS_META, timeLeft } from '@/components/CommitmentCard';
+import MentionTextarea from '@/components/MentionTextarea';
+import MentionText from '@/components/MentionText';
+import { usePlayers } from '@/lib/usePlayers';
 import { ChevronLeftIcon, CheckIcon, XIcon, ClockIcon, CameraIcon } from '@/components/icons';
 
 interface Detail {
@@ -71,6 +74,7 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState('');
   const [error, setError] = useState('');
+  const players = usePlayers(authStatus === 'authenticated');
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') {
@@ -229,7 +233,7 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         {c.detail && (
-          <p className="text-sm mb-4 whitespace-pre-wrap break-words text-neutral-200">{c.detail}</p>
+          <MentionText content={c.detail} players={players} className="text-sm mb-4 text-neutral-200 block" />
         )}
 
         {c.stats.length > 0 && (
@@ -268,7 +272,7 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
               {c.originalStats.map((o) => `${o.delta > 0 ? '+' : ''}${o.delta} ${o.label}`).join(' · ')}
             </span>
           </p>
-          {c.adjustReason && <p className="text-neutral-200 whitespace-pre-wrap break-words">{c.adjustReason}</p>}
+          {c.adjustReason && <MentionText content={c.adjustReason} players={players} className="text-neutral-200 block" />}
         </div>
       )}
 
@@ -281,7 +285,7 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
           <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent-yellow)' }}>
             Withdrawal requested — every eligible voter must agree
           </p>
-          <p className="text-neutral-200 whitespace-pre-wrap break-words">{c.withdrawReason}</p>
+          <MentionText content={c.withdrawReason} players={players} className="text-neutral-200 block" />
         </div>
       )}
 
@@ -407,10 +411,11 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
                       );
                     })}
                   </div>
-                  <textarea
+                  <MentionTextarea
                     value={adjustReason}
-                    onChange={(e) => setAdjustReason(e.target.value)}
-                    placeholder="Why? (optional — but it helps to explain)"
+                    onChange={setAdjustReason}
+                    players={players}
+                    placeholder="Why? (optional — but it helps to explain). @ to mention"
                     className="field resize-none text-sm mb-2"
                     rows={2}
                   />
@@ -443,10 +448,11 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
       {c.isSubject && (c.status === 'active' || c.status === 'awaiting_verdict') && (
         <section className="glass card-shadow p-5 mb-5 animate-rise">
           <h2 className="font-display text-lg font-bold text-white mb-3">Log progress</h2>
-          <textarea
+          <MentionTextarea
             value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="What did you do?"
+            onChange={setNote}
+            players={players}
+            placeholder="What did you do? @ to mention"
             className="field resize-none text-sm mb-3"
             rows={2}
           />
@@ -496,10 +502,11 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
           </p>
           {withdrawing ? (
             <>
-              <textarea
+              <MentionTextarea
                 value={withdrawReason}
-                onChange={(e) => setWithdrawReason(e.target.value)}
-                placeholder="What happened? The crew has to agree unanimously."
+                onChange={setWithdrawReason}
+                players={players}
+                placeholder="What happened? The crew has to agree unanimously. @ to mention"
                 className="field resize-none text-sm mb-2"
                 rows={3}
               />
@@ -580,7 +587,7 @@ export default function CommitmentDetailPage({ params }: { params: Promise<{ id:
                   />
                 )}
                 <div className="min-w-0 flex-1">
-                  {ci.note && <p className="text-sm text-neutral-200 whitespace-pre-wrap break-words">{ci.note}</p>}
+                  {ci.note && <MentionText content={ci.note} players={players} className="text-sm text-neutral-200 block" />}
                   {ci.evidence?.caption && !ci.note && (
                     <p className="text-sm text-neutral-300 italic">{ci.evidence.caption}</p>
                   )}

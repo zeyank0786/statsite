@@ -12,6 +12,7 @@ import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import TierBadge from '@/components/TierBadge';
+import MentionTextarea from '@/components/MentionTextarea';
 import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 import { ChevronLeftIcon, CheckIcon, ImageIcon, XIcon } from '@/components/icons';
 
@@ -642,12 +643,13 @@ function NewSuggestionContent() {
             </div>
 
             <label className="block text-sm font-semibold text-white mb-2">Reason (required)</label>
-            <textarea
+            <MentionTextarea
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={setReason}
+              players={players}
               className="field resize-none"
               rows={3}
-              placeholder="Why does the evidence / what you witnessed justify these changes?"
+              placeholder="Why does the evidence / what you witnessed justify these changes? @ to mention"
             />
 
             {error && (

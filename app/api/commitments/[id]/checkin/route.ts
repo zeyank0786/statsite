@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne } from '@/lib/db';
 import { featureLockMessage } from '@/lib/featureLocks';
+import { recordMentions } from '@/lib/mentionsServer';
 import { ensureCommitmentTables } from '@/lib/commitments';
 import { v4 as uuid } from 'uuid';
 
@@ -54,6 +55,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       'INSERT INTO CommitmentCheckIn (id, commitmentId, evidenceId, note, createdAt) VALUES (?, ?, ?, ?, ?)',
       [checkInId, id, evidenceId || null, note?.trim() || null, new Date().toISOString()]
     );
+
+    if (note?.trim()) {
+      const author = await queryOne('SELECT username FROM Player WHERE id = ?', [playerId]);
+      recordMentions({
+        content: String(note),
+        byId: String(playerId),
+        byName: String(author?.username || 'Someone'),
+        context: 'checkin',
+        url: `/commitments/${id}`,
+      });
+    }
 
     return NextResponse.json({ success: true, id: checkInId });
   } catch (error: any) {

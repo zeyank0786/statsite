@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { firePush } from '@/lib/push';
+import { recordMentions } from '@/lib/mentionsServer';
 import { ensureCommitmentTables, tallyVotes, resolveWithdrawal, getOriginalStats } from '@/lib/commitments';
 import { getEligibleVoterIds } from '@/lib/suggestionEngine';
 
@@ -207,6 +208,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         body: `"${String(c.title)}" — needs everyone to agree. Reason: ${reason.trim()}`,
         url: `/commitments/${id}`,
         tag: `commitment-withdraw-${id}`,
+      });
+      recordMentions({
+        content: reason.trim(),
+        byId: playerId,
+        byName: String(subject?.username || 'Someone'),
+        context: 'commitment',
+        url: `/commitments/${id}`,
       });
 
       // No eligible voters at all → nothing to be unanimous about

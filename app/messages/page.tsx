@@ -10,6 +10,8 @@ import Avatar from '@/components/Avatar';
 import { getUserColorHex, getUserColorBg } from '@/lib/userColors';
 import { CATEGORY_ORDER, getCategoryMeta, orderStats, categoryCodeOfStat } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
+import MentionTextarea from '@/components/MentionTextarea';
+import MentionText from '@/components/MentionText';
 import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 import {
   XIcon,
@@ -136,6 +138,7 @@ function MessagesContent() {
     }
     if (status === 'authenticated') {
       loadMessages();
+      loadPlayers(); // needed to render + autocomplete @mentions
       const interval = setInterval(loadMessages, 5000);
       return () => clearInterval(interval);
     }
@@ -388,10 +391,11 @@ function MessagesContent() {
         <div className="flex gap-3">
           {currentPlayerId && <Avatar id={currentPlayerId} name={currentPlayerName} size={38} />}
           <div className="flex-1 min-w-0">
-            <textarea
+            <MentionTextarea
               value={messageContent}
-              onChange={(e) => setMessageContent(e.target.value)}
-              placeholder="Share an update, celebrate a win, call your shot..."
+              onChange={setMessageContent}
+              players={players}
+              placeholder="Share an update, celebrate a win, call your shot... @ to mention"
               className="field resize-none"
               rows={3}
             />
@@ -826,9 +830,11 @@ function MessagesContent() {
                     </div>
                   ) : (
                     <>
-                      <p className="text-[15px] text-neutral-200 whitespace-pre-wrap break-words leading-relaxed">
-                        {message.content}
-                      </p>
+                      <MentionText
+                        content={message.content}
+                        players={players}
+                        className="text-[15px] text-neutral-200 leading-relaxed block"
+                      />
 
                       {/* Evidence embeds */}
                       {message.evidenceRefs && message.evidenceRefs.length > 0 && (
@@ -963,19 +969,22 @@ function MessagesContent() {
                                 {new Date(reply.createdAt).toLocaleDateString()}
                               </span>
                             </div>
-                            <p className="text-sm text-neutral-300 mt-0.5 whitespace-pre-wrap break-words">
-                              {reply.content}
-                            </p>
+                            <MentionText
+                              content={reply.content}
+                              players={players}
+                              className="text-sm text-neutral-300 mt-0.5 block"
+                            />
                           </div>
                         </div>
                       ))}
 
                       {replyingTo === message.id && (
                         <div className="pt-3">
-                          <textarea
+                          <MentionTextarea
                             value={replyContent[message.id] || ''}
-                            onChange={(e) => setReplyContent({ ...replyContent, [message.id]: e.target.value })}
-                            placeholder="Write a reply..."
+                            onChange={(v) => setReplyContent({ ...replyContent, [message.id]: v })}
+                            players={players}
+                            placeholder="Write a reply... @ to mention"
                             className="field resize-none text-sm mb-2"
                             rows={2}
                             autoFocus

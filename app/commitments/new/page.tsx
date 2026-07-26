@@ -8,6 +8,8 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 import LockBadge from '@/components/LockBadge';
+import MentionTextarea from '@/components/MentionTextarea';
+import { usePlayers } from '@/lib/usePlayers';
 import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
 import { ChevronLeftIcon, CheckIcon, XIcon } from '@/components/icons';
 
@@ -43,6 +45,7 @@ export default function NewCommitmentPage() {
   const { status, data: session } = useSession();
   const router = useRouter();
   const myLockouts = useMyLockouts(status === 'authenticated');
+  const players = usePlayers(status === 'authenticated');
 
   const [title, setTitle] = useState('');
   const [detail, setDetail] = useState('');
@@ -157,10 +160,11 @@ export default function NewCommitmentPage() {
           />
 
           <label className="block text-sm font-semibold text-white mb-2">Detail (optional)</label>
-          <textarea
+          <MentionTextarea
             value={detail}
-            onChange={(e) => setDetail(e.target.value)}
-            placeholder="What exactly counts as done? Be specific — the crew judges this."
+            onChange={setDetail}
+            players={players}
+            placeholder="What exactly counts as done? Be specific — the crew judges this. @ to mention"
             className="field resize-none text-sm"
             rows={3}
           />

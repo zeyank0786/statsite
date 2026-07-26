@@ -10,6 +10,9 @@ import Avatar from '@/components/Avatar';
 import { getCategoryMeta } from '@/lib/categories';
 import { cldImage, cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
+import AddStatToSuggestion from '@/components/AddStatToSuggestion';
+import MentionText from '@/components/MentionText';
+import { usePlayers } from '@/lib/usePlayers';
 import { PlusIcon, CheckIcon, XIcon, ImageIcon, ChevronDownIcon } from '@/components/icons';
 
 interface EvidenceRef {
@@ -28,6 +31,7 @@ interface Suggestion {
   subjectName: string;
   proposerId: string;
   proposerName: string;
+  statId: string;
   statCode: string;
   statLabel: string;
   categoryCode: string;
@@ -96,6 +100,7 @@ export default function SuggestionsPage() {
   const { status } = useSession();
   const router = useRouter();
   const myLockouts = useMyLockouts(status === 'authenticated');
+  const players = usePlayers(status === 'authenticated');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'pending' | 'resolved'>('pending');
@@ -299,6 +304,25 @@ export default function SuggestionsPage() {
             const isOpen = expanded.has(batch.key);
             const groupVotable = batch.items.filter((s) => s.canVote && s.yourVote === null);
             const anyPending = batch.items.some((s) => s.status === 'pending');
+            // An eligible voter (not the subject, not suggest-locked) can add a
+            // stat the proposer missed while the batch is still live.
+            const canAddStats =
+              anyPending &&
+              !first.isSubject &&
+              batch.items.some((s) => s.status === 'pending' && s.canVote) &&
+              !('suggest' in myLockouts);
+            const addAnchorId = (batch.items.find((s) => s.status === 'pending') || first).id;
+            const existingStatIds = batch.items.map((s) => s.statId);
+
+            const addStatControl = canAddStats ? (
+              <AddStatToSuggestion
+                anchorId={addAnchorId}
+                subjectId={first.subjectId}
+                subjectName={first.subjectName}
+                existingStatIds={existingStatIds}
+                onAdded={loadSuggestions}
+              />
+            ) : null;
 
             return (
               <article
@@ -337,7 +361,7 @@ export default function SuggestionsPage() {
                 </div>
 
                 <p className="text-sm italic mb-3" style={{ color: 'var(--text-secondary)' }}>
-                  "{first.reason}"
+                  &quot;<MentionText content={first.reason} players={players} />&quot;
                 </p>
 
                 {first.testimony && (
@@ -475,16 +499,20 @@ export default function SuggestionsPage() {
                         ⏳ Waiting on: <span className="text-neutral-300 font-medium">{first.waitingOn.join(', ')}</span>
                       </p>
                     )}
+                    {addStatControl}
                   </>
                 ) : (
-                  <SingleSuggestionBody
-                    sg={first}
-                    voting={voting}
-                    onVote={handleVote}
-                    selectMode={selectMode}
-                    selected={selected.has(first.id)}
-                    onToggleSelect={() => toggleSelected(first.id)}
-                  />
+                  <>
+                    <SingleSuggestionBody
+                      sg={first}
+                      voting={voting}
+                      onVote={handleVote}
+                      selectMode={selectMode}
+                      selected={selected.has(first.id)}
+                      onToggleSelect={() => toggleSelected(first.id)}
+                    />
+                    {addStatControl}
+                  </>
                 )}
               </article>
             );

@@ -5,6 +5,7 @@ import { query, queryOne, queryAll } from '@/lib/db';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
 import { firePush } from '@/lib/push';
+import { recordMentions } from '@/lib/mentionsServer';
 import {
   ensureCommitmentTables,
   sweepDeadlines,
@@ -249,6 +250,15 @@ export async function POST(request: Request) {
       body: title.trim(),
       url: `/commitments/${id}`,
       tag: `commitment-${id}`,
+    });
+
+    // @mentions in the title/detail
+    recordMentions({
+      content: `${title.trim()} ${detail?.trim() || ''}`,
+      byId: playerId,
+      byName: String(subject?.username || 'Someone'),
+      context: 'commitment',
+      url: `/commitments/${id}`,
     });
 
     return NextResponse.json({ success: true, id });

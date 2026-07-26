@@ -3,6 +3,7 @@ import { queryAll, query, queryOne } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { featureLockMessage } from '@/lib/featureLocks';
+import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -162,6 +163,16 @@ export async function POST(request: Request) {
         );
       }
     }
+
+    // @mentions in the body → notify + record for the bell
+    const author = await queryOne('SELECT username FROM Player WHERE id = ?', [authorId]);
+    recordMentions({
+      content: String(content),
+      byId: String(authorId),
+      byName: String(author?.username || 'Someone'),
+      context: 'message',
+      url: '/messages',
+    });
 
     return NextResponse.json({
       success: true,
