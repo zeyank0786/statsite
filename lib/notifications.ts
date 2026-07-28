@@ -5,6 +5,7 @@ import { computeAchievements, SocialCounts } from './achievements';
 import { getAllLocks } from './featureLocks';
 import { getNudgesFor, NUDGE_KINDS } from './nudges';
 import { getMentionsFor } from './mentionsServer';
+import { getReminderFiresFor } from './reminders';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -35,7 +36,8 @@ export interface FeedEvent {
     | 'lockout'
     | 'nudge'
     | 'commitment'
-    | 'mention';
+    | 'mention'
+    | 'reminder';
   at: string;
   playerId: string;
   playerName: string;
@@ -345,6 +347,25 @@ export async function buildFeed(currentPlayerId: string): Promise<{
     }
   } catch {
     /* mentions degrade gracefully */
+  }
+
+  // Reminders that fired for you
+  try {
+    for (const rf of await getReminderFiresFor(currentPlayerId, SOURCE_LIMIT)) {
+      events.push({
+        id: `reminder:${rf.id}`,
+        type: 'reminder',
+        at: rf.firedAt,
+        playerId: currentPlayerId,
+        playerName: nameOf(currentPlayerId),
+        title: `⏰ ${rf.title}`,
+        body: rf.body || undefined,
+        href: '/reminders',
+        hex: '#38bdf8',
+      });
+    }
+  } catch {
+    /* reminders degrade gracefully */
   }
 
   // Lockouts — only your own appear in your feed (getAllLocks self-creates the table)

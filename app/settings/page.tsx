@@ -3,10 +3,11 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import PushToggle from '@/components/PushToggle';
-import { EyeIcon, EyeOffIcon, CheckIcon } from '@/components/icons';
+import { EyeIcon, EyeOffIcon, CheckIcon, BellIcon, ChevronRightIcon } from '@/components/icons';
 
 function PasswordField({
   label,
@@ -199,6 +200,22 @@ export default function SettingsPage() {
       </div>
 
       <PushToggle />
+
+      <Link
+        href="/reminders"
+        className="glass card-shadow glass-hover p-5 max-w-2xl mt-5 flex items-center gap-4 group"
+      >
+        <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 shrink-0">
+          <BellIcon size={20} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white">Custom reminders</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+            Schedule your own push reminders — daily, weekly, monthly, or one-off.
+          </p>
+        </div>
+        <ChevronRightIcon size={18} className="text-neutral-500 group-hover:text-white transition" />
+      </Link>
     </AppShell>
   );
 }

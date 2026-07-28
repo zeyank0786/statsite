@@ -26,6 +26,7 @@ import {
   CameraIcon,
   AwardIcon,
   HandIcon,
+  BellIcon,
 } from './icons';
 
 interface NavItem {
@@ -47,6 +48,7 @@ const PRIMARY_NAV: NavItem[] = [
 
 const MORE_NAV: NavItem[] = [
   { href: '/commitments', label: 'Commitments', icon: HandIcon },
+  { href: '/reminders', label: 'Reminders', icon: BellIcon },
   { href: '/achievements', label: 'Achievements', icon: AwardIcon },
   { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
   { href: '/targets', label: 'Targets', icon: TargetIcon },
@@ -64,6 +66,7 @@ const MOBILE_TABS: NavItem[] = [
 
 const MOBILE_MORE: NavItem[] = [
   { href: '/commitments', label: 'Commitments', icon: HandIcon },
+  { href: '/reminders', label: 'Reminders', icon: BellIcon },
   { href: '/players', label: 'Players', icon: UsersIcon },
   { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/achievements', label: 'Achievements', icon: AwardIcon },

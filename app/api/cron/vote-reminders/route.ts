@@ -3,6 +3,7 @@ import { query, queryAll, queryOne } from '@/lib/db';
 import { getEligibleVoterIds } from '@/lib/suggestionEngine';
 import { sendPushToPlayers } from '@/lib/push';
 import { runCommitmentUpkeep } from '@/lib/commitments';
+import { runDueReminders } from '@/lib/reminders';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,16 @@ export async function GET(request: Request) {
     console.error('Commitment upkeep failed (vote reminders continue):', e);
   }
 
+  // Custom reminders ride along too — a once-a-day backstop for the free
+  // external cron that handles time-of-day precision. Dedup makes the overlap
+  // harmless. A failure here must not stop vote reminders.
+  let reminders: { checked: number; fired: number } | null = null;
+  try {
+    reminders = await runDueReminders();
+  } catch (e) {
+    console.error('Reminder upkeep failed (vote reminders continue):', e);
+  }
+
   try {
     await ensureTable();
     const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
@@ -59,7 +70,7 @@ export async function GET(request: Request) {
       [cutoff]
     );
     if (pending.length === 0) {
-      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments });
+      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments, reminders });
     }
 
     const votes = await queryAll('SELECT suggestionId, userId FROM Vote');
@@ -118,6 +129,7 @@ export async function GET(request: Request) {
       owed: owedBy.size,
       reminded,
       commitments,
+      reminders,
     });
   } catch (error: any) {
     console.error('Vote reminder cron failed:', error);
