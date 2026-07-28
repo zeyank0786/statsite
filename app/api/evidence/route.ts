@@ -5,6 +5,7 @@ import { query, queryOne, queryAll } from '@/lib/db';
 import { destroyCloudinaryAsset } from '@/lib/cloudinaryServer';
 import { firePush } from '@/lib/push';
 import { featureLockMessage } from '@/lib/featureLocks';
+import { getFolderTagsByEvidence, setEvidenceFolders } from '@/lib/evidenceFolders';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +49,8 @@ export async function GET() {
       });
     }
 
+    const foldersByEvidence = await getFolderTagsByEvidence();
+
     return NextResponse.json(
       (posts as any[]).map((post) => ({
         id: String(post.id),
@@ -59,6 +62,7 @@ export async function GET() {
         caption: post.caption || null,
         captionHidden: Boolean(Number(post.captionHidden)),
         categories: tagsByEvidence.get(String(post.id)) || [],
+        folders: foldersByEvidence.get(String(post.id)) || [],
         suggestionCount: Number(post.suggestionCount),
         isOwn: String(post.playerId) === playerId,
         createdAt: post.createdAt,
@@ -154,7 +158,7 @@ export async function PATCH(request: Request) {
     const lockMsg = await featureLockMessage(playerId, 'evidence');
     if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
-    const { evidenceId, caption, captionHidden, categoryIds } = await request.json();
+    const { evidenceId, caption, captionHidden, categoryIds, folderIds } = await request.json();
     if (!evidenceId) return NextResponse.json({ error: 'evidenceId required' }, { status: 400 });
 
     const post = await queryOne('SELECT playerId FROM Evidence WHERE id = ?', [evidenceId]);
@@ -183,6 +187,10 @@ export async function PATCH(request: Request) {
       for (const categoryId of [...new Set(categoryIds as string[])]) {
         await query('INSERT INTO EvidenceCategory (evidenceId, categoryId) VALUES (?, ?)', [evidenceId, categoryId]);
       }
+    }
+    // Folder membership — replaces the set; only the owner's own folders count.
+    if (Array.isArray(folderIds)) {
+      await setEvidenceFolders(String(evidenceId), playerId, folderIds as string[]);
     }
 
     return NextResponse.json({ success: true });

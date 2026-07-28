@@ -10,6 +10,7 @@ import Avatar from '@/components/Avatar';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, CATEGORY_ORDER } from '@/lib/categories';
 import { CrownIcon, TrendUpIcon, TrendDownIcon, AwardIcon, ZapIcon } from '@/components/icons';
+import CountUp from '@/components/CountUp';
 
 interface LeaderboardPlayer {
   id: string;
@@ -131,7 +132,7 @@ export default function LeaderboardPage() {
                     )}
                   </p>
                   <p className="font-display text-4xl font-bold mt-2" style={{ color: hex }}>
-                    {player.overall.toFixed(1)}
+                    <CountUp value={player.overall} decimals={1} />
                   </p>
                   {(player.streakWeeks ?? 0) > 0 && (
                     <p

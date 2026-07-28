@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { resolveSuggestion } from '@/lib/suggestionEngine';
+import { resolveSuggestion, notifyApprovedChanges } from '@/lib/suggestionEngine';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
@@ -59,6 +59,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const resolution = await resolveSuggestion(id);
+    // If this vote just tipped it over, tell the subject (awaited so it sends).
+    if (resolution?.applied) {
+      await notifyApprovedChanges(resolution.applied.playerId, [resolution.applied]);
+    }
     return NextResponse.json({ success: true, resolution });
   } catch (error: any) {
     console.error('Error voting on suggestion:', error);

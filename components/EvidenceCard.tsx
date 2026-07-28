@@ -150,6 +150,21 @@ export default function EvidenceCard({
 
         <div className="flex flex-wrap gap-1.5 mb-3 items-center">
           <CategoryTags post={post} max={compact ? 3 : undefined} />
+          {post.folders.slice(0, compact ? 1 : 3).map((f) => (
+            <span
+              key={f.id}
+              className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+              style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)' }}
+              title={`Folder: ${f.name}${post.isOwn ? '' : ` (${f.ownerName})`}`}
+            >
+              📁 {f.name}
+            </span>
+          ))}
+          {post.folders.length > (compact ? 1 : 3) && (
+            <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+              +{post.folders.length - (compact ? 1 : 3)}
+            </span>
+          )}
           {!showAuthor && (
             <span className="text-[10px] ml-auto" style={{ color: 'var(--text-secondary)' }}>
               {relativeTime(post.createdAt)}

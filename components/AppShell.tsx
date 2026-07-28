@@ -27,6 +27,8 @@ import {
   AwardIcon,
   HandIcon,
   BellIcon,
+  StarIcon,
+  SparklesIcon,
 } from './icons';
 
 interface NavItem {
@@ -52,6 +54,8 @@ const MORE_NAV: NavItem[] = [
   { href: '/achievements', label: 'Achievements', icon: AwardIcon },
   { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
   { href: '/targets', label: 'Targets', icon: TargetIcon },
+  { href: '/ambitions', label: 'Ambitions', icon: StarIcon },
+  { href: '/wrapped', label: 'Wrapped', icon: SparklesIcon },
   { href: '/compare', label: 'Compare', icon: CompareIcon },
   { href: '/history', label: 'History', icon: ClockIcon },
   { href: '/admin', label: 'Admin', icon: ShieldIcon, adminOnly: true },
@@ -73,6 +77,8 @@ const MOBILE_MORE: NavItem[] = [
   { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
   { href: '/compare', label: 'Compare', icon: CompareIcon },
   { href: '/targets', label: 'Targets', icon: TargetIcon },
+  { href: '/ambitions', label: 'Ambitions', icon: StarIcon },
+  { href: '/wrapped', label: 'Wrapped', icon: SparklesIcon },
   { href: '/history', label: 'History', icon: ClockIcon },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
   { href: '/admin', label: 'Admin', icon: ShieldIcon, adminOnly: true },

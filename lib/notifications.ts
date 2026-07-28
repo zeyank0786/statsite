@@ -6,6 +6,8 @@ import { getAllLocks } from './featureLocks';
 import { getNudgesFor, NUDGE_KINDS } from './nudges';
 import { getMentionsFor } from './mentionsServer';
 import { getReminderFiresFor } from './reminders';
+import { getRecentBroadcasts } from './broadcasts';
+import { getRecentCompletions } from './ambitions';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -37,7 +39,9 @@ export interface FeedEvent {
     | 'nudge'
     | 'commitment'
     | 'mention'
-    | 'reminder';
+    | 'reminder'
+    | 'broadcast'
+    | 'ambition';
   at: string;
   playerId: string;
   playerName: string;
@@ -366,6 +370,45 @@ export async function buildFeed(currentPlayerId: string): Promise<{
     }
   } catch {
     /* reminders degrade gracefully */
+  }
+
+  // Ambition completions — a crew-wide moment everyone sees
+  try {
+    for (const a of await getRecentCompletions(SOURCE_LIMIT)) {
+      const pid = a.playerId;
+      events.push({
+        id: `ambition:${a.id}`,
+        type: 'ambition',
+        at: a.completedAt || a.updatedAt,
+        playerId: pid,
+        playerName: nameOf(pid),
+        title: `🎉 ${nameOf(pid)} completed an ambition!`,
+        body: a.title,
+        href: '/ambitions',
+        hex: '#f5c451',
+      });
+    }
+  } catch {
+    /* ambitions degrade gracefully */
+  }
+
+  // Admin broadcasts — global announcements everyone sees
+  try {
+    for (const b of await getRecentBroadcasts(SOURCE_LIMIT)) {
+      events.push({
+        id: `broadcast:${b.id}`,
+        type: 'broadcast',
+        at: b.createdAt,
+        playerId: b.createdById || '',
+        playerName: b.createdByName || 'Admin',
+        title: `📢 ${b.title}`,
+        body: b.body || undefined,
+        href: b.url || undefined,
+        hex: '#f59e0b',
+      });
+    }
+  } catch {
+    /* broadcasts degrade gracefully */
   }
 
   // Lockouts — only your own appear in your feed (getAllLocks self-creates the table)

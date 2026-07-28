@@ -4,8 +4,8 @@ import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { featureLockMessage, getPlayersLockedFrom } from '@/lib/featureLocks';
 import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
-import { getEligibleVoterIds, resolveSuggestion } from '@/lib/suggestionEngine';
-import { firePush } from '@/lib/push';
+import { getEligibleVoterIds, resolveSuggestion, notifyApprovedChanges } from '@/lib/suggestionEngine';
+import { sendPushToPlayers } from '@/lib/push';
 import { v4 as uuid } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -148,7 +148,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const notify = [subjectId, ...eligible].filter(
       (pid) => pid !== String(adderId) && !voteLocked.has(pid)
     );
-    firePush([...new Set(notify)], {
+    await sendPushToPlayers([...new Set(notify)], {
       title: 'Stat added to a suggestion',
       body: `${String(adder?.username || 'Someone')} added ${Number(delta) > 0 ? '+' : ''}${Number(
         delta
@@ -156,6 +156,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       url: '/suggestions',
       tag: `suggestion-batch-${batchId}`,
     });
+
+    // If adding it immediately cleared the threshold, tell the subject.
+    if (resolution?.applied) {
+      await notifyApprovedChanges(resolution.applied.playerId, [resolution.applied]);
+    }
 
     return NextResponse.json({ success: true, id: newId, resolution });
   } catch (error: any) {

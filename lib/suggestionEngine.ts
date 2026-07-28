@@ -2,7 +2,7 @@ import { query, queryOne, queryAll } from './db';
 import { announceStatMilestones } from './milestones';
 import { getPlayersLockedFrom } from './featureLocks';
 import { getStatTier } from './categories';
-import { firePush } from './push';
+import { sendPushToPlayers } from './push';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -38,6 +38,7 @@ export async function expireStaleSuggestions(): Promise<number> {
     [cutoff]
   );
   let resolved = 0;
+  const approvedBySubject = new Map<string, ApprovedChange[]>();
   for (const suggestion of stale as any[]) {
     const eligibleIds = new Set(await getEligibleVoterIds(String(suggestion.playerId)));
     const votes = await queryAll('SELECT userId, choice FROM Vote WHERE suggestionId = ?', [String(suggestion.id)]);
@@ -51,12 +52,15 @@ export async function expireStaleSuggestions(): Promise<number> {
 
     const now = new Date().toISOString();
     if (yes > no) {
-      await applyApproval(suggestion, now);
+      const applied = await applyApproval(suggestion, now);
       await query("UPDATE Suggestion SET status = 'approved', resolvedAt = ?, updatedAt = ? WHERE id = ?", [
         now,
         now,
         String(suggestion.id),
       ]);
+      const list = approvedBySubject.get(applied.playerId) || [];
+      list.push(applied);
+      approvedBySubject.set(applied.playerId, list);
     } else {
       await query("UPDATE Suggestion SET status = 'rejected', resolvedAt = ?, updatedAt = ? WHERE id = ?", [
         now,
@@ -65,6 +69,11 @@ export async function expireStaleSuggestions(): Promise<number> {
       ]);
     }
     resolved++;
+  }
+
+  // One batched push per subject for everything that expired in their favour.
+  for (const [pid, changes] of approvedBySubject) {
+    await notifyApprovedChanges(pid, changes);
   }
   return resolved;
 }
@@ -75,6 +84,66 @@ export interface ResolutionResult {
   noVotes: number;
   eligibleCount: number;
   votesNeeded: number;
+  /** Present only when this call just approved the suggestion and moved a stat. */
+  applied?: ApprovedChange;
+}
+
+/** What an approval actually did to a stat — used to batch the subject's push. */
+export interface ApprovedChange {
+  playerId: string;
+  statId: string;
+  statLabel: string;
+  delta: number;
+  oldValue: number;
+  newValue: number;
+  rankedUp: boolean;
+  newTierName: string;
+}
+
+/**
+ * Tell the subject their crew-approved changes landed. Deliberately ONE push
+ * per resolution event rather than one per stat: a batch of approvals (e.g. a
+ * multi-stat proposal that resolves at once) collapses to a single summary.
+ * Tier-ups are the rare loud moment, so each still gets its own celebratory
+ * push on top of the summary. Awaited so it actually sends before a serverless
+ * function returns (fire-and-forget gets killed with the response).
+ */
+export async function notifyApprovedChanges(playerId: string, changes: ApprovedChange[]): Promise<void> {
+  if (!playerId || changes.length === 0) return;
+  try {
+    if (changes.length === 1) {
+      const c = changes[0];
+      await sendPushToPlayers([playerId], {
+        title: c.rankedUp ? `🏆 ${c.newTierName}!` : `${c.statLabel} ${c.delta > 0 ? '+' : ''}${c.delta}`,
+        body: c.rankedUp
+          ? `${c.statLabel} reached ${c.newTierName} — now ${c.newValue} pts.`
+          : `${c.oldValue} → ${c.newValue} pts, approved by the crew.`,
+        url: `/players/${playerId}`,
+        tag: `stat-${c.statId}`,
+      });
+      return;
+    }
+
+    const summary = changes.map((c) => `${c.delta > 0 ? '+' : ''}${c.delta} ${c.statLabel}`).join(', ');
+    await sendPushToPlayers([playerId], {
+      title: `✅ ${changes.length} stat changes approved`,
+      body: summary.length > 150 ? `${summary.slice(0, 149)}…` : summary,
+      url: `/players/${playerId}`,
+      tag: `approved-batch-${playerId}`,
+    });
+
+    // Call out each tier-up separately — a milestone shouldn't hide inside a list.
+    for (const c of changes.filter((c) => c.rankedUp)) {
+      await sendPushToPlayers([playerId], {
+        title: `🏆 ${c.newTierName}!`,
+        body: `${c.statLabel} reached ${c.newTierName} — now ${c.newValue} pts.`,
+        url: `/players/${playerId}`,
+        tag: `tier-${c.statId}`,
+      });
+    }
+  } catch (e) {
+    console.error('Approved-changes push failed (ignored):', e);
+  }
 }
 
 export async function getEligibleVoterIds(subjectPlayerId: string): Promise<string[]> {
@@ -134,12 +203,13 @@ export async function resolveSuggestion(suggestionId: string): Promise<Resolutio
   const now = new Date().toISOString();
 
   if (yesVotes >= majority) {
-    await applyApproval(suggestion, now);
+    const applied = await applyApproval(suggestion, now);
     await query(
       "UPDATE Suggestion SET status = 'approved', resolvedAt = ?, updatedAt = ? WHERE id = ?",
       [now, now, suggestionId]
     );
     result.status = 'approved';
+    result.applied = applied;
     return result;
   }
 
@@ -158,7 +228,7 @@ export async function resolveSuggestion(suggestionId: string): Promise<Resolutio
   return result;
 }
 
-async function applyApproval(suggestion: any, now: string) {
+async function applyApproval(suggestion: any, now: string): Promise<ApprovedChange> {
   const statId = String(suggestion.statId);
   const playerId = String(suggestion.playerId);
   const delta = Number(suggestion.delta);
@@ -199,23 +269,12 @@ async function applyApproval(suggestion: any, now: string) {
     console.error('Milestone announcement failed (stat change still applied):', e);
   }
 
-  // Tell the subject their stat moved (fire-and-forget; a tier-up gets the
-  // louder headline since it's the rarer moment).
-  try {
-    const stat = await queryOne('SELECT label FROM Stat WHERE id = ?', [statId]);
-    const label = stat ? String(stat.label) : 'A stat';
-    const oldTier = getStatTier(oldValue);
-    const newTier = getStatTier(newValue);
-    const rankedUp = newValue > oldValue && newTier.name !== oldTier.name;
-    firePush([playerId], {
-      title: rankedUp ? `🏆 ${newTier.name}!` : `${label} ${delta > 0 ? '+' : ''}${delta}`,
-      body: rankedUp
-        ? `${label} reached ${newTier.name} — now ${newValue} pts.`
-        : `${oldValue} → ${newValue} pts, approved by the crew.`,
-      url: `/players/${playerId}`,
-      tag: `stat-${statId}`,
-    });
-  } catch (e) {
-    console.error('Stat-change push failed (ignored):', e);
-  }
+  // Describe what changed; the caller batches these into the subject's push
+  // (see notifyApprovedChanges) so a multi-stat approval is one notification.
+  const stat = await queryOne('SELECT label FROM Stat WHERE id = ?', [statId]);
+  const statLabel = stat ? String(stat.label) : 'A stat';
+  const oldTier = getStatTier(oldValue);
+  const newTier = getStatTier(newValue);
+  const rankedUp = newValue > oldValue && newTier.name !== oldTier.name;
+  return { playerId, statId, statLabel, delta, oldValue, newValue, rankedUp, newTierName: newTier.name };
 }

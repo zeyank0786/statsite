@@ -4,6 +4,7 @@ import { getEligibleVoterIds } from '@/lib/suggestionEngine';
 import { sendPushToPlayers } from '@/lib/push';
 import { runCommitmentUpkeep } from '@/lib/commitments';
 import { runDueReminders } from '@/lib/reminders';
+import { maybeAnnounceNewSeason } from '@/lib/wrapped';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,14 @@ export async function GET(request: Request) {
     console.error('Reminder upkeep failed (vote reminders continue):', e);
   }
 
+  // Once a quarter rolls over, announce that Season Wrapped is ready.
+  let wrapped: { announced: boolean; season: string } | null = null;
+  try {
+    wrapped = await maybeAnnounceNewSeason();
+  } catch (e) {
+    console.error('Season Wrapped announce failed (vote reminders continue):', e);
+  }
+
   try {
     await ensureTable();
     const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
@@ -70,7 +79,7 @@ export async function GET(request: Request) {
       [cutoff]
     );
     if (pending.length === 0) {
-      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments, reminders });
+      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments, reminders, wrapped });
     }
 
     const votes = await queryAll('SELECT suggestionId, userId FROM Vote');
@@ -130,6 +139,7 @@ export async function GET(request: Request) {
       reminded,
       commitments,
       reminders,
+      wrapped,
     });
   } catch (error: any) {
     console.error('Vote reminder cron failed:', error);

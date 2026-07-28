@@ -8,6 +8,10 @@ import AppShell from '@/components/AppShell';
 import RadarChart from '@/components/RadarChart';
 import Sparkline from '@/components/Sparkline';
 import AchievementBadge, { AchievementData } from '@/components/AchievementBadge';
+import AmbitionCelebration from '@/components/AmbitionCelebration';
+import CountUp from '@/components/CountUp';
+import ActivityTicker from '@/components/ActivityTicker';
+import WrappedBanner from '@/components/WrappedBanner';
 import {
   orderCategories,
   getCategoryMeta,
@@ -118,6 +122,15 @@ export default function Dashboard() {
 
   return (
     <AppShell>
+      {/* Crew-wide ambition takeover (only renders when one is live) */}
+      <AmbitionCelebration />
+
+      {/* Season Wrapped prompt (only when a fresh one is unseen) */}
+      <WrappedBanner />
+
+      {/* Live crew activity ticker */}
+      <ActivityTicker />
+
       {/* ===== Hero ===== */}
       <section className="relative overflow-hidden glass card-shadow-lg p-6 md:p-10 mb-6 animate-rise">
         <div
@@ -142,7 +155,7 @@ export default function Dashboard() {
                   Overall Score
                 </p>
                 <p className="font-display text-6xl md:text-7xl font-bold text-gradient leading-none">
-                  {overall ? overall.toFixed(1) : '—'}
+                  {overall ? <CountUp value={overall} decimals={1} /> : '—'}
                 </p>
               </div>
 

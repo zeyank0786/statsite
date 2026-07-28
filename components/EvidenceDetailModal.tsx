@@ -6,9 +6,9 @@ import Link from 'next/link';
 import Avatar from './Avatar';
 import { getCategoryMeta } from '@/lib/categories';
 import { cldImage } from '@/lib/cloudinary';
-import { EvidencePost, relativeTime } from '@/lib/evidenceTypes';
+import { EvidencePost, FolderOption, relativeTime } from '@/lib/evidenceTypes';
 import { CardHandlers } from './EvidenceCard';
-import { XIcon, LightbulbIcon, LinkIcon, PencilIcon, TrashIcon, EyeIcon, EyeOffIcon, CheckIcon } from './icons';
+import { XIcon, LightbulbIcon, LinkIcon, PencilIcon, TrashIcon, EyeIcon, EyeOffIcon, CheckIcon, PlusIcon } from './icons';
 
 /** Full-size view of one evidence post, with every action in one place. */
 export default function EvidenceDetailModal({
@@ -16,18 +16,50 @@ export default function EvidenceDetailModal({
   handlers,
   onClose,
   onSaveCaption,
+  myFolders,
+  onSaveFolders,
+  onCreateFolder,
 }: {
   post: EvidencePost;
   handlers: Omit<CardHandlers, 'onOpen' | 'onEdit'>;
   onClose: () => void;
   onSaveCaption: (id: string, caption: string) => Promise<void>;
+  myFolders: FolderOption[];
+  onSaveFolders: (evidenceId: string, folderIds: string[]) => Promise<void>;
+  onCreateFolder: (name: string) => Promise<FolderOption | null>;
 }) {
   const [mounted, setMounted] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(post.caption || '');
   const [saving, setSaving] = useState(false);
+  const [folderIds, setFolderIds] = useState<string[]>(post.folders.map((f) => f.id));
+  const [newFolder, setNewFolder] = useState('');
 
   useEffect(() => setMounted(true), []);
+
+  // Resync folder selection if a different post is shown in the same instance.
+  useEffect(() => {
+    setFolderIds(post.folders.map((f) => f.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
+
+  const toggleFolder = (id: string) => {
+    const next = folderIds.includes(id) ? folderIds.filter((x) => x !== id) : [...folderIds, id];
+    setFolderIds(next);
+    onSaveFolders(post.id, next);
+  };
+
+  const addFolder = async () => {
+    const name = newFolder.trim();
+    if (!name) return;
+    const created = await onCreateFolder(name);
+    if (created) {
+      const next = [...folderIds, created.id];
+      setFolderIds(next);
+      onSaveFolders(post.id, next);
+      setNewFolder('');
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -136,6 +168,62 @@ export default function EvidenceDetailModal({
               );
             })}
           </div>
+
+          {/* Folders */}
+          {post.isOwn ? (
+            <div className="mb-4 rounded-xl border p-3" style={{ borderColor: 'var(--surface-border)', background: 'rgba(255,255,255,0.015)' }}>
+              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>
+                📁 Folders
+              </p>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                {myFolders.map((f) => {
+                  const on = folderIds.includes(f.id);
+                  return (
+                    <button
+                      key={f.id}
+                      onClick={() => toggleFolder(f.id)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${
+                        on ? 'text-white' : 'text-neutral-400 hover:text-white'
+                      }`}
+                      style={{
+                        borderColor: on ? 'rgba(34,211,238,0.7)' : 'var(--surface-border)',
+                        background: on ? 'rgba(34,211,238,0.15)' : 'transparent',
+                      }}
+                    >
+                      {f.name}
+                      {on && <CheckIcon size={11} className="inline ml-1" />}
+                    </button>
+                  );
+                })}
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    value={newFolder}
+                    onChange={(e) => setNewFolder(e.target.value.slice(0, 40))}
+                    onKeyDown={(e) => e.key === 'Enter' && addFolder()}
+                    placeholder="New folder…"
+                    className="field w-32 py-1 text-xs"
+                  />
+                  <button onClick={addFolder} disabled={!newFolder.trim()} className="btn-ghost py-1 px-2 text-xs">
+                    <PlusIcon size={12} />
+                  </button>
+                </span>
+              </div>
+            </div>
+          ) : (
+            post.folders.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {post.folders.map((f) => (
+                  <span
+                    key={f.id}
+                    className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                    style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)' }}
+                  >
+                    📁 {f.name}
+                  </span>
+                ))}
+              </div>
+            )
+          )}
 
           <div className="flex items-center gap-1.5 flex-wrap">
             {!post.isOwn && post.playerActive && (

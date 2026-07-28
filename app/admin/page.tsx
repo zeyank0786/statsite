@@ -18,6 +18,7 @@ import {
   UnlockIcon,
   EyeOffIcon,
   ShieldIcon,
+  SendIcon,
 } from '@/components/icons';
 
 interface AdminPlayer {
@@ -49,7 +50,7 @@ interface CatalogData {
   players: { id: string; username: string; active: number }[];
 }
 
-type Tab = 'roster' | 'catalog' | 'gating' | 'editstats' | 'danger';
+type Tab = 'roster' | 'announce' | 'catalog' | 'gating' | 'editstats' | 'danger';
 
 export default function AdminPage() {
   const { status, data: session } = useSession();
@@ -165,6 +166,7 @@ export default function AdminPage() {
         {(
           [
             { key: 'roster', label: 'Roster' },
+            { key: 'announce', label: 'Announce' },
             { key: 'catalog', label: 'Categories & Stats' },
             { key: 'gating', label: 'Locks & Prereqs' },
             { key: 'editstats', label: 'Edit Stats' },
@@ -189,6 +191,7 @@ export default function AdminPage() {
       </div>
 
       {tab === 'roster' && <RosterTab roster={roster} busy={busy} call={call} />}
+      {tab === 'announce' && <AnnounceTab flash={flash} />}
       {tab === 'catalog' && catalog && <CatalogTab catalog={catalog} busy={busy} call={call} />}
       {tab === 'gating' && catalog && <GatingTab catalog={catalog} busy={busy} call={call} />}
       {tab === 'editstats' && <StatEditTab roster={roster} flash={flash} />}
@@ -304,6 +307,176 @@ function RosterTab({
           </tbody>
         </table>
       </section>
+    </div>
+  );
+}
+
+/* ============================== Announce ============================== */
+
+interface BroadcastRow {
+  id: string;
+  title: string;
+  body: string | null;
+  url: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+const TITLE_MAX = 90;
+const MESSAGE_MAX = 300;
+
+function AnnounceTab({ flash }: { flash: (kind: 'ok' | 'err', text: string) => void }) {
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [url, setUrl] = useState('');
+  const [sending, setSending] = useState(false);
+  const [history, setHistory] = useState<BroadcastRow[]>([]);
+
+  const load = async () => {
+    try {
+      const res = await fetch('/api/admin/broadcast');
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data.broadcasts || []);
+      }
+    } catch (e) {
+      console.error('Failed to load broadcasts:', e);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const send = async () => {
+    if (!title.trim()) return;
+    if (
+      !confirm(
+        `Send this to the whole crew?\n\nEveryone gets a push notification and it lands in their bell.\n\n📢 ${title.trim()}`
+      )
+    )
+      return;
+    setSending(true);
+    try {
+      const res = await fetch('/api/admin/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim(), message: message.trim(), url: url.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        flash('ok', `Sent to ${data.recipients} · pushed to ${data.pushed} device${data.pushed === 1 ? '' : 's'}`);
+        setTitle('');
+        setMessage('');
+        setUrl('');
+        load();
+      } else {
+        flash('err', [data.error, data.details].filter(Boolean).join(' — ') || 'Failed to send');
+      }
+    } catch (e: any) {
+      flash('err', e.message || 'Failed to send');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5 animate-rise">
+      <section className="glass card-shadow p-5 max-w-2xl">
+        <h2 className="font-display text-lg font-bold text-white mb-1 flex items-center gap-2">
+          <SendIcon size={16} />
+          Broadcast to the crew
+        </h2>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+          A one-off announcement — everyone with notifications on gets a push, and it shows in
+          everyone&apos;s bell. Good for &quot;new feature&quot;, &quot;season resets Sunday&quot;, that sort of thing.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                Title
+              </label>
+              <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                {title.length}/{TITLE_MAX}
+              </span>
+            </div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value.slice(0, TITLE_MAX))}
+              placeholder="What's happening?"
+              className="field"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                Message (optional)
+              </label>
+              <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                {message.length}/{MESSAGE_MAX}
+              </span>
+            </div>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value.slice(0, MESSAGE_MAX))}
+              placeholder="A little more detail (shows under the title)."
+              rows={3}
+              className="field resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+              Link when tapped (optional)
+            </label>
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="/reminders  —  an in-app path starting with /"
+              className="field"
+            />
+          </div>
+
+          <button onClick={send} disabled={sending || !title.trim()} className="btn-gradient w-full py-3">
+            <SendIcon size={15} /> {sending ? 'Sending…' : 'Send to everyone'}
+          </button>
+        </div>
+      </section>
+
+      {history.length > 0 && (
+        <section className="glass card-shadow p-5 max-w-2xl">
+          <h3 className="font-display font-bold text-white mb-3">Recent announcements</h3>
+          <div className="space-y-2">
+            {history.map((b) => (
+              <div
+                key={b.id}
+                className="px-3.5 py-3 rounded-xl border"
+                style={{ borderColor: 'rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.05)' }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-white">📢 {b.title}</p>
+                  <span className="text-[10px] shrink-0 mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                    {new Date(b.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                {b.body && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    {b.body}
+                  </p>
+                )}
+                {b.createdByName && (
+                  <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    by {b.createdByName}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

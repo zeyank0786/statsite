@@ -15,7 +15,7 @@ import EvidenceToolbar from '@/components/EvidenceToolbar';
 import EvidenceComposer from '@/components/EvidenceComposer';
 import EvidenceDetailModal from '@/components/EvidenceDetailModal';
 import { useEvidencePrefs, activeFilterCount } from '@/lib/evidencePrefs';
-import { EvidencePost, CategoryOption, EvidencePlayer, dateGroup } from '@/lib/evidenceTypes';
+import { EvidencePost, CategoryOption, EvidencePlayer, FolderOption, dateGroup } from '@/lib/evidenceTypes';
 import { CameraIcon, ChevronDownIcon } from '@/components/icons';
 
 export default function EvidenceBoardPage() {
@@ -26,6 +26,7 @@ export default function EvidenceBoardPage() {
   const [players, setPlayers] = useState<EvidencePlayer[]>([]);
   const [posts, setPosts] = useState<EvidencePost[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [folders, setFolders] = useState<FolderOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [composerOpen, setComposerOpen] = useState(false);
   const [detail, setDetail] = useState<EvidencePost | null>(null);
@@ -45,11 +46,13 @@ export default function EvidenceBoardPage() {
 
   const loadAll = async () => {
     try {
-      const [playersRes, postsRes, categoriesRes] = await Promise.all([
+      const [playersRes, postsRes, categoriesRes, foldersRes] = await Promise.all([
         fetch('/api/players'),
         fetch('/api/evidence'),
         fetch('/api/categories'),
+        fetch('/api/evidence/folders'),
       ]);
+      if (foldersRes.ok) setFolders((await foldersRes.json()).folders || []);
       if (playersRes.ok) setPlayers(await playersRes.json());
       if (postsRes.ok) {
         const loaded: EvidencePost[] = await postsRes.json();
@@ -125,15 +128,88 @@ export default function EvidenceBoardPage() {
     },
   };
 
+  // Folder management (own folders) + assigning your evidence to folders.
+  const reloadFolders = async () => {
+    try {
+      const res = await fetch('/api/evidence/folders');
+      if (res.ok) setFolders((await res.json()).folders || []);
+    } catch (e) {
+      console.error('Failed to reload folders:', e);
+    }
+  };
+
+  const createFolder = async (name: string): Promise<FolderOption | null> => {
+    try {
+      const res = await fetch('/api/evidence/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to create folder');
+        return null;
+      }
+      await reloadFolders();
+      return { id: String(data.id), name, playerId: currentPlayerId, ownerName: '', count: 0 };
+    } catch (e) {
+      console.error('Failed to create folder:', e);
+      return null;
+    }
+  };
+
+  const renameFolder = async (id: string, name: string) => {
+    await fetch('/api/evidence/folders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name }),
+    }).catch(() => {});
+    await reloadFolders();
+  };
+
+  const deleteFolder = async (id: string) => {
+    await fetch('/api/evidence/folders', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => {});
+    update({ folderIds: prefs.folderIds.filter((f) => f !== id) });
+    await Promise.all([reloadFolders(), loadAll()]);
+  };
+
+  const saveEvidenceFolders = async (evidenceId: string, folderIds: string[]) => {
+    try {
+      const res = await fetch('/api/evidence', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ evidenceId, folderIds }),
+      });
+      if (res.ok) {
+        await Promise.all([loadAll(), reloadFolders()]);
+        setDetail((d) =>
+          d && d.id === evidenceId
+            ? { ...d, folders: folders.filter((f) => folderIds.includes(f.id)).map((f) => ({ id: f.id, name: f.name, playerId: f.playerId, ownerName: f.ownerName })) }
+            : d
+        );
+      }
+    } catch (e) {
+      console.error('Failed to save folders:', e);
+    }
+  };
+
+  const myFolders = folders.filter((f) => f.playerId === currentPlayerId);
+
   /** Filter + sort once, reused by every view. */
   const visible = useMemo(() => {
     const needle = prefs.search.trim().toLowerCase();
     const catSet = new Set(prefs.categoryIds);
     const playerSet = new Set(prefs.playerIds);
+    const folderSet = new Set(prefs.folderIds);
 
     const filtered = posts.filter((p) => {
       if (playerSet.size > 0 && !playerSet.has(p.playerId)) return false;
       if (catSet.size > 0 && !p.categories.some((c) => catSet.has(c.categoryId))) return false;
+      if (folderSet.size > 0 && !p.folders.some((f) => folderSet.has(f.id))) return false;
       if (prefs.media === 'photo' && p.mediaType !== 'image') return false;
       if (prefs.media === 'video' && p.mediaType !== 'video') return false;
       if (prefs.media === 'text' && p.mediaUrl) return false;
@@ -181,7 +257,7 @@ export default function EvidenceBoardPage() {
       </p>
       {filtersOn ? (
         <button
-          onClick={() => update({ playerIds: [], categoryIds: [], media: 'all', citedOnly: false, search: '' })}
+          onClick={() => update({ playerIds: [], categoryIds: [], folderIds: [], media: 'all', citedOnly: false, search: '' })}
           className="btn-ghost inline-flex mt-2"
         >
           Clear filters
@@ -234,6 +310,11 @@ export default function EvidenceBoardPage() {
         update={update}
         players={players}
         categories={categories}
+        folders={folders}
+        currentPlayerId={currentPlayerId}
+        onCreateFolder={createFolder}
+        onRenameFolder={renameFolder}
+        onDeleteFolder={deleteFolder}
         shown={visible.length}
         total={posts.length}
       />
@@ -353,6 +434,9 @@ export default function EvidenceBoardPage() {
           handlers={handlers}
           onClose={() => setDetail(null)}
           onSaveCaption={saveCaption}
+          myFolders={myFolders}
+          onSaveFolders={saveEvidenceFolders}
+          onCreateFolder={createFolder}
         />
       )}
     </AppShell>

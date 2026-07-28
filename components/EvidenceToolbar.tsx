@@ -4,8 +4,8 @@ import { useState } from 'react';
 import Avatar from './Avatar';
 import { getCategoryMeta } from '@/lib/categories';
 import { EvidencePrefs, EvidenceView, EvidenceSort, MediaFilter, activeFilterCount, DEFAULT_PREFS } from '@/lib/evidencePrefs';
-import { CategoryOption, EvidencePlayer } from '@/lib/evidenceTypes';
-import { ListIcon, GridIcon, ColumnsIcon, FilterIcon, SearchIcon, XIcon, CheckIcon } from './icons';
+import { CategoryOption, EvidencePlayer, FolderOption } from '@/lib/evidenceTypes';
+import { ListIcon, GridIcon, ColumnsIcon, FilterIcon, SearchIcon, XIcon, CheckIcon, PlusIcon, PencilIcon, TrashIcon } from './icons';
 
 /**
  * View switcher + collapsible filter panel for the evidence board.
@@ -17,6 +17,11 @@ export default function EvidenceToolbar({
   update,
   players,
   categories,
+  folders,
+  currentPlayerId,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
   shown,
   total,
 }: {
@@ -24,14 +29,28 @@ export default function EvidenceToolbar({
   update: (patch: Partial<EvidencePrefs>) => void;
   players: EvidencePlayer[];
   categories: CategoryOption[];
+  folders: FolderOption[];
+  currentPlayerId: string;
+  onCreateFolder: (name: string) => Promise<FolderOption | null>;
+  onRenameFolder: (id: string, name: string) => Promise<void>;
+  onDeleteFolder: (id: string) => Promise<void>;
   shown: number;
   total: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [newFolder, setNewFolder] = useState('');
   const filterCount = activeFilterCount(prefs);
+  const myFolders = folders.filter((f) => f.playerId === currentPlayerId);
 
   const toggleIn = (list: string[], id: string) =>
     list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+
+  const addFolder = async () => {
+    const name = newFolder.trim();
+    if (!name) return;
+    const created = await onCreateFolder(name);
+    if (created) setNewFolder('');
+  };
 
   const views: { key: EvidenceView; label: string; Icon: any }[] = [
     { key: 'feed', label: 'Feed', Icon: ListIcon },
@@ -194,6 +213,86 @@ export default function EvidenceToolbar({
             </div>
           </div>
 
+          {/* Folders — crew-visible; you manage your own */}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>
+              Folder
+            </p>
+            {folders.length === 0 ? (
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                No folders yet — make one below to group your evidence into projects.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {folders.map((f) => {
+                  const on = prefs.folderIds.includes(f.id);
+                  const mine = f.playerId === currentPlayerId;
+                  return (
+                    <button
+                      key={f.id}
+                      onClick={() => update({ folderIds: toggleIn(prefs.folderIds, f.id) })}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${
+                        on ? 'text-white' : 'text-neutral-400 hover:text-white'
+                      }`}
+                      style={{
+                        borderColor: on ? 'rgba(34,211,238,0.7)' : 'var(--surface-border)',
+                        background: on ? 'rgba(34,211,238,0.15)' : 'transparent',
+                      }}
+                      title={mine ? 'Your folder' : `${f.ownerName}'s folder`}
+                    >
+                      📁 {f.name}
+                      {!mine && <span className="opacity-60"> · {f.ownerName}</span>}
+                      {f.count > 0 && <span className="opacity-60"> {f.count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Manage your own folders */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+              <input
+                value={newFolder}
+                onChange={(e) => setNewFolder(e.target.value.slice(0, 40))}
+                onKeyDown={(e) => e.key === 'Enter' && addFolder()}
+                placeholder="New folder…"
+                className="field w-40 py-1.5 text-xs"
+              />
+              <button onClick={addFolder} disabled={!newFolder.trim()} className="btn-ghost py-1.5 px-2.5 text-xs">
+                <PlusIcon size={13} /> Add
+              </button>
+              {myFolders.map((f) => (
+                <span
+                  key={f.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold text-white"
+                  style={{ borderColor: 'var(--surface-border)', background: 'rgba(255,255,255,0.03)' }}
+                >
+                  📁 {f.name}
+                  <button
+                    onClick={async () => {
+                      const name = prompt('Rename folder', f.name);
+                      if (name && name.trim() && name.trim() !== f.name) await onRenameFolder(f.id, name.trim());
+                    }}
+                    className="text-neutral-500 hover:text-white transition"
+                    title="Rename"
+                  >
+                    <PencilIcon size={11} />
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm(`Delete folder "${f.name}"? Your evidence stays; only the folder goes.`))
+                        await onDeleteFolder(f.id);
+                    }}
+                    className="text-neutral-500 hover:text-red-400 transition"
+                    title="Delete folder"
+                  >
+                    <TrashIcon size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
           {/* Media type + cited */}
           <div className="flex flex-wrap items-end gap-4">
             <div>
@@ -242,6 +341,7 @@ export default function EvidenceToolbar({
                   update({
                     playerIds: [],
                     categoryIds: [],
+                    folderIds: [],
                     media: DEFAULT_PREFS.media,
                     citedOnly: false,
                     search: '',

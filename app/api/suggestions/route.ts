@@ -3,9 +3,15 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
-import { resolveSuggestion, expireStaleSuggestions, getEligibleVoterIds } from '@/lib/suggestionEngine';
+import {
+  resolveSuggestion,
+  expireStaleSuggestions,
+  getEligibleVoterIds,
+  notifyApprovedChanges,
+  type ApprovedChange,
+} from '@/lib/suggestionEngine';
 import { featureLockMessage, getPlayersLockedFrom } from '@/lib/featureLocks';
-import { firePush } from '@/lib/push';
+import { sendPushToPlayers } from '@/lib/push';
 import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
 
@@ -365,6 +371,9 @@ export async function POST(request: Request) {
 
     // One push per batch (not per stat) to everyone who still needs to vote —
     // the proposer already auto-voted, and anything already resolved is moot.
+    // AWAITED (not fire-and-forget): an unawaited send gets killed when the
+    // serverless function returns its response, which is why these never
+    // arrived. Blocking on it costs a beat but guarantees delivery.
     try {
       const stillPending = created.filter((c) => c.resolution?.status === 'pending');
       if (stillPending.length > 0) {
@@ -375,7 +384,7 @@ export async function POST(request: Request) {
             queryOne('SELECT username FROM Player WHERE id = ?', [subjectPlayerId]),
           ]);
           const n = stillPending.length;
-          firePush(voters, {
+          await sendPushToPlayers(voters, {
             title: 'A suggestion needs your vote',
             body: `${String(proposerRow?.username || 'Someone')} proposed ${
               n > 1 ? `${n} stat changes` : 'a stat change'
@@ -387,6 +396,18 @@ export async function POST(request: Request) {
       }
     } catch (e) {
       console.error('Vote-needed push failed (ignored):', e);
+    }
+
+    // In a small roster a proposal can clear on creation (the proposer's own
+    // yes is already a majority). Tell the subject once for the whole batch
+    // rather than firing a separate push for every approved stat.
+    try {
+      const applied = created
+        .map((c) => c.resolution?.applied)
+        .filter((a): a is ApprovedChange => Boolean(a));
+      await notifyApprovedChanges(String(subjectPlayerId), applied);
+    } catch (e) {
+      console.error('Approval push failed (ignored):', e);
     }
 
     // @mentions in the reason

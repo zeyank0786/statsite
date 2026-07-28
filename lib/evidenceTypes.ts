@@ -1,3 +1,10 @@
+export interface EvidenceFolderTag {
+  id: string;
+  name: string;
+  playerId: string;
+  ownerName: string;
+}
+
 export interface EvidencePost {
   id: string;
   playerId: string;
@@ -8,6 +15,7 @@ export interface EvidencePost {
   caption: string | null;
   captionHidden: boolean;
   categories: { categoryId: string; code: string; label: string }[];
+  folders: EvidenceFolderTag[];
   suggestionCount: number;
   isOwn: boolean;
   createdAt: string;
@@ -17,6 +25,15 @@ export interface CategoryOption {
   id: string;
   code: string;
   label: string;
+}
+
+/** Client-facing folder shape (mirrors lib/evidenceFolders FolderOption). */
+export interface FolderOption {
+  id: string;
+  name: string;
+  playerId: string;
+  ownerName: string;
+  count: number;
 }
 
 export interface EvidencePlayer {

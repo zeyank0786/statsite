@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { resolveSuggestion } from '@/lib/suggestionEngine';
+import { resolveSuggestion, notifyApprovedChanges, type ApprovedChange } from '@/lib/suggestionEngine';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
 
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
     const results: { id: string; ok: boolean; skipped?: string; resolution?: any }[] = [];
+    const approvedBySubject = new Map<string, ApprovedChange[]>();
     for (const id of ids) {
       const suggestion = await queryOne('SELECT id, playerId, status FROM Suggestion WHERE id = ?', [id]);
       if (!suggestion) {
@@ -72,7 +73,18 @@ export async function POST(request: Request) {
         ]);
       }
       const resolution = await resolveSuggestion(id);
+      if (resolution?.applied) {
+        const pid = resolution.applied.playerId;
+        const list = approvedBySubject.get(pid) || [];
+        list.push(resolution.applied);
+        approvedBySubject.set(pid, list);
+      }
       results.push({ id, ok: true, resolution });
+    }
+
+    // One summary push per subject for everything this bulk vote approved.
+    for (const [pid, changes] of approvedBySubject) {
+      await notifyApprovedChanges(pid, changes);
     }
 
     return NextResponse.json({ success: true, results, voted: results.filter((r) => r.ok).length });

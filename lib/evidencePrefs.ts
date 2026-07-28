@@ -20,6 +20,7 @@ export interface EvidencePrefs {
   compact: boolean;
   playerIds: string[]; // empty = everyone
   categoryIds: string[]; // empty = all categories
+  folderIds: string[]; // empty = all folders
   media: MediaFilter;
   citedOnly: boolean;
   search: string;
@@ -31,6 +32,7 @@ export const DEFAULT_PREFS: EvidencePrefs = {
   compact: false,
   playerIds: [],
   categoryIds: [],
+  folderIds: [],
   media: 'all',
   citedOnly: false,
   search: '',
@@ -78,6 +80,7 @@ export function activeFilterCount(p: EvidencePrefs): number {
   return (
     (p.playerIds.length > 0 ? 1 : 0) +
     (p.categoryIds.length > 0 ? 1 : 0) +
+    (p.folderIds.length > 0 ? 1 : 0) +
     (p.media !== 'all' ? 1 : 0) +
     (p.citedOnly ? 1 : 0) +
     (p.search.trim() ? 1 : 0)

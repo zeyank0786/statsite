@@ -345,6 +345,31 @@ select.field {
   }
 }
 
+/* ---------- Live activity ticker ---------- */
+.ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: ticker-scroll 48s linear infinite;
+  will-change: transform;
+}
+.ticker-mask:hover .ticker-track {
+  animation-play-state: paused;
+}
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    /* Two copies sit side by side; -50% loops seamlessly */
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+}
+
 /* ---------- Safe areas (mobile bottom nav) ---------- */
 /* Home-indicator inset when present, but never less than a small breather —
    some launchers report 0 and the bar ends up flush with the screen edge. */
