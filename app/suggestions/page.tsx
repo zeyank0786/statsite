@@ -13,7 +13,7 @@ import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
 import AddStatToSuggestion from '@/components/AddStatToSuggestion';
 import MentionText from '@/components/MentionText';
 import { usePlayers } from '@/lib/usePlayers';
-import { PlusIcon, CheckIcon, XIcon, ImageIcon, ChevronDownIcon } from '@/components/icons';
+import { PlusIcon, CheckIcon, XIcon, ImageIcon, ChevronDownIcon, PencilIcon } from '@/components/icons';
 
 interface EvidenceRef {
   id: string;
@@ -55,6 +55,7 @@ interface Suggestion {
   canVote: boolean;
   isSubject: boolean;
   isProposer: boolean;
+  youMissed: boolean;
 }
 
 /** A batch = suggestions created together (shared reason/evidence/testimony). */
@@ -103,7 +104,8 @@ export default function SuggestionsPage() {
   const players = usePlayers(status === 'authenticated');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'pending' | 'resolved'>('pending');
+  const [tab, setTab] = useState<'pending' | 'resolved' | 'missed'>('pending');
+  const [caughtUpBusy, setCaughtUpBusy] = useState(false);
   const [voting, setVoting] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<EvidenceRef | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -198,6 +200,26 @@ export default function SuggestionsPage() {
     });
   };
 
+  // Mark the recap caught up: everything currently in the Missed tab clears
+  // (server stamps a watermark); anything that resolves later reappears.
+  const markCaughtUp = async () => {
+    setCaughtUpBusy(true);
+    try {
+      const res = await fetch('/api/suggestions/recap/seen', { method: 'POST' });
+      if (res.ok) {
+        await loadSuggestions();
+        setTab('pending');
+        flash("You're all caught up on missed votes");
+      } else {
+        alert('Failed to update recap');
+      }
+    } catch (error) {
+      console.error('Failed to mark recap seen:', error);
+    } finally {
+      setCaughtUpBusy(false);
+    }
+  };
+
   if (status === 'loading' || loading) {
     return (
       <AppShell width="narrow">
@@ -209,7 +231,8 @@ export default function SuggestionsPage() {
 
   const pending = suggestions.filter((s) => s.status === 'pending');
   const resolved = suggestions.filter((s) => s.status !== 'pending');
-  const shown = tab === 'pending' ? pending : resolved;
+  const missed = suggestions.filter((s) => s.youMissed);
+  const shown = tab === 'pending' ? pending : tab === 'missed' ? missed : resolved;
   const batches = groupByBatch(shown);
   const votableIds = pending.filter((s) => s.canVote && s.yourVote === null).map((s) => s.id);
 
@@ -247,25 +270,41 @@ export default function SuggestionsPage() {
         <div className="flex gap-1 p-1 rounded-xl border w-fit" style={{ borderColor: 'var(--surface-border)' }}>
           {(
             [
-              { key: 'pending', label: `Live queue (${pending.length})` },
-              { key: 'resolved', label: `Resolved (${resolved.length})` },
+              { key: 'pending', label: `Live queue (${pending.length})`, amber: false },
+              { key: 'resolved', label: `Resolved (${resolved.length})`, amber: false },
+              // The recap tab surfaces only when there's something to catch up
+              // on (or you're already looking at it), styled amber to stand out.
+              ...(missed.length > 0 || tab === 'missed'
+                ? [{ key: 'missed' as const, label: `Missed (${missed.length})`, amber: true }]
+                : []),
             ] as const
-          ).map((t) => (
-            <button
-              key={t.key}
-              onClick={() => {
-                setTab(t.key);
-                setSelectMode(false);
-                setSelected(new Set());
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                tab === t.key ? 'text-white' : 'text-neutral-400 hover:text-white'
-              }`}
-              style={tab === t.key ? { background: 'rgba(168,85,247,0.25)' } : {}}
-            >
-              {t.label}
-            </button>
-          ))}
+          ).map((t) => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => {
+                  setTab(t.key);
+                  setSelectMode(false);
+                  setSelected(new Set());
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                  active
+                    ? 'text-white'
+                    : t.amber
+                    ? 'text-amber-300 hover:text-amber-200'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                style={
+                  active
+                    ? { background: t.amber ? 'rgba(251,191,36,0.22)' : 'rgba(168,85,247,0.25)' }
+                    : {}
+                }
+              >
+                {t.label}
+              </button>
+            );
+          })}
         </div>
         {tab === 'pending' && votableIds.length > 1 && !('vote' in myLockouts) && (
           <button
@@ -283,11 +322,37 @@ export default function SuggestionsPage() {
         )}
       </div>
 
+      {/* Recap banner: what the crew decided while you were away */}
+      {tab === 'missed' && missed.length > 0 && (
+        <div
+          className="glass card-shadow p-4 mb-4 flex items-center justify-between gap-3 flex-wrap animate-rise"
+          style={{ borderColor: 'rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.05)' }}
+        >
+          <div className="min-w-0">
+            <p className="font-display font-bold text-white">While you were away</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              {missed.length} crew {missed.length === 1 ? 'vote' : 'votes'} resolved without you. Here's
+              what the crew decided.
+            </p>
+          </div>
+          <button
+            onClick={markCaughtUp}
+            disabled={caughtUpBusy}
+            className="px-4 py-2 rounded-xl text-sm font-semibold border shrink-0 transition disabled:opacity-50"
+            style={{ borderColor: 'rgba(251,191,36,0.5)', background: 'rgba(251,191,36,0.12)', color: 'var(--accent-yellow)' }}
+          >
+            {caughtUpBusy ? 'Clearing…' : "I've caught up"}
+          </button>
+        </div>
+      )}
+
       {shown.length === 0 ? (
         <div className="glass card-shadow text-center py-16 px-6">
           <p className="text-lg mb-5" style={{ color: 'var(--text-secondary)' }}>
             {tab === 'pending'
               ? 'No live suggestions. Spot progress on the evidence board? Call it.'
+              : tab === 'missed'
+              ? "You're all caught up — no missed votes."
               : 'Nothing resolved yet.'}
           </p>
           {tab === 'pending' && (
@@ -324,6 +389,16 @@ export default function SuggestionsPage() {
               />
             ) : null;
 
+            // You can edit your own proposal only until someone else weighs in:
+            // you proposed every row, none has resolved, and the only votes so
+            // far are your own implicit yeses.
+            const canEdit =
+              !selectMode &&
+              !('suggest' in myLockouts) &&
+              batch.items.every((s) => s.isProposer) &&
+              batch.items.every((s) => s.status === 'pending') &&
+              batch.items.every((s) => s.voters.every((v) => v.playerId === first.proposerId));
+
             return (
               <article
                 key={batch.key}
@@ -357,7 +432,19 @@ export default function SuggestionsPage() {
                       </p>
                     </div>
                   </div>
-                  {!isGroup && first.status !== 'pending' && <StatusChip status={first.status} />}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {canEdit && (
+                      <Link
+                        href={`/suggestions/new?edit=${first.id}`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border text-neutral-300 hover:text-white transition"
+                        style={{ borderColor: 'var(--surface-border)' }}
+                        title="Edit this suggestion (no one has voted yet)"
+                      >
+                        <PencilIcon size={13} /> Edit
+                      </Link>
+                    )}
+                    {!isGroup && first.status !== 'pending' && <StatusChip status={first.status} />}
+                  </div>
                 </div>
 
                 <p className="text-sm italic mb-3" style={{ color: 'var(--text-secondary)' }}>

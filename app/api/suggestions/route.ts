@@ -39,6 +39,22 @@ export async function GET() {
       console.error('Stale-suggestion expiry failed (listing continues):', e);
     }
 
+    // Recap watermark: a suggestion that resolved WITHOUT your vote after this
+    // moment counts as "missed". Defaults to when you joined, so a new player
+    // never inherits a backlog of votes from before they existed. Column is
+    // additive (created on first mark-as-seen) — tolerate its absence.
+    let recapWatermarkMs = 0;
+    try {
+      const meRow = await queryOne('SELECT recapSeenAt, createdAt FROM Player WHERE id = ?', [currentPlayerId]);
+      const stamp = String((meRow?.recapSeenAt as string) || meRow?.createdAt || '');
+      recapWatermarkMs = stamp ? Date.parse(stamp) : 0;
+    } catch (e: any) {
+      if (!/no column named|no such column/i.test(String(e?.message))) throw e;
+      const meRow = await queryOne('SELECT createdAt FROM Player WHERE id = ?', [currentPlayerId]);
+      recapWatermarkMs = meRow?.createdAt ? Date.parse(String(meRow.createdAt)) : 0;
+    }
+    if (Number.isNaN(recapWatermarkMs)) recapWatermarkMs = 0;
+
     const suggestions = await queryAll(
       `SELECT sg.*,
               subject.username as subjectName, subject.active as subjectActive,
@@ -190,6 +206,14 @@ export async function GET() {
           currentPlayerId !== subjectId,
         isSubject: currentPlayerId === subjectId,
         isProposer: currentPlayerId === String(sg.proposedById),
+        // A vote you never got to cast: resolved, not about you, you didn't
+        // vote, and it resolved after your last catch-up. Powers the Missed tab.
+        youMissed:
+          String(sg.status) !== 'pending' &&
+          currentPlayerId !== subjectId &&
+          !myVote &&
+          Boolean(sg.resolvedAt) &&
+          Date.parse(String(sg.resolvedAt)) > recapWatermarkMs,
       };
     });
 

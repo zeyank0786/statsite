@@ -88,6 +88,13 @@ function NewSuggestionContent() {
   const paramSubject = searchParams.get('subject');
   const paramEvidence = searchParams.get('evidenceId');
 
+  // Edit mode: ?edit=<suggestionId> reopens an existing proposal (whole batch)
+  // for the proposer to change — allowed only while no one else has voted yet.
+  const editAnchor = searchParams.get('edit');
+  const editMode = !!editAnchor;
+  const [editLoading, setEditLoading] = useState(editMode);
+  const [editBlocked, setEditBlocked] = useState(false);
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
@@ -113,8 +120,65 @@ function NewSuggestionContent() {
     }
   };
 
+  // Edit mode: pull the existing batch and prefill the form. Gated the same
+  // way the server is — you must own every row, nothing may have resolved, and
+  // no one else may have voted — so a blocked edit fails loudly up front.
+  useEffect(() => {
+    if (!editMode || status !== 'authenticated') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/suggestions');
+        if (!res.ok || cancelled) return;
+        const all = (await res.json()) as any[];
+        if (cancelled) return;
+        const anchor = all.find((s) => s.id === editAnchor);
+        if (!anchor) {
+          setError('That suggestion no longer exists.');
+          setEditBlocked(true);
+          return;
+        }
+        const batchKey = anchor.batchId || anchor.id;
+        const rows = all.filter((s) => (s.batchId || s.id) === batchKey);
+        const iOwnAll = rows.every((s) => s.isProposer);
+        const allPending = rows.every((s) => s.status === 'pending');
+        const noOtherVotes = rows.every((s) =>
+          (s.voters || []).every((v: any) => v.playerId === s.proposerId)
+        );
+        if (!iOwnAll || !allPending || !noOtherVotes) {
+          setError(
+            !allPending
+              ? 'This suggestion has already resolved — it can no longer be edited.'
+              : "Voting has started on this suggestion — it can no longer be edited."
+          );
+          setEditBlocked(true);
+          return;
+        }
+        setSubjectId(String(anchor.subjectId));
+        setReason(anchor.reason || '');
+        setTestimony(anchor.testimony || '');
+        const ch: Record<string, number> = {};
+        for (const s of rows) ch[String(s.statId)] = Number(s.delta);
+        setChanges(ch);
+        setSelectedEvidenceIds([
+          ...new Set(rows.flatMap((s: any) => (s.evidence || []).map((e: any) => String(e.id)))),
+        ] as string[]);
+      } catch (e) {
+        console.error('Failed to load suggestion for editing:', e);
+        setError('Could not load this suggestion.');
+        setEditBlocked(true);
+      } finally {
+        if (!cancelled) setEditLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editMode, editAnchor, status]);
+
   // Apply URL prefill once data is available
   useEffect(() => {
+    if (editMode) return;
     if (paramSubject && paramSubject !== currentPlayerId && !subjectId) {
       setSubjectId(paramSubject);
     }
@@ -169,6 +233,7 @@ function NewSuggestionContent() {
   const selectedStats = subjectStats.filter((s) => changes[s.id] !== undefined);
 
   const changeSubject = (id: string) => {
+    if (editMode) return; // subject is fixed while editing an existing proposal
     setSubjectId(id);
     setSelectedEvidenceIds([]);
     setTestimony('');
@@ -263,31 +328,39 @@ function NewSuggestionContent() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subjectPlayerId: subjectId,
-          changes: Object.entries(changes).map(([statId, delta]) => ({ statId, delta })),
-          reason: reason.trim(),
-          evidenceIds: selectedEvidenceIds,
-          testimony: testimony.trim() || null,
-        }),
-      });
+      const payload = {
+        changes: Object.entries(changes).map(([statId, delta]) => ({ statId, delta })),
+        reason: reason.trim(),
+        evidenceIds: selectedEvidenceIds,
+        testimony: testimony.trim() || null,
+      };
+      const res = await fetch(
+        editMode ? `/api/suggestions/${editAnchor}` : '/api/suggestions',
+        {
+          method: editMode ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editMode ? payload : { subjectPlayerId: subjectId, ...payload }),
+        }
+      );
       const data = await res.json();
       if (res.ok) {
-        const approvedNow = (data.created || []).filter(
-          (c: any) => c.resolution?.status === 'approved'
-        ).length;
-        const n = data.count || 1;
-        setSuccessMessage(
-          approvedNow === n
-            ? `${n} suggestion${n > 1 ? 's' : ''} created — and instantly approved (your yes was already a majority)!`
-            : `${n} suggestion${n > 1 ? 's' : ''} created! The crew votes on each separately.`
-        );
+        if (editMode) {
+          const n = data.count || 1;
+          setSuccessMessage(`Suggestion updated — ${n} stat${n > 1 ? 's' : ''} now in play.`);
+        } else {
+          const approvedNow = (data.created || []).filter(
+            (c: any) => c.resolution?.status === 'approved'
+          ).length;
+          const n = data.count || 1;
+          setSuccessMessage(
+            approvedNow === n
+              ? `${n} suggestion${n > 1 ? 's' : ''} created — and instantly approved (your yes was already a majority)!`
+              : `${n} suggestion${n > 1 ? 's' : ''} created! The crew votes on each separately.`
+          );
+        }
         setTimeout(() => router.push('/suggestions'), 1600);
       } else {
-        setError(data.error || 'Failed to create suggestion');
+        setError(data.error || (editMode ? 'Failed to update suggestion' : 'Failed to create suggestion'));
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred');
@@ -308,18 +381,54 @@ function NewSuggestionContent() {
       </Link>
 
       <PageHeader
-        title="New Suggestion"
-        subtitle="Grounded in evidence, decided by majority. Your proposal counts as your yes vote."
+        title={editMode ? 'Edit Suggestion' : 'New Suggestion'}
+        subtitle={
+          editMode
+            ? 'Change the stats, deltas, evidence or reason — allowed only until someone else votes.'
+            : 'Grounded in evidence, decided by majority. Your proposal counts as your yes vote.'
+        }
         eyebrow="Crew Votes"
         eyebrowColor="var(--accent-purple)"
       />
 
       <LockoutBanner locks={myLockouts} feature="suggest" />
 
+      {editBlocked ? (
+        <div className="glass card-shadow p-6 text-center animate-rise">
+          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+            {error || 'This suggestion can no longer be edited.'}
+          </p>
+          <Link href="/suggestions" className="btn-ghost inline-flex">
+            Back to suggestions
+          </Link>
+        </div>
+      ) : editMode && editLoading ? (
+        <div className="glass h-80 animate-pulse rounded-2xl" />
+      ) : (
       <div className="space-y-5" style={suggestLocked ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
         {/* Step 1: subject */}
         <section className="glass card-shadow p-5 animate-rise">
           <StepLabel n={1} title="Who is this about?" />
+          {editMode ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {(() => {
+                const subj = players.find((p) => p.id === subjectId);
+                const hex = getUserColorHex(subjectId);
+                return (
+                  <span
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium text-white"
+                    style={{ borderColor: hex, background: `${hex}1f` }}
+                  >
+                    <Avatar id={subjectId} name={subj?.username || '?'} size={22} />
+                    {subj?.username || 'Subject'}
+                  </span>
+                );
+              })()}
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Locked while editing
+              </span>
+            </div>
+          ) : (
           <div className="flex flex-wrap gap-2">
             {eligibleSubjects.map((p) => {
               const hex = getUserColorHex(p.id);
@@ -342,13 +451,16 @@ function NewSuggestionContent() {
               );
             })}
           </div>
-          <p className="text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
-            You can't suggest about yourself — post evidence and let the crew call it.
-          </p>
+          )}
+          {!editMode && (
+            <p className="text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
+              You can't suggest about yourself — post evidence and let the crew call it.
+            </p>
+          )}
         </section>
 
         {/* Quick start: presets (crew-made templates for regular hand-outs) */}
-        {subjectId && presets.length > 0 && (
+        {!editMode && subjectId && presets.length > 0 && (
           <section className="glass card-shadow p-5 animate-rise">
             <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent-purple)' }}>
               Quick start
@@ -669,17 +781,23 @@ function NewSuggestionContent() {
               className="btn-gradient w-full py-3 mt-4"
             >
               {submitting
-                ? 'Submitting...'
+                ? editMode
+                  ? 'Saving...'
+                  : 'Submitting...'
+                : editMode
+                ? `Save changes${changeCount > 1 ? ` (${changeCount} stats)` : ''}`
                 : `Submit ${changeCount > 1 ? `${changeCount} suggestions` : 'suggestion'} — your yes vote on each`}
             </button>
-            <button
-              onClick={savePreset}
-              disabled={submitting || !reason.trim() || changeCount === 0}
-              className="btn-ghost w-full py-2.5 mt-2 text-sm"
-              title="Save these stats + reason as a reusable preset (subject not included)"
-            >
-              Save as preset for next time
-            </button>
+            {!editMode && (
+              <button
+                onClick={savePreset}
+                disabled={submitting || !reason.trim() || changeCount === 0}
+                className="btn-ghost w-full py-2.5 mt-2 text-sm"
+                title="Save these stats + reason as a reusable preset (subject not included)"
+              >
+                Save as preset for next time
+              </button>
+            )}
           </section>
         )}
 
@@ -689,6 +807,7 @@ function NewSuggestionContent() {
           </div>
         )}
       </div>
+      )}
     </AppShell>
   );
 }
