@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { getPlayerTimezone, setPlayerTimezone, isValidTimezone } from '@/lib/reminders';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, timezone });
   } catch (error: any) {
     console.error('Error setting timezone:', error);
-    return NextResponse.json({ error: 'Failed to set timezone', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to set timezone', error), { status: 500 });
   }
 }

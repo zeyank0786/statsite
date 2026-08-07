@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { usePoll } from '@/lib/usePoll';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -119,12 +120,10 @@ export default function SuggestionsPage() {
       router.push('/auth/signin');
       return;
     }
-    if (status === 'authenticated') {
-      loadSuggestions();
-      const interval = setInterval(loadSuggestions, 8000);
-      return () => clearInterval(interval);
-    }
   }, [status, router]);
+
+  // Fires immediately on mount, then every 8s while the tab is visible.
+  usePoll(() => loadSuggestions(), 8000, { enabled: status === 'authenticated' });
 
   const loadSuggestions = async () => {
     try {

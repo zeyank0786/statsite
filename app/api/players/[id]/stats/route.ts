@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
+import { invalidateStatsCache } from '@/lib/statsCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +62,9 @@ export async function PUT(
       'INSERT INTO StatHistory (id, statValueId, oldValue, newValue, reason, changedById, source, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [uuid(), current.id, oldValue, newValue, 'Direct edit', id, 'admin_edit', new Date().toISOString()]
     );
+    // The cached crew leaderboard is now stale — drop it so this change
+    // is visible immediately rather than up to a TTL later.
+    invalidateStatsCache();
 
     return NextResponse.json({
       success: true,
@@ -68,7 +73,7 @@ export async function PUT(
   } catch (error: any) {
     console.error('Error updating stat:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to update stat' },
+      errorPayload('Failed to update stat', error),
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { usePoll } from '@/lib/usePoll';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import StatDescriptionModal from '@/components/StatDescriptionModal';
@@ -102,17 +103,15 @@ export default function ReviewSessionPage({ params }: { params: Promise<{ id: st
       return;
     }
     if (status === 'authenticated' && sessionId) {
-      loadStats();
       const eventSource = connectToStream();
-      const pollInterval = setInterval(() => {
-        loadStats();
-      }, 2000);
-      return () => {
-        eventSource.close();
-        clearInterval(pollInterval);
-      };
+      return () => eventSource.close();
     }
   }, [status, router, sessionId]);
+
+  // Backstop for the SSE stream (module-level client Maps don't survive
+  // serverless instances, so the stream can silently stop delivering).
+  // Suspended while the tab is hidden.
+  usePoll(() => loadStats(), 2000, { enabled: status === 'authenticated' && Boolean(sessionId) });
 
   const connectToStream = () => {
     const eventSource = new EventSource(`/api/reviews/sessions/${sessionId}/stream`);

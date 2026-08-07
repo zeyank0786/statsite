@@ -5,6 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { resolveSuggestion, notifyApprovedChanges, type ApprovedChange } from '@/lib/suggestionEngine';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,6 +91,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, results, voted: results.filter((r) => r.ok).length });
   } catch (error: any) {
     console.error('Error bulk voting:', error);
-    return NextResponse.json({ error: 'Failed to bulk vote', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to bulk vote', error), { status: 500 });
   }
 }

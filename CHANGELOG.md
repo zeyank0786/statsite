@@ -1,301 +1,153 @@
 # Changelog
 
-## Holographic trophy case — 7 August 2026
+Changes the crew has **not** been told about yet. New entries go here.
 
-The achievement set went from 30 to 49, and the cards became objects worth
-looking at.
-
-### Rarity
-
-Every achievement now declares `common | rare | epic | mythic`, assigned by
-hand. Rarity was *not* computed from how many of the crew hold a thing: in a
-crew of five, one person earning something would visibly downgrade everyone
-else's card, which is the opposite of a reward.
-
-The tier drives the whole treatment through four custom properties — edge
-colour, glow, pip colour and the band gradient — so a new tier is a block of
-variables, not a new set of rules. Current spread across the 49: 12 common,
-17 rare, 15 epic, 5 mythic.
-
-### The card
-
-Pointer-tracked foil over an oversized band gradient: `--fx/--fy` shift the
-`background-position`, so the pattern slides across the card as though it were
-catching the light rather than printed on. Common gets a plain silver sheen
-through `screen`; mythic gets the full spectrum through `color-dodge`.
-
-Tilt comes from the existing `.tilt` plumbing. Foil coordinates were added to
-the same delegated `pointermove` listener in `Effects.tsx` as a **separate**
-lookup from the glass spotlight — one combined `closest()` would return the
-card, and the section's spotlight would die the moment the cursor entered a
-card.
-
-Tap or click to flip: the back gives the earn date and which crew members hold
-it. An unclaimed mythic says so, which is the point of showing it at all.
-Holders come from the freshly computed result rather than the earned table, so
-the list is who qualifies *now*.
-
-Two things that would have silently broken the flip:
-
-- Dimming locked cards via `opacity` on the flipping element. Opacity below 1
-  forces `transform-style` back to `flat`. The faces are dimmed instead.
-- Making the `<button>` itself the grid container. Button-as-grid has a patchy
-  history across engines, and a fallback to `block` would stack the two faces
-  instead of overlapping them. The grid is a div inside the button.
-
-Touch devices never get a pointer — `Effects.tsx` doesn't even listen on them —
-so under `(hover: none)` the foil drifts on a slow ambient loop instead. That's
-the phone PWA, which is where most of this will actually be seen.
-
-### The set
-
-**Removed:** Comeback Story. It was the only achievement whose condition
-involved a stat going down, so it quietly paid for a dip.
-
-**Added 20**, none of which can be earned by losing ground anywhere:
-
-- *Milestones* — Double Century, Double Legend, Ten Deep, No Weak Links,
-  Ground Up
-- *Categories* — Specialist, Total Package, Well Rounded, Even Keel
-- *Momentum* — Big Swing, Big Day, Four Straight, Season Long, Half-Year Habit,
-  The Long Game
-- *Crew* — Podium, Triple Crown, Most Improved
-- *Community* — Called Your Shot (ambitions), Locked On (targets)
-
-Ground Up keys off a stat's **first** recorded change, not its lowest point —
-"carried it up from the 5-point start", never "dropped it and climbed back".
-
-Streaks reuse `computeStreakWeeks` with the same inputs as the leaderboard —
-stat changes plus evidence posts — so the two can never quote different
-numbers at the same person.
-
-### Rollout without a confetti storm
-
-Shipping 20 definitions at once would read as everyone earning all 20
-simultaneously, and celebrations play as a queue of full-screen modals, one at
-a time.
-
-`AchievementCatalog` now records every achievement ID the system has ever
-computed. The sync distinguishes three cases: first run ever, an award that was
-*invented* today, and an award someone actually just earned. Only the last one
-gets a real timestamp; the other two back-fill at epoch and stay quiet. Future
-batches inherit this automatically.
-
-### Fixed along the way
-
-`fetchSocialCounts` existed twice — once in the achievements route, once in
-`notifications.ts` — and the copies had drifted. The notifications one never
-fetched commitments, so commitment achievements displayed on the page but were
-never recorded, and therefore never celebrated. There's one copy now in
-`lib/socialCounts.ts`, imported by both, because the sync has to see exactly
-what the page sees. The leaderboard was calling `computeAchievements` with no
-social counts at all and undercounting everyone's total; it now passes them.
-
-### Note
-
-Existing `AchievementEarned` rows for `comeback` were left in place — deleting
-them would rewrite past Wrapped recaps. They're inert: the trophy case only
-renders computed definitions.
+When an announcement goes out, move those sections into
+[CHANGELOG-ANNOUNCED.md](./CHANGELOG-ANNOUNCED.md) under a dated heading. This
+file should always answer one question at a glance: what still needs telling?
 
 ---
 
-## Draw-on charts — 7 August 2026
+## Search, speed and a floor under the app — 7 August 2026
 
-Charts and bars used to arrive fully formed. They now build themselves as they
-scroll into view. Presentation only — no number on screen changed.
+One release covering a user-facing addition and a batch of foundation work.
+Only the first item is worth telling the crew about; the rest is invisible
+when it works.
 
-**Radar** (dashboard, profile, compare). The grid settles first, then each
-series' outline is traced round the polygon, then its fill washes in and the
-vertices pop one after another following the outline. Multiple series are
-staggered, so a comparison reads as two players drawn in turn rather than one
-overlapping shape.
+### ⌘K — search everything
 
-The outline was split off the fill into its own path. A single path can't trace
-its stroke and fade its fill independently, and the fill appearing at full
-opacity behind a half-drawn outline looked like a rendering fault.
+The app had **no search anywhere**, while carrying ~20 destinations split
+across a desktop dropdown and a separate mobile sheet, plus 70 stats whose
+detail pages were effectively unreachable without knowing the URL.
 
-`pathLength={1}` normalises each perimeter, so the dash maths is `1 → 0`
-regardless of the chart's size or the player's values — no `getTotalLength()`,
-no measuring pass, nothing to re-measure on resize.
+`components/CommandPalette.tsx` is the flat index over all of it: pages,
+players, all 70 stats, and verbs (*Post evidence*, *New suggestion*, *New
+commitment*, *Start a review session*, *Set your targets*, *Sign out*).
 
-**Sparklines** trace left to right, the gradient area fades in behind at 35% of
-the way through, and the head dot lands where the line stopped.
+- **⌘K / Ctrl+K** on desktop, a **search button in the header** everywhere,
+  **long-press the mobile "More" tab**, and a *Search everything* row inside
+  the More sheet — the gesture isn't discoverable on its own, so it has a
+  visible twin in all three places.
+- Fuzzy matching (`lib/fuzzy.ts`) is a ~60-line subsequence scorer, no
+  dependency and no index: the corpus is under 100 entries, so ranking on
+  every keystroke is nowhere near the cost where anything cleverer would pay
+  for itself. Scoring favours consecutive runs, then word starts, then
+  earlier positions, with an exact-prefix bonus.
+- Results are grouped and capped per group (`Stats` at 8) so 70 stats can't
+  bury the six pages. With an empty query, Players and Stats are hidden
+  entirely — a bare list of 70 stats is noise until you've typed.
+- Stats open on **your** profile, since that's the copy you can act on.
+- Players and the stat catalogue load once, lazily, on first open.
+  New endpoint: `GET /api/stats/catalog` — read-only, any signed-in member
+  (distinct from the admin-gated `/api/admin/catalog`).
 
-**Bars** (dashboard category momentum, profile stat cards, both compare
-columns) grow from their anchored edge, staggered ~55ms apart down the group.
-The compare page's left column is right-anchored via `.bar-grow-right` so
-mirrored rows grow outward from the centre instead of both racing rightward.
+### The three most-visited pages now render on the server
 
-Bars animate `transform: scaleX()`, not `width`. A profile carries a bar per
-stat, and animating width would lay out dozens of elements per frame mid-scroll
-where a transform stays on the compositor. The trade is that the pill's end cap
-is slightly flattened in flight; it's correct at rest, which is the frame that
-lasts.
+Dashboard, Leaderboard and Players were client components that booted, waited
+for the session to resolve, *then* fetched — so the most-visited screens in the
+app showed a skeleton for a full round trip after JS had already loaded. They
+now fetch during the request and ship the numbers inside the HTML.
 
-### Reveal
+They also call `getLeaderboard()` / `getDashboardData()` **directly** rather
+than making an HTTP request to our own API, so the hop is gone entirely.
 
-One module-level `IntersectionObserver` serves every caller — the profile would
-otherwise build ~70 of them doing identical work against the same root. Targets
-are one-shot: unobserved before the callback fires, so nothing re-enters.
+Two extractions made that possible without duplicating logic — the route
+handlers are now thin wrappers over the same functions:
 
-It triggers at threshold 0 with a **fixed** 56px bottom margin. A ratio
-threshold can never be met by an element taller than the viewport, which is
-exactly what the long category sections are, and a percentage margin creates a
-dead band that grows with the screen — on a page too short to scroll, anything
-inside it would stay collapsed forever. The failure mode being designed around
-is an invisible chart, not a missed flourish.
+- `lib/leaderboard.ts` — the board, previously inline in the route
+- `lib/trends.ts` — the overall-score timeline, previously inline in the route
+- `lib/dashboard.ts` — assembles only the subset the dashboard actually shows
 
-Under `prefers-reduced-motion` or the **Reduce effects** toggle, the revealed
-flag is set in a layout effect, so the finished state is what first paints.
-There's no hidden frame to transition out of and nothing animates, even though
-the transitions are still declared. Bars additionally have a CSS override, which
-covers groups that were already mounted when the toggle was flipped — the hook
-decides once at mount and doesn't reconsider.
+**The trap worth recording.** Per-user colours live in a module map populated
+by `setKnownRoster`, which only ever ran in a *client effect*. Server-render a
+page with avatars in it and the SSR pass computes fallback hash colours while
+hydration computes the assigned ones — and because client components render in
+a different module graph from server components, registering the roster
+server-side does **not** reach the copy `Avatar` uses. The fix is
+`AppShell rosterIds={…}`: server pages pass the roster down, and AppShell
+registers it *during render* rather than in an effect, so both passes agree.
+It must be the same set the client would have fetched (all players, archived
+included) or every avatar silently shifts colour on mount.
 
----
+### Polling: one request instead of five, and none at all when hidden
 
-## Visual pass — 7 August 2026
+Baseline traffic was ~16 requests/minute per open tab before a page added its
+own — the shell polled three endpoints every 15s, with the bell and ticker on
+separate timers. `/messages` took it to ~28/min; `/reviews` polled **every
+second**, and none of it checked whether anyone was looking.
 
-Eight presentation-layer features. No changes to scoring, stat definitions, or
-the data model — every number on screen is the same number as before.
+- **`GET /api/pulse`** returns all three badge counts in one round trip.
+- **`lib/usePoll.ts`** pauses while `document.visibilityState` is hidden and
+  fires once on return, so coming back to a tab shows fresh data instead of
+  waiting out the rest of an interval. Every `setInterval` in the app now goes
+  through it — there are no bare ones left.
+- Cadences are unchanged; a backgrounded tab simply stops costing anything.
 
-### Motion between pages
+`/api/pulse` computes each count in isolation. Consolidating three endpoints
+into one otherwise means a single failure — a table that doesn't exist yet on
+a given deployment — takes down *every* badge at once, where before it only
+broke its own. A count that can't be computed reads 0.
 
-**Shared-element morphs.** A player's avatar now physically travels from the
-leaderboard podium or the players grid into the profile hero, instead of one
-element vanishing and another appearing. Built on React's `<ViewTransition>` via
-`experimental.viewTransition` in `next.config.ts` — no animation library.
+### The leaderboard is cached for 60s
 
-Morph names must be unique per rendered page, so only the *primary* occurrence
-of a player is tagged. The leaderboard's "fastest riser" callout repeats
-someone already shown on the podium and is deliberately left untagged;
-duplicate names abort the transition for the whole page.
+It recomputed every player's aggregates, all 49 achievements, social counts and
+streaks on **every** request, and produced an identical answer for every
+viewer. Now `unstable_cache` with a 60s TTL and a `crew-stats` tag.
 
-**Directional route slides.** Links tagged `nav-forward` / `nav-back` slide
-content in the matching direction. The header and mobile tab bar are pinned via
-`viewTransitionName`, so only the content moves and the user keeps a fixed
-spatial anchor. Browser back gestures carry no transition type and fall through
-to an instant swap, which is correct — there's no forward/back meaning to convey.
+Measured locally: **592ms cold → 35ms warm.**
 
-### Surfaces
+`invalidateStatsCache()` fires at every one of the 7 `StatHistory` write sites
+— every stat change records history, so those are exactly the points where the
+board goes stale. Verified end-to-end: a stat write moved the cached overall
+from 56 → 69.6 on the very next read.
 
-**Cursor spotlight** on every glass card, tracking the pointer.
+It uses `revalidateTag(tag, { expire: 0 })`, deliberately *not* the recommended
+`'max'` profile. `'max'` is stale-while-revalidate — the next reader gets the
+old board while a fresh one builds behind them, so whoever just approved a
+suggestion would watch their own change fail to appear. (`updateTag` does this
+natively but is Server Actions only; these calls come from route handlers.)
 
-One delegated `pointermove` listener on the document, coalesced to one write per
-animation frame, writing CSS custom properties straight to the hovered node.
-Nothing re-renders — with ~40 cards on the leaderboard, per-card React state
-would re-render the tree on every mouse movement.
+`use cache` was the other option and was rejected: it requires the app-wide
+`cacheComponents` flag, which changes the rendering model for every route in
+the app to buy caching on one.
 
-Implemented as a `background-image` layer rather than a `::before`, specifically
-so `.glass` didn't need `position: relative`. Adding that would have re-parented
-the absolutely positioned glow blobs that several pages already rely on.
+### A floor under the whole thing
 
-**Card tilt** (`.tilt`), opt-in rather than global — a full-width section
-tilting on hover reads as broken rather than tactile. Applied to the dashboard
-quick actions and the players grid.
+**Error boundaries.** There were none — anywhere. Any thrown render error gave
+a dead screen with no way back, which on a phone is indistinguishable from the
+app being down. Added `app/error.tsx` (keeps the shell, offers retry, shows the
+digest), `app/global-error.tsx` (catches failures in the root layout itself —
+ships its own `<html>`/`<body>` and is styled entirely inline, because
+`globals.css` may be exactly what failed), and `app/not-found.tsx`.
 
-**Living backdrop.** The three static radial gradients that were on `body` now
-drift on a 46s cycle, with film grain and a vignette over the top. Grain kills
-the flat-black banding that dark gradient UIs get on cheaper panels. All three
-are transform-animated fixed layers, so they stay on the compositor and cost
-nothing on scroll.
+Note for future work: Next 16 renamed the retry prop — it's `unstable_retry`,
+not `reset`.
 
-### Loading
+**Stopped leaking exception text to the browser.** 108 call sites across 67
+route files returned `{ error: '…', details: error.message }` — raw SQL
+fragments and driver internals, in a public repo. All now go through
+`errorPayload()`, which attaches the detail only outside production. The full
+error still hits the server log at every site; only what crosses the wire
+changed.
 
-**Shimmer skeletons** replacing the bare `Loading...` text and the
-`animate-pulse` blocks. Each skeleton mirrors the shape of what it stands in
-for — same card sizes, same column counts — so nothing shifts position when
-data lands. Sweeps are staggered per item; a grid pulsing in lockstep looks
-mechanical.
+**96 tests, from zero.** Vitest over the pure functions where a silent
+regression would change everyone's numbers and nobody would notice: scoring,
+tier ladder, radar normalisation, streak weeks, season maths, player
+aggregates, and the achievement predicates.
 
-Covers the dashboard, players, leaderboard, profile, and Wrapped.
+The one worth keeping: a property test that the **no-tanking invariant**
+holds — lowering a stat can never turn an unearned achievement into an earned
+one, walking the whole tier ladder (5 → 200) and asserting nothing is ever
+revoked or gained by dropping. That rule is load-bearing (it's why *Comeback
+Story* was removed) and nothing enforced it until now.
 
-### Identity
+Two tests failed first time and were **right to**: crew-relative awards are
+deliberately withheld from a solo player, and *Podium* needs a crew larger
+than the podium. Both now pinned by tests.
 
-**Per-player accent theming.** Each profile now wears its owner's colour,
-rebinding `--accent-cyan` and `--brand-gradient` within the page.
-
-Only *decorative* accents are rebound. The green/red gain-loss semantics stay
-fixed on purpose — recolouring those would make a stat drop look like a win on
-a player whose identity colour happens to be green.
-
-**Odometer.** The dashboard and profile hero scores roll digit by digit,
-spinning through two full 0–9 cycles on mount with a left-to-right stagger so
-the number settles like a counter coming to rest. Later value changes are a
-short hop within the final cycle rather than another full spin.
-
-Reserved for hero figures. On a dense table of numbers, rolling digits read as
-noise.
-
-### Sharing
-
-**Stat cards.** A branded 1200×630 PNG of your radar, overall score, crew rank
-and top three stats, rendered with `next/og`.
-
-The route is auth-gated and the client fetches it with session cookies and
-saves the blob. A public URL would let anyone holding a link read the crew's
-real numbers, so sharing is an explicit act of posting the file rather than
-passing around a live link.
-
-**Season Wrapped as a story player.** Full-screen slides with segment progress
-bars, auto-advance, swipe, keyboard control and pause. Autoplays once per season
-per device — it should feel like an event on arrival, not a modal you dismiss on
-every visit. The existing card grid remains underneath as the summary view, and
-a Play button replays the story.
-
-### Accessibility
-
-A **Reduce effects** toggle in Settings turns off the spotlight, tilt, backdrop
-drift and grain. It's per-device, not per-account: the right answer depends on
-the screen you're on, and a phone on battery and a desktop can reasonably
-disagree. Applied pre-paint by an inline script so a reduced device never
-flashes the full treatment on load.
-
-Separately, every new animation is wired into the existing
-`prefers-reduced-motion` block, including the view transitions — directional
-slides simulate travel across the viewport and are the highest-risk pattern for
-motion sensitivity.
-
-Odometer strips carry 30 glyphs per digit, so the visual is `aria-hidden` with
-the real value exposed to screen readers. Skeletons announce as a polite live
-region.
+Ran: `npm test` (96 passing), `tsc --noEmit` clean, `next build` clean, and a
+signed-in smoke test confirming real data in the server-rendered HTML.
 
 ---
 
-## Fixes
-
-**Homepage score rendered as a lone decimal point.** The hero used
-`.text-gradient`, which sets `color: transparent` and clips the *parent's*
-background to the parent's own text run. The rolling digits sit inside
-`overflow: hidden` + `transform` boxes that paint as separate layers, so they
-inherited the transparent colour with no background of their own and vanished —
-leaving only the decimal point, which is a plain inline span in the paragraph's
-own text run.
-
-Odometer now takes a `gradient` prop and each glyph paints and clips its own
-background. The gradient is sized to the full number's width and offset per
-character, so the run reads as one continuous sweep rather than repeating per
-digit. The profile score was unaffected throughout, since it uses a solid colour
-that inherits normally through transforms.
-
-**Cursor spotlight died on hover.** `.glass-hover:hover` used the `background`
-shorthand, which resets `background-image`, and at `:hover` specificity it beat
-the spotlight rule — killing the highlight at exactly the moment the cursor was
-on the card. Changed to `background-color`.
-
-**Share card returned a 500 despite a clean build.** Satori rejects SVG `<text>`
-nodes. The radar's axis labels are now absolutely positioned divs layered over
-the chart. Caught only by rendering the route; compilation proved nothing here.
-
----
-
-## Notes
-
-`experimental.viewTransition` is, as the name says, experimental. Browsers
-without the View Transitions API navigate normally and simply don't animate, so
-the downside is a lost flourish rather than a broken page.
-
-The `types/react-canary.d.ts` reference exists because the App Router runs on
-Next's vendored React canary build, which exports `<ViewTransition>`, while the
-installed `react` package is stable 19.x. Without that reference the import
-type-errors even though it resolves fine at runtime.
+_Everything through 7 August 2026 has been announced._

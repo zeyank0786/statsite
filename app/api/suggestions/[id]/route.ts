@@ -7,6 +7,7 @@ import { featureLockMessage } from '@/lib/featureLocks';
 import { resolveSuggestion } from '@/lib/suggestionEngine';
 import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -233,6 +234,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ success: true, batchId, count: survivingRowIds.length });
   } catch (error: any) {
     console.error('Error editing suggestion:', error);
-    return NextResponse.json({ error: 'Failed to edit suggestion', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to edit suggestion', error), { status: 500 });
   }
 }

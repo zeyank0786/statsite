@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { queryAll } from '@/lib/db';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,7 @@ export async function GET() {
   } catch (error: any) {
     console.error('Error fetching review sessions:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch review sessions' },
+      errorPayload('Failed to fetch review sessions', error),
       { status: 500 }
     );
   }

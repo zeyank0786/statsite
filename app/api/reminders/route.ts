@@ -12,6 +12,7 @@ import {
 } from '@/lib/reminders';
 import { firePush } from '@/lib/push';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error('Error listing reminders:', error);
-    return NextResponse.json({ error: 'Failed to load reminders', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to load reminders', error), { status: 500 });
   }
 }
 
@@ -140,7 +141,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error: any) {
     console.error('Error creating reminder:', error);
-    return NextResponse.json({ error: 'Failed to create reminder', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to create reminder', error), { status: 500 });
   }
 }
 
@@ -203,7 +204,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error updating reminder:', error);
-    return NextResponse.json({ error: 'Failed to update reminder', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to update reminder', error), { status: 500 });
   }
 }
 
@@ -229,6 +230,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting reminder:', error);
-    return NextResponse.json({ error: 'Failed to delete reminder', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to delete reminder', error), { status: 500 });
   }
 }

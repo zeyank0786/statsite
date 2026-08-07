@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { queryOne, query } from '@/lib/db';
 import { compare, hash } from 'bcryptjs';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,7 +88,7 @@ export async function PUT(request: Request) {
   } catch (error: any) {
     console.error('Error updating profile:', error);
     return NextResponse.json(
-      { error: 'Failed to update profile', details: error.message },
+      errorPayload('Failed to update profile', error),
       { status: 500 }
     );
   }

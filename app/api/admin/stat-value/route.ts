@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
+import { invalidateStatsCache } from '@/lib/statsCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +58,7 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error('Error loading player stat values:', error);
-    return NextResponse.json({ error: 'Failed to load stat values', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to load stat values', error), { status: 500 });
   }
 }
 
@@ -112,11 +114,14 @@ export async function POST(request: Request) {
          VALUES (?, ?, ?, ?, ?, ?, 'admin_edit', ?)`,
         [uuid(), statValueId, oldValue, newValue, reason?.trim() || 'Admin manual adjustment', adminPlayerId, now]
       );
+      // The cached crew leaderboard is now stale — drop it so this change
+      // is visible immediately rather than up to a TTL later.
+      invalidateStatsCache();
     }
 
     return NextResponse.json({ success: true, oldValue, newValue });
   } catch (error: any) {
     console.error('Error setting stat value:', error);
-    return NextResponse.json({ error: 'Failed to set stat value', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to set stat value', error), { status: 500 });
   }
 }

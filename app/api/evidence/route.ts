@@ -7,6 +7,7 @@ import { firePush } from '@/lib/push';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { getFolderTagsByEvidence, setEvidenceFolders } from '@/lib/evidenceFolders';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +72,7 @@ export async function GET() {
     );
   } catch (error: any) {
     console.error('Error fetching evidence:', error);
-    return NextResponse.json({ error: 'Failed to fetch evidence', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to fetch evidence', error), { status: 500 });
   }
 }
 
@@ -145,7 +146,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error: any) {
     console.error('Error creating evidence:', error);
-    return NextResponse.json({ error: 'Failed to create evidence', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to create evidence', error), { status: 500 });
   }
 }
 
@@ -196,7 +197,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error updating evidence:', error);
-    return NextResponse.json({ error: 'Failed to update evidence', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to update evidence', error), { status: 500 });
   }
 }
 
@@ -247,6 +248,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting evidence:', error);
-    return NextResponse.json({ error: 'Failed to delete evidence', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to delete evidence', error), { status: 500 });
   }
 }

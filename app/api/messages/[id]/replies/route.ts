@@ -5,6 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +72,7 @@ export async function POST(
   } catch (error: any) {
     console.error('Error creating reply:', error);
     return NextResponse.json(
-      { error: 'Failed to create reply', details: error.message },
+      errorPayload('Failed to create reply', error),
       { status: 500 }
     );
   }

@@ -16,6 +16,7 @@ import {
 } from '@/lib/commitments';
 import { getEligibleVoterIds } from '@/lib/suggestionEngine';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -142,7 +143,7 @@ export async function GET() {
     return NextResponse.json({ commitments: payload, records });
   } catch (error: any) {
     console.error('Error listing commitments:', error);
-    return NextResponse.json({ error: 'Failed to list commitments', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to list commitments', error), { status: 500 });
   }
 }
 
@@ -264,6 +265,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error: any) {
     console.error('Error creating commitment:', error);
-    return NextResponse.json({ error: 'Failed to create commitment', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to create commitment', error), { status: 500 });
   }
 }

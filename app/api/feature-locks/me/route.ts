@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { getLocksForPlayer } from '@/lib/featureLocks';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,6 @@ export async function GET() {
     return NextResponse.json({ locks: Object.fromEntries(locks) });
   } catch (error: any) {
     console.error('Error loading own locks:', error);
-    return NextResponse.json({ error: 'Failed to load locks', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to load locks', error), { status: 500 });
   }
 }

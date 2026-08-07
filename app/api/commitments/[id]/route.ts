@@ -6,6 +6,7 @@ import { firePush } from '@/lib/push';
 import { recordMentions } from '@/lib/mentionsServer';
 import { ensureCommitmentTables, tallyVotes, resolveWithdrawal, getOriginalStats } from '@/lib/commitments';
 import { getEligibleVoterIds } from '@/lib/suggestionEngine';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -137,7 +138,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
   } catch (error: any) {
     console.error('Error loading commitment:', error);
-    return NextResponse.json({ error: 'Failed to load commitment', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to load commitment', error), { status: 500 });
   }
 }
 
@@ -237,7 +238,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
   } catch (error: any) {
     console.error('Error updating commitment:', error);
-    return NextResponse.json({ error: 'Failed to update commitment', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to update commitment', error), { status: 500 });
   }
 }
 
@@ -274,6 +275,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting commitment:', error);
-    return NextResponse.json({ error: 'Failed to delete commitment', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to delete commitment', error), { status: 500 });
   }
 }

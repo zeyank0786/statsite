@@ -14,6 +14,7 @@ import { featureLockMessage, getPlayersLockedFrom } from '@/lib/featureLocks';
 import { sendPushToPlayers } from '@/lib/push';
 import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -220,7 +221,7 @@ export async function GET() {
     return NextResponse.json(payload);
   } catch (error: any) {
     console.error('Error fetching suggestions:', error);
-    return NextResponse.json({ error: 'Failed to fetch suggestions', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to fetch suggestions', error), { status: 500 });
   }
 }
 
@@ -447,6 +448,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, created, count: created.length });
   } catch (error: any) {
     console.error('Error creating suggestion:', error);
-    return NextResponse.json({ error: 'Failed to create suggestion', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to create suggestion', error), { status: 500 });
   }
 }

@@ -10,6 +10,7 @@ import {
   deleteFolder,
   FOLDER_NAME_MAX,
 } from '@/lib/evidenceFolders';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,7 @@ export async function GET() {
     return NextResponse.json({ folders });
   } catch (error: any) {
     console.error('Error listing folders:', error);
-    return NextResponse.json({ error: 'Failed to list folders', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to list folders', error), { status: 500 });
   }
 }
 
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error: any) {
     console.error('Error creating folder:', error);
-    return NextResponse.json({ error: 'Failed to create folder', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to create folder', error), { status: 500 });
   }
 }
 
@@ -81,7 +82,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error renaming folder:', error);
-    return NextResponse.json({ error: 'Failed to rename folder', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to rename folder', error), { status: 500 });
   }
 }
 
@@ -102,6 +103,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting folder:', error);
-    return NextResponse.json({ error: 'Failed to delete folder', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to delete folder', error), { status: 500 });
   }
 }

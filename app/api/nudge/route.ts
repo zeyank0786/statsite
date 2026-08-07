@@ -11,6 +11,7 @@ import {
   nudgeCooldownRemaining,
   recordNudge,
 } from '@/lib/nudges';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +94,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, cooldownHours: NUDGE_COOLDOWN_HOURS });
   } catch (error: any) {
     console.error('Error sending nudge:', error);
-    return NextResponse.json({ error: 'Failed to send nudge', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to send nudge', error), { status: 500 });
   }
 }

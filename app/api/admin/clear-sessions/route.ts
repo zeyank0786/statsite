@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error clearing sessions:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to clear sessions' },
+      errorPayload('Failed to clear sessions', error),
       { status: 500 }
     );
   }

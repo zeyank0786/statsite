@@ -2,6 +2,7 @@ import { hash } from 'bcryptjs';
 import { NextResponse } from 'next/server';
 import { query, queryAll } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -218,7 +219,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error('❌ Seed error:', error);
     return NextResponse.json(
-      { error: 'Failed to seed database', details: error.message },
+      errorPayload('Failed to seed database', error),
       { status: 500 }
     );
   }
@@ -238,7 +239,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('❌ Seed error:', error);
     return NextResponse.json(
-      { error: 'Failed to seed database', details: error.message },
+      errorPayload('Failed to seed database', error),
       { status: 500 }
     );
   }

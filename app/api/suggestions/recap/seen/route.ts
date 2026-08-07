@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne } from '@/lib/db';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +38,7 @@ export async function POST() {
     return NextResponse.json({ success: true, recapSeenAt: now });
   } catch (error: any) {
     console.error('Error marking recap seen:', error);
-    return NextResponse.json({ error: 'Failed to update recap', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to update recap', error), { status: 500 });
   }
 }
 
@@ -58,6 +59,6 @@ export async function GET() {
     }
     return NextResponse.json({ recapSeenAt: row?.recapSeenAt || null });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed', error), { status: 500 });
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { queryAll } from '@/lib/db';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error('Error fetching players:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch players', details: error.message },
+      errorPayload('Failed to fetch players', error),
       { status: 500 }
     );
   }

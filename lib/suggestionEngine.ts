@@ -4,6 +4,7 @@ import { getPlayersLockedFrom } from './featureLocks';
 import { getStatTier } from './categories';
 import { sendPushToPlayers } from './push';
 import { v4 as uuid } from 'uuid';
+import { invalidateStatsCache } from './statsCache';
 
 /**
  * Suggestion resolution engine — the ONLY code path that changes a stat value.
@@ -260,6 +261,9 @@ async function applyApproval(suggestion: any, now: string): Promise<ApprovedChan
      VALUES (?, ?, ?, ?, ?, ?, 'suggestion', ?)`,
     [uuid(), String(statValue.id), oldValue, newValue, String(suggestion.reason), String(suggestion.proposedById), now]
   );
+  // The cached crew leaderboard is now stale — drop it so this change
+  // is visible immediately rather than up to a TTL later.
+  invalidateStatsCache();
 
   // Celebrate tier-ups / category milestones on the board — never let a
   // failure here undo the approved stat change.

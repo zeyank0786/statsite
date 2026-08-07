@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { computeWrapped, listCompletedSeasons, seasonFromKey, previousSeason } from '@/lib/wrapped';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,6 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error('Error building wrapped:', error);
-    return NextResponse.json({ error: 'Failed to build Wrapped', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to build Wrapped', error), { status: 500 });
   }
 }

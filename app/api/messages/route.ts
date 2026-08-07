@@ -5,6 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,7 +114,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error('Error fetching messages:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch messages', details: error.message },
+      errorPayload('Failed to fetch messages', error),
       { status: 500 }
     );
   }
@@ -182,7 +183,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error creating message:', error);
     return NextResponse.json(
-      { error: 'Failed to create message', details: error.message },
+      errorPayload('Failed to create message', error),
       { status: 500 }
     );
   }
@@ -236,7 +237,7 @@ export async function PUT(request: Request) {
   } catch (error: any) {
     console.error('Error editing message:', error);
     return NextResponse.json(
-      { error: 'Failed to edit message', details: error.message },
+      errorPayload('Failed to edit message', error),
       { status: 500 }
     );
   }
@@ -288,7 +289,7 @@ export async function DELETE(request: Request) {
   } catch (error: any) {
     console.error('Error deleting message:', error);
     return NextResponse.json(
-      { error: 'Failed to delete message', details: error.message },
+      errorPayload('Failed to delete message', error),
       { status: 500 }
     );
   }

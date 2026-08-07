@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,7 +71,7 @@ export async function POST(
   } catch (error: any) {
     console.error('Error toggling reaction:', error);
     return NextResponse.json(
-      { error: 'Failed to toggle reaction', details: error.message },
+      errorPayload('Failed to toggle reaction', error),
       { status: 500 }
     );
   }

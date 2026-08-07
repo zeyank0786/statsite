@@ -3,6 +3,7 @@ import { queryOne, query, queryAll } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error('Error fetching unread count:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch unread count', details: error.message },
+      errorPayload('Failed to fetch unread count', error),
       { status: 500 }
     );
   }
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error marking messages as read:', error);
     return NextResponse.json(
-      { error: 'Failed to mark messages as read', details: error.message },
+      errorPayload('Failed to mark messages as read', error),
       { status: 500 }
     );
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { queryAll } from '@/lib/db';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,6 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error('Export failed:', error);
-    return NextResponse.json({ error: 'Export failed', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Export failed', error), { status: 500 });
   }
 }

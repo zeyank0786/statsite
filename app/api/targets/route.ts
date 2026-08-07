@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ export async function GET() {
   } catch (error: any) {
     console.error('Error fetching targets:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch targets', details: error.message },
+      errorPayload('Failed to fetch targets', error),
       { status: 500 }
     );
   }
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error updating targets:', error);
     return NextResponse.json(
-      { error: 'Failed to update targets', details: error.message },
+      errorPayload('Failed to update targets', error),
       { status: 500 }
     );
   }

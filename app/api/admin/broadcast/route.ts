@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/auth';
 import { queryAll } from '@/lib/db';
 import { createBroadcast, getRecentBroadcasts } from '@/lib/broadcasts';
 import { sendPushToPlayers } from '@/lib/push';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export async function GET() {
     return NextResponse.json({ broadcasts });
   } catch (error: any) {
     console.error('Error listing broadcasts:', error);
-    return NextResponse.json({ error: 'Failed to list broadcasts', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to list broadcasts', error), { status: 500 });
   }
 }
 
@@ -71,6 +72,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, id: record.id, recipients: ids.length, pushed });
   } catch (error: any) {
     console.error('Error sending broadcast:', error);
-    return NextResponse.json({ error: 'Failed to send broadcast', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to send broadcast', error), { status: 500 });
   }
 }

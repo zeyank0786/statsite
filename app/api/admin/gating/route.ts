@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -171,6 +172,6 @@ export async function POST(request: Request) {
     }
   } catch (error: any) {
     console.error('Error in gating action:', error);
-    return NextResponse.json({ error: 'Gating action failed', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Gating action failed', error), { status: 500 });
   }
 }

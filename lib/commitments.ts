@@ -3,6 +3,7 @@ import { getEligibleVoterIds } from './suggestionEngine';
 import { announceStatMilestones } from './milestones';
 import { firePush } from './push';
 import { v4 as uuid } from 'uuid';
+import { invalidateStatsCache } from './statsCache';
 
 /**
  * Commitments — a public promise with a deadline, judged by the crew.
@@ -330,6 +331,9 @@ async function applyCommitmentStats(commitment: CommitmentRow, now: string): Pro
         now,
       ]
     );
+    // The cached crew leaderboard is now stale — drop it so this change
+    // is visible immediately rather than up to a TTL later.
+    invalidateStatsCache();
 
     try {
       await announceStatMilestones({

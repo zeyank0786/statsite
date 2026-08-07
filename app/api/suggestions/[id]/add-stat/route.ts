@@ -7,6 +7,7 @@ import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
 import { getEligibleVoterIds, resolveSuggestion, notifyApprovedChanges } from '@/lib/suggestionEngine';
 import { sendPushToPlayers } from '@/lib/push';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -165,6 +166,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true, id: newId, resolution });
   } catch (error: any) {
     console.error('Error adding stat to suggestion:', error);
-    return NextResponse.json({ error: 'Failed to add stat', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to add stat', error), { status: 500 });
   }
 }

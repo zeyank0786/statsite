@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { queryOne, queryAll } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,6 +102,6 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching stat detail:', error);
-    return NextResponse.json({ error: 'Failed to fetch stat detail', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to fetch stat detail', error), { status: 500 });
   }
 }

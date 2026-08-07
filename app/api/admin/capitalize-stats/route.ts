@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryAll } from '@/lib/db';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error capitalizing stats:', error);
     return NextResponse.json(
-      { error: 'Failed to capitalize stats', details: error.message },
+      errorPayload('Failed to capitalize stats', error),
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { queryAll } from '@/lib/db';
 import { orderCategories } from '@/lib/categories';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,6 @@ export async function GET() {
     );
   } catch (error: any) {
     console.error('Error fetching categories:', error);
-    return NextResponse.json({ error: 'Failed to fetch categories', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to fetch categories', error), { status: 500 });
   }
 }

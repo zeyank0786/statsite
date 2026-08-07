@@ -3,6 +3,7 @@ import { queryAll, queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ export async function GET() {
   } catch (error: any) {
     console.error('Error fetching review sessions:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch review sessions' },
+      errorPayload('Failed to fetch review sessions', error),
       { status: 500 }
     );
   }
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error creating review session:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create review session' },
+      errorPayload('Failed to create review session', error),
       { status: 500 }
     );
   }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { pushConfigured, saveSubscription, removeSubscription, sendPushToPlayers } from '@/lib/push';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error saving push subscription:', error);
-    return NextResponse.json({ error: 'Failed to save subscription', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to save subscription', error), { status: 500 });
   }
 }
 
@@ -75,6 +76,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error removing push subscription:', error);
-    return NextResponse.json({ error: 'Failed to remove subscription', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to remove subscription', error), { status: 500 });
   }
 }

@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import {
-  fetchAllPlayerStats,
-  fetchAllHistory,
-  buildPlayerAggregates,
-  historySince,
-  daysAgo,
-} from '@/lib/serverStats';
-import { computeAchievements } from '@/lib/achievements';
-import { fetchSocialCounts } from '@/lib/socialCounts';
-import { computeStreakWeeks } from '@/lib/streaks';
-import { queryAll } from '@/lib/db';
+import { getLeaderboard } from '@/lib/leaderboard';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * The board itself is cached crew-wide (see lib/leaderboard.ts) — the auth
+ * check stays out here, per request, so caching never serves data to a
+ * signed-out caller.
+ */
 export async function GET() {
   try {
     const authOptions = await getAuthOptions();
@@ -23,74 +19,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [rows, history, social] = await Promise.all([
-      fetchAllPlayerStats(),
-      fetchAllHistory(),
-      fetchSocialCounts(),
-    ]);
-    const players = buildPlayerAggregates(rows);
-    // With the social counts: without them the community, commitment and
-    // streak achievements read as unearned and the board undercounts everyone.
-    const achievements = computeAchievements(players, history, social);
-
-    const cutoff90 = daysAgo(90);
-    const cutoff30 = daysAgo(30);
-
-    // Evidence posts also count toward activity streaks
-    let evidenceDatesByPlayer = new Map<string, string[]>();
-    try {
-      const evidenceRows = await queryAll('SELECT playerId, createdAt FROM Evidence');
-      for (const r of evidenceRows as any[]) {
-        const pid = String(r.playerId);
-        if (!evidenceDatesByPlayer.has(pid)) evidenceDatesByPlayer.set(pid, []);
-        evidenceDatesByPlayer.get(pid)!.push(String(r.createdAt));
-      }
-    } catch {
-      /* streaks degrade to history-only */
-    }
-
-    const payload = players.map((p) => {
-      const ph = history.filter((h) => h.playerId === p.id);
-      const h90 = historySince(ph, cutoff90);
-      const h30 = historySince(ph, cutoff30);
-      const bestStat = p.categories
-        .flatMap((c) => c.stats.map((s) => ({ ...s, categoryCode: c.code })))
-        .reduce((a, b) => (b.value > a.value ? b : a), { value: -1 } as any);
-
-      return {
-        id: p.id,
-        username: p.username,
-        overall: Math.round(p.overall * 10) / 10,
-        totalSum: p.totalSum,
-        categories: p.categories.map((c) => ({
-          code: c.code,
-          label: c.label,
-          total: c.total,
-          avg: Math.round(c.avg * 100) / 100,
-        })),
-        net90: h90.reduce((s, h) => s + (h.newValue - h.oldValue), 0),
-        net30: h30.reduce((s, h) => s + (h.newValue - h.oldValue), 0),
-        changes90: h90.length,
-        eliteStats: p.categories.flatMap((c) => c.stats).filter((s) => s.value >= 8).length,
-        bestStat:
-          bestStat.value >= 0
-            ? { code: bestStat.code, label: bestStat.label, value: bestStat.value, categoryCode: bestStat.categoryCode }
-            : null,
-        achievementsEarned: (achievements[p.id] || []).filter((a) => a.earned).length,
-        achievementsTotal: (achievements[p.id] || []).length,
-        streakWeeks: computeStreakWeeks([
-          ...ph.map((h) => h.createdAt),
-          ...(evidenceDatesByPlayer.get(p.id) || []),
-        ]),
-      };
-    });
-
-    return NextResponse.json({ players: payload });
+    const players = await getLeaderboard();
+    return NextResponse.json({ players });
   } catch (error: any) {
     console.error('Error building leaderboards:', error);
-    return NextResponse.json(
-      { error: 'Failed to build leaderboards', details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json(errorPayload('Failed to build leaderboards', error), { status: 500 });
   }
 }

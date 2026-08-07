@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { BellIcon, XIcon } from './icons';
+import { usePoll } from '@/lib/usePoll';
 
 /**
  * The bell: a polled activity feed for the whole crew, plus personal
@@ -118,12 +119,9 @@ export default function NotificationCenter() {
     }
   };
 
-  useEffect(() => {
-    load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Paused while the tab is hidden; fires once on return so a notification that
+  // landed while you were away shows up immediately rather than up to 30s later.
+  usePoll(load, 30000);
 
   // Close the panel on outside click (panel is portaled, so check both trees)
   useEffect(() => {

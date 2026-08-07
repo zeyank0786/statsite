@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { runDueReminders } from '@/lib/reminders';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,7 @@ async function handle(request: Request) {
     return NextResponse.json({ ok: true, ...result });
   } catch (error: any) {
     console.error('Reminder cron failed:', error);
-    return NextResponse.json({ error: 'Cron failed', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Cron failed', error), { status: 500 });
   }
 }
 

@@ -406,6 +406,26 @@ export const WarningIcon = (p: IconProps) => (
   </Base>
 );
 
+export const RefreshIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+    <path d="M21 3v6h-6" />
+  </Base>
+);
+
+export const CommandIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3Z" />
+  </Base>
+);
+
+export const CornerDownLeftIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+    <path d="M8 11l-4 4 4 4" />
+  </Base>
+);
+
 export const BellIcon = (p: IconProps) => (
   <Base {...p}>
     <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { queryAll, queryOne } from '@/lib/db';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,7 @@ export async function GET(
   } catch (error: any) {
     console.error('Error fetching stat changes:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch stat changes', details: error.message },
+      errorPayload('Failed to fetch stat changes', error),
       { status: 500 }
     );
   }

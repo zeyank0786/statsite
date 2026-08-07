@@ -5,6 +5,7 @@ import { query, queryOne, queryAll } from '@/lib/db';
 import { ensureAmbitionTables, listAmbitions, getActiveCelebrations } from '@/lib/ambitions';
 import { sendPushToPlayers } from '@/lib/push';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,7 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error('Error listing ambitions:', error);
-    return NextResponse.json({ error: 'Failed to load ambitions', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to load ambitions', error), { status: 500 });
   }
 }
 
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error: any) {
     console.error('Error creating ambition:', error);
-    return NextResponse.json({ error: 'Failed to create ambition', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to create ambition', error), { status: 500 });
   }
 }
 
@@ -174,7 +175,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error updating ambition:', error);
-    return NextResponse.json({ error: 'Failed to update ambition', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to update ambition', error), { status: 500 });
   }
 }
 
@@ -203,6 +204,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting ambition:', error);
-    return NextResponse.json({ error: 'Failed to delete ambition', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to delete ambition', error), { status: 500 });
   }
 }

@@ -5,6 +5,7 @@ import { queryAll } from '@/lib/db';
 import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from '@/lib/serverStats';
 import { computeAchievements } from '@/lib/achievements';
 import { fetchSocialCounts } from '@/lib/socialCounts';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error('Error computing achievements:', error);
     return NextResponse.json(
-      { error: 'Failed to compute achievements', details: error.message },
+      errorPayload('Failed to compute achievements', error),
       { status: 500 }
     );
   }

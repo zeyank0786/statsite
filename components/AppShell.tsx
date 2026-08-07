@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useState, ViewTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, ViewTransition } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import Logo from './Logo';
 import Avatar from './Avatar';
 import NotificationCenter from './NotificationCenter';
+import CommandPalette from './CommandPalette';
 import { setKnownRoster } from '@/lib/userColors';
+import { usePoll } from '@/lib/usePoll';
 import {
   HomeIcon,
   UsersIcon,
@@ -29,6 +31,7 @@ import {
   BellIcon,
   StarIcon,
   SparklesIcon,
+  SearchIcon,
 } from './icons';
 
 interface NavItem {
@@ -92,10 +95,26 @@ function isActive(pathname: string, href: string): boolean {
 export default function AppShell({
   children,
   width = 'default',
+  rosterIds,
 }: {
   children: React.ReactNode;
   width?: 'default' | 'narrow' | 'wide';
+  /**
+   * Full roster (archived included) supplied by server-rendered pages. Passed
+   * here rather than fetched so SSR and hydration agree — see below.
+   */
+  rosterIds?: string[];
 }) {
+  // Registered during render, not in an effect, and deliberately so: a
+  // server-rendered page paints avatars in the initial HTML, and an effect
+  // only runs after hydration. Assigning here means the server pass and the
+  // hydration pass compute identical colours, instead of every avatar
+  // flipping shade the moment the effect lands.
+  //
+  // Safe as a render-time call: setKnownRoster is deterministic and idempotent
+  // for a given set of ids, so repeating it changes nothing.
+  if (rosterIds && rosterIds.length > 0) setKnownRoster(rosterIds);
+
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -109,41 +128,34 @@ export default function AppShell({
   const playerName = (session?.user as any)?.playerUsername || session?.user?.name || '';
   const isAdmin = Boolean((session?.user as any)?.isAdmin);
 
-  useEffect(() => {
+  const loadPulse = useCallback(async () => {
     if (status !== 'authenticated') return;
+    try {
+      const res = await fetch('/api/pulse');
+      if (!res.ok) return;
+      const data = await res.json();
+      setUnreadCount(data.messages || 0);
+      setUnreadEvidence(data.evidence || 0);
+      setUnvotedSuggestions(data.suggestions || 0);
+    } catch {
+      /* silent */
+    }
+  }, [status]);
 
-    const load = async () => {
-      try {
-        const [messagesRes, evidenceRes, unvotedRes] = await Promise.all([
-          fetch('/api/messages/unread'),
-          fetch('/api/evidence/unread'),
-          fetch('/api/suggestions/unvoted'),
-        ]);
-        if (messagesRes.ok) {
-          const data = await messagesRes.json();
-          setUnreadCount(data.unreadCount || 0);
-        }
-        if (evidenceRes.ok) {
-          const data = await evidenceRes.json();
-          setUnreadEvidence(data.unreadCount || 0);
-        }
-        if (unvotedRes.ok) {
-          const data = await unvotedRes.json();
-          setUnvotedSuggestions(data.unvotedCount || 0);
-        }
-      } catch {
-        /* silent */
-      }
-    };
+  // All three badge counts arrive in one request (/api/pulse) rather than three,
+  // and `usePoll` stops the timer entirely while the tab is hidden.
+  usePoll(loadPulse, 15000, { enabled: status === 'authenticated' });
 
-    load();
-    const interval = setInterval(load, 15000);
-    return () => clearInterval(interval);
-  }, [status, pathname]);
-
-  // Register the full roster (incl. archived) so user colors are collision-free
+  // Reading a page usually clears its badge, so refresh on navigation too —
+  // otherwise the count lingers for up to a full interval after you've looked.
   useEffect(() => {
-    if (status !== 'authenticated') return;
+    void loadPulse();
+  }, [pathname, loadPulse]);
+
+  // Register the full roster (incl. archived) so user colors are collision-free.
+  // Skipped when a server-rendered page already supplied it above.
+  useEffect(() => {
+    if (status !== 'authenticated' || (rosterIds && rosterIds.length > 0)) return;
     fetch('/api/players?includeInactive=1')
       .then((res) => (res.ok ? res.json() : []))
       .then((players: any[]) => {
@@ -153,13 +165,35 @@ export default function AppShell({
         }
       })
       .catch(() => {});
-  }, [status]);
+  }, [status, rosterIds]);
 
   // Close menus on navigation
   useEffect(() => {
     setMoreOpen(false);
     setSheetOpen(false);
   }, [pathname]);
+
+  const openPalette = () => document.dispatchEvent(new CustomEvent('4ward:open-palette'));
+
+  /**
+   * Long-press the mobile "More" tab to open the palette instead of the sheet.
+   * Touch devices have no ⌘K to discover, and More is where someone already
+   * goes when hunting for something — so the gesture sits on the same target.
+   */
+  const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  const startLongPress = () => {
+    longPressFired.current = false;
+    longPress.current = setTimeout(() => {
+      longPressFired.current = true;
+      openPalette();
+    }, 500);
+  };
+  const cancelLongPress = () => {
+    if (longPress.current) clearTimeout(longPress.current);
+    longPress.current = null;
+  };
 
   const moreNav = MORE_NAV.filter((item) => !item.adminOnly || isAdmin);
   const mobileMore = MOBILE_MORE.filter((item) => !item.adminOnly || isAdmin);
@@ -189,6 +223,9 @@ export default function AppShell({
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Portals itself to <body>; renders nothing until opened */}
+      <CommandPalette />
+
       {/* ===== Top header ===== */}
       {/* The iOS status-bar style is black-translucent, so the web view runs
           underneath the clock/battery. Pad the header by the top inset and
@@ -280,6 +317,16 @@ export default function AppShell({
 
               {/* Right actions */}
               <div className="flex items-center gap-1.5">
+                {status === 'authenticated' && (
+                  <button
+                    onClick={openPalette}
+                    className="p-2.5 rounded-xl text-neutral-400 hover:text-white hover:bg-white/5 transition"
+                    title="Search (⌘K)"
+                    aria-label="Search"
+                  >
+                    <SearchIcon size={18} />
+                  </button>
+                )}
                 {status === 'authenticated' && playerId && <NotificationCenter />}
                 <Link
                   href="/settings"
@@ -360,7 +407,20 @@ export default function AppShell({
             );
           })}
           <button
-            onClick={() => setSheetOpen(true)}
+            onClick={() => {
+              // Suppress the tap that follows a completed long-press, or the
+              // sheet opens on top of the palette.
+              if (longPressFired.current) {
+                longPressFired.current = false;
+                return;
+              }
+              setSheetOpen(true);
+            }}
+            onTouchStart={startLongPress}
+            onTouchEnd={cancelLongPress}
+            onTouchMove={cancelLongPress}
+            onTouchCancel={cancelLongPress}
+            onContextMenu={(e) => e.preventDefault()}
             className={`flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition ${
               mobileMore.some((i) => isActive(pathname, i.href)) ? 'text-white' : 'text-neutral-500'
             }`}
@@ -388,6 +448,20 @@ export default function AppShell({
                 <XIcon size={20} />
               </button>
             </div>
+            {/* Search sits above the grid — the long-press gesture that also
+                opens it isn't discoverable on its own. */}
+            <button
+              onClick={() => {
+                setSheetOpen(false);
+                openPalette();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-medium border text-neutral-300 mb-2"
+              style={{ borderColor: 'var(--surface-border)' }}
+            >
+              <SearchIcon size={19} />
+              Search everything
+            </button>
+
             <div className="grid grid-cols-2 gap-2 mb-4">
               {mobileMore.map((item) => (
                 <Link

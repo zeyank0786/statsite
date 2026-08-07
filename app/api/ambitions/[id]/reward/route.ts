@@ -13,6 +13,7 @@ import { ensureAmbitionTables, MAX_REWARD_DELTA } from '@/lib/ambitions';
 import { sendPushToPlayers } from '@/lib/push';
 import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -157,6 +158,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true, id: suggestionId, resolution });
   } catch (error: any) {
     console.error('Error proposing ambition reward:', error);
-    return NextResponse.json({ error: 'Failed to propose reward', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to propose reward', error), { status: 500 });
   }
 }

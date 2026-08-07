@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { queryOne } from '@/lib/db';
 import { getLocksForPlayer } from '@/lib/featureLocks';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,6 @@ export async function GET() {
     return NextResponse.json({ unvotedCount: Number(row?.c) || 0 });
   } catch (error: any) {
     console.error('Error counting unvoted suggestions:', error);
-    return NextResponse.json({ error: 'Failed to count', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to count', error), { status: 500 });
   }
 }

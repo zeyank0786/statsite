@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { usePoll } from '@/lib/usePoll';
 
 interface ActivityItem {
   id: string;
@@ -22,22 +23,18 @@ export default function ActivityTicker() {
   const router = useRouter();
   const [items, setItems] = useState<ActivityItem[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = () =>
-      fetch('/api/activity')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (!cancelled && data) setItems(data.events || []);
-        })
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 25000);
-    return () => {
-      cancelled = true;
-      clearInterval(t);
-    };
-  }, []);
+  // Paused while the tab is hidden — a marquee nobody can see has no reason to
+  // keep querying. Refetches immediately on return.
+  usePoll(async () => {
+    try {
+      const r = await fetch('/api/activity');
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data) setItems(data.events || []);
+    } catch {
+      /* silent */
+    }
+  }, 25000);
 
   if (items.length === 0) return null;
 

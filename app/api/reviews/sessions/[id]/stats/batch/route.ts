@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { broadcastUpdate } from '@/lib/realtime';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
+import { invalidateStatsCache } from '@/lib/statsCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,6 +92,9 @@ export async function PUT(
         'INSERT INTO StatHistory (id, statValueId, oldValue, newValue, reason, changedById, source, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [uuid(), statValueId, previousValue, value, 'Collaborative review', currentPlayerId, 'review_cycle', now]
       );
+      // The cached crew leaderboard is now stale — drop it so this change
+      // is visible immediately rather than up to a TTL later.
+      invalidateStatsCache();
 
       broadcastUpdate(id, {
         type: 'stat_updated',
@@ -106,7 +111,7 @@ export async function PUT(
   } catch (error: any) {
     console.error('Error saving stats:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to save stats' },
+      errorPayload('Failed to save stats', error),
       { status: 500 }
     );
   }

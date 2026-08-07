@@ -7,6 +7,7 @@ import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
 import { getEligibleVoterIds } from '@/lib/suggestionEngine';
 import { recordMentions } from '@/lib/mentionsServer';
 import { ensureCommitmentTables, proposeAdjustment, ALLOWED_DELTAS } from '@/lib/commitments';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,6 +119,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true, adjusted: parsed.length });
   } catch (error: any) {
     console.error('Error adjusting commitment:', error);
-    return NextResponse.json({ error: 'Failed to adjust', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to adjust', error), { status: 500 });
   }
 }

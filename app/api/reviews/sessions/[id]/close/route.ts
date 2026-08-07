@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { errorPayload } from '@/lib/apiError';
+import { invalidateStatsCache } from '@/lib/statsCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,6 +85,9 @@ export async function POST(
               'INSERT INTO StatHistory (id, statValueId, oldValue, newValue, reason, changedById, source, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
               [uuid(), existingValue.id, oldValue, snap.value, 'Review session reverted', currentPlayerId, 'review_revert', now]
             );
+            // The cached crew leaderboard is now stale — drop it so this change
+            // is visible immediately rather than up to a TTL later.
+            invalidateStatsCache();
           } else {
             console.log(`[REVERT] No existing value found for ${snap.statId}`);
           }
@@ -105,7 +110,7 @@ export async function POST(
   } catch (error: any) {
     console.error('Error closing review session:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to close review session' },
+      errorPayload('Failed to close review session', error),
       { status: 500 }
     );
   }

@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,7 +100,7 @@ export async function GET() {
     );
   } catch (error: any) {
     console.error('Error listing presets:', error);
-    return NextResponse.json({ error: 'Failed to list presets', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to list presets', error), { status: 500 });
   }
 }
 
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error: any) {
     console.error('Error creating preset:', error);
-    return NextResponse.json({ error: 'Failed to create preset', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to create preset', error), { status: 500 });
   }
 }
 
@@ -177,7 +178,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error updating preset:', error);
-    return NextResponse.json({ error: 'Failed to update preset', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to update preset', error), { status: 500 });
   }
 }
 
@@ -201,6 +202,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting preset:', error);
-    return NextResponse.json({ error: 'Failed to delete preset', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to delete preset', error), { status: 500 });
   }
 }

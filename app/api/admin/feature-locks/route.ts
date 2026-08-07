@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { getAllLocks, setFeatureLock, isValidFeature, LOCKABLE_FEATURES } from '@/lib/featureLocks';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export async function GET() {
     return NextResponse.json({ features: LOCKABLE_FEATURES, locks });
   } catch (error: any) {
     console.error('Error listing feature locks:', error);
-    return NextResponse.json({ error: 'Failed to list locks', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to list locks', error), { status: 500 });
   }
 }
 
@@ -49,6 +50,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, affected: features.length });
   } catch (error: any) {
     console.error('Error setting feature lock:', error);
-    return NextResponse.json({ error: 'Failed to set lock', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to set lock', error), { status: 500 });
   }
 }

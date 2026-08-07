@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export async function GET() {
     );
   } catch (error: any) {
     console.error('Error listing players:', error);
-    return NextResponse.json({ error: 'Failed to list players', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to list players', error), { status: 500 });
   }
 }
 
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id });
   } catch (error: any) {
     console.error('Error creating player:', error);
-    return NextResponse.json({ error: 'Failed to create player', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to create player', error), { status: 500 });
   }
 }
 
@@ -89,6 +90,6 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error updating player:', error);
-    return NextResponse.json({ error: 'Failed to update player', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to update player', error), { status: 500 });
   }
 }

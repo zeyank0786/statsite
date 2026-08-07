@@ -3,6 +3,7 @@ import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,7 @@ export async function GET() {
   } catch (error: any) {
     console.error('Error fetching unread evidence count:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch unread evidence count', details: error.message },
+      errorPayload('Failed to fetch unread evidence count', error),
       { status: 500 }
     );
   }
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error marking evidence as read:', error);
     return NextResponse.json(
-      { error: 'Failed to mark evidence as read', details: error.message },
+      errorPayload('Failed to mark evidence as read', error),
       { status: 500 }
     );
   }

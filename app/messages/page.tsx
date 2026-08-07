@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
+import { usePoll } from '@/lib/usePoll';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -137,12 +138,13 @@ function MessagesContent() {
       return;
     }
     if (status === 'authenticated') {
-      loadMessages();
       loadPlayers(); // needed to render + autocomplete @mentions
-      const interval = setInterval(loadMessages, 5000);
-      return () => clearInterval(interval);
     }
   }, [status, router]);
+
+  // usePoll runs once immediately on mount, then every 5s while the tab is
+  // visible — a board left open in a background tab stops querying entirely.
+  usePoll(() => loadMessages(), 5000, { enabled: status === 'authenticated' });
 
   // Mark all messages as read when page loads or messages change
   useEffect(() => {

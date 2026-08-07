@@ -4,6 +4,7 @@ import { computeLocksForPlayer } from '@/lib/locks';
 import { getNextTier } from '@/lib/categories';
 import { computeStreakWeeks } from '@/lib/streaks';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -245,7 +246,7 @@ export async function GET(
   } catch (error: any) {
     console.error('Error fetching player:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch player', details: error.message },
+      errorPayload('Failed to fetch player', error),
       { status: 500 }
     );
   }
@@ -272,7 +273,7 @@ export async function PUT(
   } catch (error: any) {
     console.error('Error updating player:', error);
     return NextResponse.json(
-      { error: 'Failed to update player', details: error.message },
+      errorPayload('Failed to update player', error),
       { status: 500 }
     );
   }

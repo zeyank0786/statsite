@@ -5,6 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { resolveSuggestion, notifyApprovedChanges } from '@/lib/suggestionEngine';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,6 +67,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true, resolution });
   } catch (error: any) {
     console.error('Error voting on suggestion:', error);
-    return NextResponse.json({ error: 'Failed to vote', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to vote', error), { status: 500 });
   }
 }

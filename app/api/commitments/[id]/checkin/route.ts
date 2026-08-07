@@ -6,6 +6,7 @@ import { featureLockMessage } from '@/lib/featureLocks';
 import { recordMentions } from '@/lib/mentionsServer';
 import { ensureCommitmentTables } from '@/lib/commitments';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,6 +71,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true, id: checkInId });
   } catch (error: any) {
     console.error('Error checking in:', error);
-    return NextResponse.json({ error: 'Failed to check in', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to check in', error), { status: 500 });
   }
 }

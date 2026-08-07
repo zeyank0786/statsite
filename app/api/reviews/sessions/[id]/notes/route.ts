@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { recordMentions } from '@/lib/mentionsServer';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export async function GET(
   } catch (error: any) {
     console.error('Error fetching notes:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch notes', details: error.message },
+      errorPayload('Failed to fetch notes', error),
       { status: 500 }
     );
   }
@@ -89,7 +90,7 @@ export async function POST(
   } catch (error: any) {
     console.error('Error saving note:', error);
     return NextResponse.json(
-      { error: 'Failed to save note', details: error.message },
+      errorPayload('Failed to save note', error),
       { status: 500 }
     );
   }
@@ -143,7 +144,7 @@ export async function PUT(
   } catch (error: any) {
     console.error('Error updating note:', error);
     return NextResponse.json(
-      { error: 'Failed to update note', details: error.message },
+      errorPayload('Failed to update note', error),
       { status: 500 }
     );
   }
@@ -193,7 +194,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error('Error deleting note:', error);
     return NextResponse.json(
-      { error: 'Failed to delete note', details: error.message },
+      errorPayload('Failed to delete note', error),
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@ import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +68,7 @@ export async function POST(
   } catch (error: any) {
     console.error('Error creating snapshot:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create snapshot' },
+      errorPayload('Failed to create snapshot', error),
       { status: 500 }
     );
   }

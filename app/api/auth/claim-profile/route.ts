@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { queryOne, query } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error claiming profile:', error);
     return NextResponse.json(
-      { error: 'Failed to claim profile', details: error.message },
+      errorPayload('Failed to claim profile', error),
       { status: 500 }
     );
   }

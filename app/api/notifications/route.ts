@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { buildFeed, markSeen } from '@/lib/notifications';
+import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export async function GET() {
     return NextResponse.json(feed);
   } catch (error: any) {
     console.error('Error building notification feed:', error);
-    return NextResponse.json({ error: 'Failed to build feed', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to build feed', error), { status: 500 });
   }
 }
 
@@ -40,6 +41,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error marking notifications:', error);
-    return NextResponse.json({ error: 'Failed to mark', details: error.message }, { status: 500 });
+    return NextResponse.json(errorPayload('Failed to mark', error), { status: 500 });
   }
 }

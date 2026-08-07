@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { usePoll } from '@/lib/usePoll';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -52,19 +53,21 @@ export default function ReviewsPage() {
     }
   }, [status, router]);
 
-  // Poll sessions every 1 second for real-time updates (but not while joining/closing)
-  useEffect(() => {
-    if (!currentPlayerId || status !== 'authenticated' || joining || closing) return;
-    const interval = setInterval(async () => {
+  // Live session list. Kept at a 1s cadence because a review session is
+  // genuinely collaborative — but `usePoll` suspends it while the tab is
+  // hidden, so a forgotten tab no longer costs 60 requests a minute forever.
+  usePoll(
+    async () => {
       try {
         const res = await fetch('/api/reviews/cycles');
         if (res.ok) setSessions(await res.json());
       } catch (error) {
         console.error('Failed to refresh sessions:', error);
       }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [currentPlayerId, status, joining, closing]);
+    },
+    1000,
+    { enabled: Boolean(currentPlayerId) && status === 'authenticated' && !joining && !closing }
+  );
 
   const loadData = async () => {
     try {
