@@ -1,5 +1,159 @@
 # Changelog
 
+## Holographic trophy case — 7 August 2026
+
+The achievement set went from 30 to 49, and the cards became objects worth
+looking at.
+
+### Rarity
+
+Every achievement now declares `common | rare | epic | mythic`, assigned by
+hand. Rarity was *not* computed from how many of the crew hold a thing: in a
+crew of five, one person earning something would visibly downgrade everyone
+else's card, which is the opposite of a reward.
+
+The tier drives the whole treatment through four custom properties — edge
+colour, glow, pip colour and the band gradient — so a new tier is a block of
+variables, not a new set of rules. Current spread across the 49: 12 common,
+17 rare, 15 epic, 5 mythic.
+
+### The card
+
+Pointer-tracked foil over an oversized band gradient: `--fx/--fy` shift the
+`background-position`, so the pattern slides across the card as though it were
+catching the light rather than printed on. Common gets a plain silver sheen
+through `screen`; mythic gets the full spectrum through `color-dodge`.
+
+Tilt comes from the existing `.tilt` plumbing. Foil coordinates were added to
+the same delegated `pointermove` listener in `Effects.tsx` as a **separate**
+lookup from the glass spotlight — one combined `closest()` would return the
+card, and the section's spotlight would die the moment the cursor entered a
+card.
+
+Tap or click to flip: the back gives the earn date and which crew members hold
+it. An unclaimed mythic says so, which is the point of showing it at all.
+Holders come from the freshly computed result rather than the earned table, so
+the list is who qualifies *now*.
+
+Two things that would have silently broken the flip:
+
+- Dimming locked cards via `opacity` on the flipping element. Opacity below 1
+  forces `transform-style` back to `flat`. The faces are dimmed instead.
+- Making the `<button>` itself the grid container. Button-as-grid has a patchy
+  history across engines, and a fallback to `block` would stack the two faces
+  instead of overlapping them. The grid is a div inside the button.
+
+Touch devices never get a pointer — `Effects.tsx` doesn't even listen on them —
+so under `(hover: none)` the foil drifts on a slow ambient loop instead. That's
+the phone PWA, which is where most of this will actually be seen.
+
+### The set
+
+**Removed:** Comeback Story. It was the only achievement whose condition
+involved a stat going down, so it quietly paid for a dip.
+
+**Added 20**, none of which can be earned by losing ground anywhere:
+
+- *Milestones* — Double Century, Double Legend, Ten Deep, No Weak Links,
+  Ground Up
+- *Categories* — Specialist, Total Package, Well Rounded, Even Keel
+- *Momentum* — Big Swing, Big Day, Four Straight, Season Long, Half-Year Habit,
+  The Long Game
+- *Crew* — Podium, Triple Crown, Most Improved
+- *Community* — Called Your Shot (ambitions), Locked On (targets)
+
+Ground Up keys off a stat's **first** recorded change, not its lowest point —
+"carried it up from the 5-point start", never "dropped it and climbed back".
+
+Streaks reuse `computeStreakWeeks` with the same inputs as the leaderboard —
+stat changes plus evidence posts — so the two can never quote different
+numbers at the same person.
+
+### Rollout without a confetti storm
+
+Shipping 20 definitions at once would read as everyone earning all 20
+simultaneously, and celebrations play as a queue of full-screen modals, one at
+a time.
+
+`AchievementCatalog` now records every achievement ID the system has ever
+computed. The sync distinguishes three cases: first run ever, an award that was
+*invented* today, and an award someone actually just earned. Only the last one
+gets a real timestamp; the other two back-fill at epoch and stay quiet. Future
+batches inherit this automatically.
+
+### Fixed along the way
+
+`fetchSocialCounts` existed twice — once in the achievements route, once in
+`notifications.ts` — and the copies had drifted. The notifications one never
+fetched commitments, so commitment achievements displayed on the page but were
+never recorded, and therefore never celebrated. There's one copy now in
+`lib/socialCounts.ts`, imported by both, because the sync has to see exactly
+what the page sees. The leaderboard was calling `computeAchievements` with no
+social counts at all and undercounting everyone's total; it now passes them.
+
+### Note
+
+Existing `AchievementEarned` rows for `comeback` were left in place — deleting
+them would rewrite past Wrapped recaps. They're inert: the trophy case only
+renders computed definitions.
+
+---
+
+## Draw-on charts — 7 August 2026
+
+Charts and bars used to arrive fully formed. They now build themselves as they
+scroll into view. Presentation only — no number on screen changed.
+
+**Radar** (dashboard, profile, compare). The grid settles first, then each
+series' outline is traced round the polygon, then its fill washes in and the
+vertices pop one after another following the outline. Multiple series are
+staggered, so a comparison reads as two players drawn in turn rather than one
+overlapping shape.
+
+The outline was split off the fill into its own path. A single path can't trace
+its stroke and fade its fill independently, and the fill appearing at full
+opacity behind a half-drawn outline looked like a rendering fault.
+
+`pathLength={1}` normalises each perimeter, so the dash maths is `1 → 0`
+regardless of the chart's size or the player's values — no `getTotalLength()`,
+no measuring pass, nothing to re-measure on resize.
+
+**Sparklines** trace left to right, the gradient area fades in behind at 35% of
+the way through, and the head dot lands where the line stopped.
+
+**Bars** (dashboard category momentum, profile stat cards, both compare
+columns) grow from their anchored edge, staggered ~55ms apart down the group.
+The compare page's left column is right-anchored via `.bar-grow-right` so
+mirrored rows grow outward from the centre instead of both racing rightward.
+
+Bars animate `transform: scaleX()`, not `width`. A profile carries a bar per
+stat, and animating width would lay out dozens of elements per frame mid-scroll
+where a transform stays on the compositor. The trade is that the pill's end cap
+is slightly flattened in flight; it's correct at rest, which is the frame that
+lasts.
+
+### Reveal
+
+One module-level `IntersectionObserver` serves every caller — the profile would
+otherwise build ~70 of them doing identical work against the same root. Targets
+are one-shot: unobserved before the callback fires, so nothing re-enters.
+
+It triggers at threshold 0 with a **fixed** 56px bottom margin. A ratio
+threshold can never be met by an element taller than the viewport, which is
+exactly what the long category sections are, and a percentage margin creates a
+dead band that grows with the screen — on a page too short to scroll, anything
+inside it would stay collapsed forever. The failure mode being designed around
+is an invisible chart, not a missed flourish.
+
+Under `prefers-reduced-motion` or the **Reduce effects** toggle, the revealed
+flag is set in a layout effect, so the finished state is what first paints.
+There's no hidden frame to transition out of and nothing animates, even though
+the transitions are still declared. Bars additionally have a CSS override, which
+covers groups that were already mounted when the toggle was flipped — the hook
+decides once at mount and doesn't reconsider.
+
+---
+
 ## Visual pass — 7 August 2026
 
 Eight presentation-layer features. No changes to scoring, stat definitions, or

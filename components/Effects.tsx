@@ -15,6 +15,11 @@ export const EFFECTS_STORAGE_KEY = '4ward-effects';
  *
  * Reads:  .glass / .glass-strong  -> --mx, --my  (cursor spotlight)
  *         .tilt                   -> --tilt-x, --tilt-y  (3D tilt)
+ *         .holo                   -> --fx, --fy  (holographic foil)
+ *
+ * The three lookups are independent rather than one closest() call, because a
+ * holo card sits inside a glass section: a single lookup would return the card
+ * and the section's spotlight would die the moment the cursor entered a card.
  */
 export default function Effects() {
   useEffect(() => {
@@ -28,6 +33,7 @@ export default function Effects() {
     // the highlight freezes in place instead of fading out.
     let lastSurface: HTMLElement | null = null;
     let lastTilt: HTMLElement | null = null;
+    let lastFoil: HTMLElement | null = null;
 
     const clearTilt = (el: HTMLElement | null) => {
       if (!el) return;
@@ -39,6 +45,12 @@ export default function Effects() {
       if (!el) return;
       el.style.removeProperty('--mx');
       el.style.removeProperty('--my');
+    };
+
+    const clearFoil = (el: HTMLElement | null) => {
+      if (!el) return;
+      el.style.removeProperty('--fx');
+      el.style.removeProperty('--fy');
     };
 
     const apply = () => {
@@ -75,6 +87,22 @@ export default function Effects() {
         tilt.style.setProperty('--tilt-x', `${-py * 5}deg`);
         tilt.style.setProperty('--tilt-y', `${px * 5}deg`);
       }
+
+      const foil = target.closest<HTMLElement>('.holo');
+      if (foil !== lastFoil) {
+        clearFoil(lastFoil);
+        lastFoil = foil;
+      }
+      if (foil) {
+        // Percentages, not pixels: these drive background-position on a
+        // deliberately oversized gradient, so the pattern slides with the
+        // cursor across cards of any width.
+        const r = foil.getBoundingClientRect();
+        const px = ((e.clientX - r.left) / r.width) * 100;
+        const py = ((e.clientY - r.top) / r.height) * 100;
+        foil.style.setProperty('--fx', `${px.toFixed(1)}%`);
+        foil.style.setProperty('--fy', `${py.toFixed(1)}%`);
+      }
     };
 
     const onMove = (e: PointerEvent) => {
@@ -86,8 +114,10 @@ export default function Effects() {
     const onLeave = () => {
       clearSurface(lastSurface);
       clearTilt(lastTilt);
+      clearFoil(lastFoil);
       lastSurface = null;
       lastTilt = null;
+      lastFoil = null;
     };
 
     document.addEventListener('pointermove', onMove, { passive: true });

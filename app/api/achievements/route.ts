@@ -3,49 +3,22 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { queryAll } from '@/lib/db';
 import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from '@/lib/serverStats';
-import { computeAchievements, SocialCounts } from '@/lib/achievements';
+import { computeAchievements } from '@/lib/achievements';
+import { fetchSocialCounts } from '@/lib/socialCounts';
 
 export const dynamic = 'force-dynamic';
 
-/** Evidence / approved-proposal / vote counts per player, for Community achievements. */
-async function fetchSocialCounts(): Promise<Record<string, SocialCounts>> {
-  const counts: Record<string, SocialCounts> = {};
-  const ensure = (id: string) => {
-    if (!counts[id]) counts[id] = { evidencePosts: 0, approvedProposals: 0, votesCast: 0 };
-    return counts[id];
-  };
-  try {
-    const [evidence, approved, votes] = await Promise.all([
-      queryAll('SELECT playerId as id, COUNT(*) as c FROM Evidence GROUP BY playerId'),
-      queryAll("SELECT proposedById as id, COUNT(*) as c FROM Suggestion WHERE status = 'approved' GROUP BY proposedById"),
-      queryAll('SELECT userId as id, COUNT(*) as c FROM Vote GROUP BY userId'),
-    ]);
-    for (const r of evidence as any[]) ensure(String(r.id)).evidencePosts = Number(r.c);
-    for (const r of approved as any[]) ensure(String(r.id)).approvedProposals = Number(r.c);
-    for (const r of votes as any[]) ensure(String(r.id)).votesCast = Number(r.c);
-
-    // Commitments may not exist yet on an older database
-    try {
-      const commitments = await queryAll(
-        "SELECT playerId as id, status, COUNT(*) as c FROM Commitment WHERE status IN ('kept','missed') GROUP BY playerId, status"
-      );
-      for (const r of commitments as any[]) {
-        const bucket = ensure(String(r.id));
-        if (String(r.status) === 'kept') bucket.commitmentsKept = Number(r.c);
-        else bucket.commitmentsMissed = Number(r.c);
-      }
-    } catch {
-      /* no commitments table yet */
-    }
-  } catch (e) {
-    console.error('Social counts unavailable (achievements degrade gracefully):', e);
-  }
-  return counts;
-}
+/** Rows back-filled by the notification sync carry epoch, meaning "we don't know". */
+const isRealDate = (iso: string) => new Date(iso).getUTCFullYear() > 2000;
 
 /**
  * GET /api/achievements            → achievements for all players
  * GET /api/achievements?playerId=X → achievements for one player
+ *
+ * Each achievement carries `earnedAt` (when the sync first observed it) and
+ * `holders` (everyone in the crew currently holding it) for the card's back
+ * face. Holders come from the freshly computed result rather than the
+ * AchievementEarned table, so the list reflects who qualifies right now.
  */
 export async function GET(request: Request) {
   try {
@@ -64,7 +37,40 @@ export async function GET(request: Request) {
       fetchSocialCounts(),
     ]);
     const players = buildPlayerAggregates(rows);
-    const achievements = computeAchievements(players, history, social);
+    const computed = computeAchievements(players, history, social);
+
+    const nameById = new Map(players.map((p) => [p.id, p.username]));
+
+    // achievementId -> usernames currently holding it
+    const holders = new Map<string, string[]>();
+    for (const [pid, list] of Object.entries(computed)) {
+      for (const a of list) {
+        if (!a.earned) continue;
+        if (!holders.has(a.id)) holders.set(a.id, []);
+        holders.get(a.id)!.push(nameById.get(pid) || 'Unknown');
+      }
+    }
+
+    // playerId:achievementId -> when the sync first saw it
+    const earnedAt = new Map<string, string>();
+    try {
+      const earnedRows = await queryAll('SELECT playerId, achievementId, earnedAt FROM AchievementEarned');
+      for (const r of earnedRows) {
+        const at = String(r.earnedAt);
+        if (isRealDate(at)) earnedAt.set(`${r.playerId}:${r.achievementId}`, at);
+      }
+    } catch {
+      /* table appears on the first notification poll — cards just omit the date */
+    }
+
+    const achievements: Record<string, unknown[]> = {};
+    for (const [pid, list] of Object.entries(computed)) {
+      achievements[pid] = list.map((a) => ({
+        ...a,
+        earnedAt: a.earned ? earnedAt.get(`${pid}:${a.id}`) : undefined,
+        holders: holders.get(a.id) || [],
+      }));
+    }
 
     if (playerId) {
       return NextResponse.json({ achievements: achievements[playerId] || [] });

@@ -1,7 +1,8 @@
 import { query, queryOne, queryAll } from './db';
 import { getStatTier } from './categories';
 import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from './serverStats';
-import { computeAchievements, SocialCounts } from './achievements';
+import { computeAchievements } from './achievements';
+import { fetchSocialCounts } from './socialCounts';
 import { getAllLocks } from './featureLocks';
 import { getNudgesFor, NUDGE_KINDS } from './nudges';
 import { getMentionsFor } from './mentionsServer';
@@ -81,30 +82,28 @@ async function ensureTables() {
        lastCelebratedAt TEXT NOT NULL
      )`
   );
+  // Which achievement IDs the system has ever computed. Without this there's
+  // no way to tell "you just earned this" from "this was invented today".
+  await query(
+    `CREATE TABLE IF NOT EXISTS AchievementCatalog (
+       achievementId TEXT PRIMARY KEY,
+       firstSeenAt   TEXT NOT NULL
+     )`
+  );
 }
 
-async function fetchSocialCounts(): Promise<Record<string, SocialCounts>> {
-  const counts: Record<string, SocialCounts> = {};
-  const ensure = (id: string) => {
-    if (!counts[id]) counts[id] = { evidencePosts: 0, approvedProposals: 0, votesCast: 0 };
-    return counts[id];
-  };
-  try {
-    const [evidence, approved, votes] = await Promise.all([
-      queryAll('SELECT playerId as id, COUNT(*) as c FROM Evidence GROUP BY playerId'),
-      queryAll("SELECT proposedById as id, COUNT(*) as c FROM Suggestion WHERE status = 'approved' GROUP BY proposedById"),
-      queryAll('SELECT userId as id, COUNT(*) as c FROM Vote GROUP BY userId'),
-    ]);
-    for (const r of evidence as any[]) ensure(String(r.id)).evidencePosts = Number(r.c);
-    for (const r of approved as any[]) ensure(String(r.id)).approvedProposals = Number(r.c);
-    for (const r of votes as any[]) ensure(String(r.id)).votesCast = Number(r.c);
-  } catch {
-    /* achievements degrade gracefully */
-  }
-  return counts;
-}
-
-/** Record any newly-earned achievements; back-fill silently on first run. */
+/**
+ * Record any newly-earned achievements.
+ *
+ * Three cases, and they must not be confused with each other:
+ *   · first run (no table)      — back-fill everything as epoch, silently
+ *   · a newly INVENTED award    — back-fill current holders as epoch, silently
+ *   · someone actually earned it — stamp now, which is what celebrates
+ *
+ * The middle case is why AchievementCatalog exists. Shipping a batch of new
+ * definitions would otherwise read as everyone earning all of them at once,
+ * and the celebration queue plays one full-screen modal at a time.
+ */
 async function syncAchievements(): Promise<void> {
   const [rows, history, social] = await Promise.all([fetchAllPlayerStats(), fetchAllHistory(), fetchSocialCounts()]);
   const players = buildPlayerAggregates(rows);
@@ -113,14 +112,33 @@ async function syncAchievements(): Promise<void> {
   const existing = await queryAll('SELECT playerId, achievementId FROM AchievementEarned');
   const known = new Set((existing as any[]).map((r) => `${r.playerId}:${r.achievementId}`));
   const firstRun = existing.length === 0;
-  const at = firstRun ? new Date(0).toISOString() : new Date().toISOString();
+
+  const catalogued = new Set(
+    ((await queryAll('SELECT achievementId FROM AchievementCatalog')) as any[]).map((r) =>
+      String(r.achievementId)
+    )
+  );
+  const epoch = new Date(0).toISOString();
+  const now = new Date().toISOString();
+
+  // Definitions are identical for every player, so one list names them all.
+  const introduced = new Set<string>();
+  for (const a of Object.values(computed)[0] || []) {
+    if (catalogued.has(a.id)) continue;
+    introduced.add(a.id);
+    await query('INSERT OR IGNORE INTO AchievementCatalog (achievementId, firstSeenAt) VALUES (?, ?)', [
+      a.id,
+      now,
+    ]);
+  }
 
   for (const [playerId, list] of Object.entries(computed)) {
     for (const a of list) {
       if (!a.earned || known.has(`${playerId}:${a.id}`)) continue;
+      const silent = firstRun || introduced.has(a.id);
       await query(
         'INSERT OR IGNORE INTO AchievementEarned (id, playerId, achievementId, name, earnedAt) VALUES (?, ?, ?, ?, ?)',
-        [uuid(), playerId, a.id, a.name, at]
+        [uuid(), playerId, a.id, a.name, silent ? epoch : now]
       );
     }
   }

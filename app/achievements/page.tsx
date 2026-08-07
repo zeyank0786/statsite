@@ -18,6 +18,9 @@ interface Player {
 /** Section order on the page (any unknown group lands at the end). */
 const GROUP_ORDER = ['Milestones', 'Categories', 'Momentum', 'Crew', 'Grind', 'Community'];
 
+/** Ascending, so the legend reads as a difficulty ladder. */
+const RARITIES = ['common', 'rare', 'epic', 'mythic'] as const;
+
 const GROUP_BLURBS: Record<string, string> = {
   Milestones: 'Climb the tier ladder on individual stats',
   Categories: 'Build whole areas, not just single stats',
@@ -153,8 +156,24 @@ export default function AchievementsPage() {
           />
         </div>
 
+        {/* Rarity legend — same palette the cards themselves use */}
+        <div className="flex flex-wrap items-center gap-1.5 mt-4">
+          {RARITIES.map((r) => {
+            const inTier = achievements.filter((a) => (a.rarity || 'common') === r);
+            const got = inTier.filter((a) => a.earned).length;
+            return (
+              <span key={r} data-rarity={r} className="holo-pip">
+                {r} {got}/{inTier.length}
+              </span>
+            );
+          })}
+          <span className="text-[10px] ml-1" style={{ color: 'var(--text-secondary)' }}>
+            Tap a card to see who else holds it
+          </span>
+        </div>
+
         {/* Tier ladder legend */}
-        <div className="flex flex-wrap gap-1.5 mt-4">
+        <div className="flex flex-wrap gap-1.5 mt-3">
           {STAT_TIERS.map((tier) => (
             <span
               key={tier.name}

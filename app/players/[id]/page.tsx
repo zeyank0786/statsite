@@ -18,6 +18,7 @@ import { orderCategories, getCategoryMeta, getValueColor, scaleMax, categoryRada
 import LockBadge from '@/components/LockBadge';
 import TierBadge from '@/components/TierBadge';
 import NudgeButton from '@/components/NudgeButton';
+import Reveal from '@/components/Reveal';
 import {
   CompareIcon,
   PencilIcon,
@@ -577,10 +578,10 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <Reveal className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {(() => {
                   const catMax = scaleMax(category.stats.map((s) => s.value));
-                  return getSortedStats(category.stats).map((stat) => {
+                  return getSortedStats(category.stats).map((stat, si) => {
                   const change = changes[stat.code];
                   const diff =
                     change && change.lastReviewValue !== undefined && change.lastReviewValue !== null
@@ -639,8 +640,13 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                       </div>
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
                         <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${Math.min(100, (stat.value / catMax) * 100)}%`, backgroundColor: valueColor }}
+                          className="h-full rounded-full bar-grow"
+                          style={{
+                            width: `${Math.min(100, (stat.value / catMax) * 100)}%`,
+                            backgroundColor: valueColor,
+                            // Reading order across the grid, not down a column.
+                            ['--bar-i' as string]: si,
+                          }}
                         />
                       </div>
                       <div className="mt-2">
@@ -695,7 +701,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                   );
                   });
                 })()}
-              </div>
+              </Reveal>
             </section>
           );
         })}

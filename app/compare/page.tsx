@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import RadarChart from '@/components/RadarChart';
+import Reveal from '@/components/Reveal';
 import { orderCategories, getCategoryMeta, computeOverallScore, scaleMax, categoryRadarValue } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
 
@@ -221,7 +222,7 @@ function CompareContent() {
           {/* Category bars */}
           <section className="glass card-shadow p-6 md:p-8 mb-6 animate-rise animate-rise-3">
             <h2 className="font-display text-xl font-bold text-white mb-6">Category Breakdown</h2>
-            <div className="space-y-5">
+            <Reveal className="space-y-5">
               {unionCats.map((cat, i) => {
                 const meta = getCategoryMeta(cat.code, cat.label);
                 const a = valuesA[i] ?? 0;
@@ -244,21 +245,29 @@ function CompareContent() {
                     <div className="flex gap-1.5 items-center">
                       <div className="flex-1 h-2.5 rounded-full overflow-hidden flex justify-end" style={{ background: 'rgba(255,255,255,0.05)' }}>
                         <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${Math.min(100, (a / rowMax) * 100)}%`, background: `linear-gradient(270deg, ${hexA}, ${hexA}66)` }}
+                          className="h-full rounded-full bar-grow bar-grow-right"
+                          style={{
+                            width: `${Math.min(100, (a / rowMax) * 100)}%`,
+                            background: `linear-gradient(270deg, ${hexA}, ${hexA}66)`,
+                            ['--bar-i' as string]: i,
+                          }}
                         />
                       </div>
                       <div className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
                         <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${Math.min(100, (b / rowMax) * 100)}%`, background: `linear-gradient(90deg, ${hexB}, ${hexB}66)` }}
+                          className="h-full rounded-full bar-grow"
+                          style={{
+                            width: `${Math.min(100, (b / rowMax) * 100)}%`,
+                            background: `linear-gradient(90deg, ${hexB}, ${hexB}66)`,
+                            ['--bar-i' as string]: i,
+                          }}
                         />
                       </div>
                     </div>
                   </div>
                 );
               })}
-            </div>
+            </Reveal>
           </section>
 
           {/* Per-stat table */}
@@ -279,8 +288,8 @@ function CompareContent() {
                     <span className="w-1.5 h-6 rounded-full" style={{ background: meta.hex }} />
                     {cat.label}
                   </h3>
-                  <div className="space-y-1">
-                    {rowStats.map((stat) => {
+                  <Reveal className="space-y-1">
+                    {rowStats.map((stat, si) => {
                       const a = catA ? stat.value : 0;
                       const b = statsB.get(stat.code) ?? 0;
                       const diff = a - b;
@@ -293,7 +302,10 @@ function CompareContent() {
                             {a}
                           </span>
                           <div className="hidden sm:flex h-1.5 rounded-full overflow-hidden justify-end" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                            <div className="h-full rounded-full" style={{ width: `${Math.min(100, (a / statMax) * 100)}%`, background: hexA }} />
+                            <div
+                              className="h-full rounded-full bar-grow bar-grow-right"
+                              style={{ width: `${Math.min(100, (a / statMax) * 100)}%`, background: hexA, ['--bar-i' as string]: si }}
+                            />
                           </div>
                           <span className="text-xs text-center font-medium truncate col-span-1 sm:col-auto" style={{ color: 'var(--text-secondary)' }} title={stat.label}>
                             <span className="block truncate">{stat.label}</span>
@@ -304,7 +316,10 @@ function CompareContent() {
                             )}
                           </span>
                           <div className="hidden sm:flex h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                            <div className="h-full rounded-full" style={{ width: `${Math.min(100, (b / statMax) * 100)}%`, background: hexB }} />
+                            <div
+                              className="h-full rounded-full bar-grow"
+                              style={{ width: `${Math.min(100, (b / statMax) * 100)}%`, background: hexB, ['--bar-i' as string]: si }}
+                            />
                           </div>
                           <span className="text-sm font-bold" style={{ color: diff < 0 ? hexB : 'rgba(255,255,255,0.45)' }}>
                             {b}
@@ -312,7 +327,7 @@ function CompareContent() {
                         </div>
                       );
                     })}
-                  </div>
+                  </Reveal>
                 </div>
               );
             })}

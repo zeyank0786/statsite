@@ -9,6 +9,7 @@ import {
   daysAgo,
 } from '@/lib/serverStats';
 import { computeAchievements } from '@/lib/achievements';
+import { fetchSocialCounts } from '@/lib/socialCounts';
 import { computeStreakWeeks } from '@/lib/streaks';
 import { queryAll } from '@/lib/db';
 
@@ -22,9 +23,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [rows, history] = await Promise.all([fetchAllPlayerStats(), fetchAllHistory()]);
+    const [rows, history, social] = await Promise.all([
+      fetchAllPlayerStats(),
+      fetchAllHistory(),
+      fetchSocialCounts(),
+    ]);
     const players = buildPlayerAggregates(rows);
-    const achievements = computeAchievements(players, history);
+    // With the social counts: without them the community, commitment and
+    // streak achievements read as unearned and the board undercounts everyone.
+    const achievements = computeAchievements(players, history, social);
 
     const cutoff90 = daysAgo(90);
     const cutoff30 = daysAgo(30);

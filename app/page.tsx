@@ -12,6 +12,7 @@ import AmbitionCelebration from '@/components/AmbitionCelebration';
 import Odometer from '@/components/Odometer';
 import { DashboardSkeleton } from '@/components/Skeleton';
 import ActivityTicker from '@/components/ActivityTicker';
+import Reveal from '@/components/Reveal';
 import WrappedBanner from '@/components/WrappedBanner';
 import {
   orderCategories,
@@ -226,13 +227,13 @@ export default function Dashboard() {
               View history →
             </Link>
           </div>
-          <div className="space-y-4">
+          <Reveal className="space-y-4">
             {(() => {
               const rows =
                 trends?.perCategory ??
                 CATEGORY_ORDER.map((code) => ({ code, label: getCategoryMeta(code).label, avg: 0, net90: 0 }));
               const momentumMax = scaleMax(rows.map((r) => Number(r.avg)));
-              return rows.map((cat) => {
+              return rows.map((cat, ri) => {
               const meta = getCategoryMeta(cat.code, (cat as any).label);
               return (
                 <div key={cat.code}>
@@ -259,10 +260,11 @@ export default function Dashboard() {
                   </div>
                   <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                     <div
-                      className="h-full rounded-full transition-all duration-700"
+                      className="h-full rounded-full bar-grow"
                       style={{
                         width: `${Math.min(100, (Number(cat.avg) / momentumMax) * 100)}%`,
                         background: `linear-gradient(90deg, ${meta.hex}88, ${meta.hex})`,
+                        ['--bar-i' as string]: ri,
                       }}
                     />
                   </div>
@@ -270,7 +272,7 @@ export default function Dashboard() {
               );
               });
             })()}
-          </div>
+          </Reveal>
         </div>
 
         {/* Achievements preview */}
