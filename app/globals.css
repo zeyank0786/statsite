@@ -46,19 +46,67 @@
 
 html {
   scroll-behavior: smooth;
+  /* The base colour lives on <html> so the fixed backdrop layers below can sit
+     at z-index -1 — a negative-z child paints behind its own parent's
+     background, so body must stay transparent for them to be visible. */
+  background: var(--background);
 }
 
 body {
-  background:
-    radial-gradient(1100px 700px at 85% -10%, rgba(168, 85, 247, 0.10), transparent 60%),
-    radial-gradient(900px 650px at -10% 25%, rgba(34, 211, 238, 0.07), transparent 55%),
-    radial-gradient(1000px 700px at 50% 115%, rgba(236, 72, 153, 0.06), transparent 60%),
-    var(--background);
-  background-attachment: fixed;
+  background: transparent;
   color: var(--foreground);
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   min-height: 100vh;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- Living backdrop ---------- */
+/* Three slow-drifting colour fields. Transform-animated (not background-position)
+   so it stays on the compositor and costs nothing on scroll. */
+.backdrop-aurora {
+  position: fixed;
+  /* Oversized so the drift never exposes an unpainted edge */
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 700px at 85% 10%, rgba(168, 85, 247, 0.13), transparent 60%),
+    radial-gradient(900px 650px at 5% 35%, rgba(34, 211, 238, 0.09), transparent 55%),
+    radial-gradient(1000px 700px at 50% 95%, rgba(236, 72, 153, 0.08), transparent 60%);
+  animation: aurora-drift 46s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2.5%, -2%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-2%, 2.5%, 0) scale(1.03);
+  }
+}
+
+/* Film grain + vignette. Grain kills the flat-black banding that dark gradient
+   UIs get on cheap panels; the vignette pulls focus toward the centre. */
+.backdrop-grain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.038;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.backdrop-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(120% 100% at 50% 40%, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
 }
 
 ::selection {
@@ -101,7 +149,42 @@ body {
 
 .glass-hover:hover {
   border-color: var(--surface-border-strong);
-  background: var(--surface-strong);
+  /* background-color, not the `background` shorthand: the shorthand resets
+     background-image, and at :hover specificity it would beat the spotlight
+     rule below — killing the highlight exactly when the cursor is on the card. */
+  background-color: var(--surface-strong);
+}
+
+/* ---------- Cursor spotlight ---------- */
+/* A highlight that tracks the pointer across every glass surface. Implemented
+   as a background-image layer rather than a ::before so it needs no
+   `position: relative` — adding that to .glass would re-parent the absolutely
+   positioned glow blobs several pages rely on.
+   --mx/--my are written by components/Effects.tsx; the -1000px default parks
+   the highlight off-canvas so untouched cards render exactly as before. */
+.glass,
+.glass-strong {
+  background-image: radial-gradient(
+    240px circle at var(--mx, -1000px) var(--my, -1000px),
+    rgba(255, 255, 255, 0.07),
+    transparent 60%
+  );
+  /* Deliberately no transition: --mx/--my are rewritten every frame, so a
+     transition would restart continuously and leave the glow trailing the
+     cursor instead of tracking it. */
+}
+
+/* Opt-in pointer tilt. Deliberately not on every .glass — full-width sections
+   tilting on hover reads as broken rather than tactile. */
+.tilt {
+  transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-style: preserve-3d;
+}
+
+.tilt:hover {
+  /* Snappier while tracking; the slower default eases it back on exit */
+  transition: transform 0.08s linear;
 }
 
 .card-shadow {
@@ -164,10 +247,73 @@ body {
   animation: pulseGlow 2.4s ease-in-out infinite;
 }
 
+/* ---------- Shimmer skeletons ---------- */
+/* A sweep travelling across a ghost of the real layout. Reads as "content is
+   arriving" far better than a pulsing block, and because the shapes match the
+   final render there's no layout jump when data lands. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 0.5rem;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.07) 45%,
+    rgba(255, 255, 255, 0.11) 50%,
+    rgba(255, 255, 255, 0.07) 55%,
+    transparent
+  );
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Staggering the sweep stops a grid of skeletons pulsing in lockstep, which
+   looks mechanical — offsets make it feel like independent content loading. */
+.skeleton-delay-1::after { animation-delay: 0.12s; }
+.skeleton-delay-2::after { animation-delay: 0.24s; }
+.skeleton-delay-3::after { animation-delay: 0.36s; }
+.skeleton-delay-4::after { animation-delay: 0.48s; }
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
-  .animate-pulse-glow {
+  .animate-pulse-glow,
+  .backdrop-aurora,
+  .odometer-digit-track,
+  .story-progress-fill {
     animation: none;
+  }
+
+  .skeleton::after {
+    animation: none;
+    opacity: 0.5;
+    transform: none;
+  }
+
+  .tilt {
+    transform: none !important;
+  }
+
+  /* Directional slides simulate travel across the viewport — the highest-risk
+     pattern for motion sensitivity. Zeroing the duration falls back to the
+     browser's instant swap. */
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
 }
 
@@ -368,6 +514,173 @@ select.field {
   .ticker-track {
     animation: none;
   }
+}
+
+/* ---------- View transitions ---------- */
+:root {
+  --vt-exit: 150ms;
+  --vt-enter: 210ms;
+}
+
+/* Shared-element morph: a player's avatar travelling from a list into the
+   profile hero. The mid-flight blur hides pixel interpolation artefacts as the
+   element changes size. */
+::view-transition-group(.morph) {
+  animation-duration: 400ms;
+}
+
+::view-transition-image-pair(.morph) {
+  animation-name: vt-blur;
+}
+
+@keyframes vt-blur {
+  30% {
+    filter: blur(3px);
+  }
+}
+
+/* Directional route slides. Old content leaves fast so it stops competing for
+   attention; new content arrives slower and only after the exit finishes. */
+::view-transition-old(.nav-forward) {
+  --vt-slide: -60px;
+  animation: var(--vt-exit) ease-in both vt-fade reverse, 400ms ease-in-out both vt-slide reverse;
+}
+
+::view-transition-new(.nav-forward) {
+  --vt-slide: 60px;
+  animation: var(--vt-enter) ease-out var(--vt-exit) both vt-fade, 400ms ease-in-out both vt-slide;
+}
+
+::view-transition-old(.nav-back) {
+  --vt-slide: 60px;
+  animation: var(--vt-exit) ease-in both vt-fade reverse, 400ms ease-in-out both vt-slide reverse;
+}
+
+::view-transition-new(.nav-back) {
+  --vt-slide: -60px;
+  animation: var(--vt-enter) ease-out var(--vt-exit) both vt-fade, 400ms ease-in-out both vt-slide;
+}
+
+@keyframes vt-fade {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes vt-slide {
+  from {
+    translate: var(--vt-slide);
+  }
+  to {
+    translate: 0;
+  }
+}
+
+/* Chrome stays put while content slides beneath it. Hiding the old snapshot
+   avoids a flash of two headers overlapping mid-transition. */
+::view-transition-group(site-header),
+::view-transition-group(site-tabbar) {
+  animation: none;
+  z-index: 100;
+}
+
+::view-transition-old(site-header),
+::view-transition-old(site-tabbar) {
+  display: none;
+}
+
+::view-transition-new(site-header),
+::view-transition-new(site-tabbar) {
+  animation: none;
+}
+
+/* ---------- Odometer ---------- */
+.odometer {
+  display: inline-flex;
+  align-items: baseline;
+  /* Digits must not reflow as they roll through different glyph widths */
+  font-variant-numeric: tabular-nums;
+}
+
+.odometer-digit {
+  display: inline-block;
+  overflow: hidden;
+  height: 1em;
+  line-height: 1;
+  vertical-align: bottom;
+}
+
+.odometer-digit-track {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(var(--roll, 0));
+  transition: transform var(--roll-duration, 900ms) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.odometer-digit-track > span {
+  height: 1em;
+  line-height: 1;
+}
+
+/* ---------- Wrapped story player ---------- */
+.story-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: white;
+  transform-origin: left center;
+}
+
+.story-slide {
+  animation: story-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes story-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- Reduce effects (per-device opt-out, /settings) ---------- */
+/* Kept separate from prefers-reduced-motion: this is a taste control for
+   people whose OS reports no motion preference but who still want it calmer. */
+[data-effects="reduced"] .backdrop-aurora {
+  animation: none;
+}
+
+[data-effects="reduced"] .backdrop-grain,
+[data-effects="reduced"] .backdrop-vignette {
+  display: none;
+}
+
+[data-effects="reduced"] .glass,
+[data-effects="reduced"] .glass-strong {
+  background-image: none;
+}
+
+[data-effects="reduced"] .tilt {
+  transform: none !important;
+}
+
+[data-effects="reduced"] .story-slide,
+[data-effects="reduced"] .animate-rise {
+  animation: none;
+}
+
+[data-effects="reduced"] ::view-transition-old(*),
+[data-effects="reduced"] ::view-transition-new(*),
+[data-effects="reduced"] ::view-transition-group(*) {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
 }
 
 /* ---------- Safe areas (mobile bottom nav) ---------- */

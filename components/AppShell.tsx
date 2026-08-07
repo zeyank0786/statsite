@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, ViewTransition } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -194,11 +194,15 @@ export default function AppShell({
           underneath the clock/battery. Pad the header by the top inset and
           carry the blurred background up behind the status bar — the strip
           stays dark (white status text readable) and the nav clears it. */}
+      {/* `site-header` is pinned during route transitions (see globals.css) so
+          the content slides underneath a stationary nav — the user keeps one
+          fixed spatial anchor instead of the whole viewport moving. */}
       <header
         className="sticky top-0 z-50 backdrop-blur-xl"
         style={{
           paddingTop: 'env(safe-area-inset-top, 0px)',
           backgroundColor: 'rgba(10, 10, 15, 0.8)',
+          viewTransitionName: 'site-header',
         }}
       >
         <div className="brand-hairline" />
@@ -309,13 +313,26 @@ export default function AppShell({
       {/* ===== Page content ===== */}
       {/* Mobile bottom padding clears the fixed tab bar + safe-area inset with room to breathe */}
       <main className={`${maxW} w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 pb-36 md:pb-16 flex-1`}>
-        {children}
+        {/* Links tagged with a transitionType slide directionally; everything
+            else (initial load, browser back) falls through to `none` so we
+            don't animate navigations that carry no forward/back meaning. */}
+        <ViewTransition
+          enter={{ 'nav-forward': 'nav-forward', 'nav-back': 'nav-back', default: 'none' }}
+          exit={{ 'nav-forward': 'nav-forward', 'nav-back': 'nav-back', default: 'none' }}
+          default="none"
+        >
+          {children}
+        </ViewTransition>
       </main>
 
       {/* ===== Mobile bottom tab bar ===== */}
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t backdrop-blur-xl pb-safe"
-        style={{ backgroundColor: 'rgba(10, 10, 15, 0.88)', borderColor: 'var(--surface-border)' }}
+        style={{
+          backgroundColor: 'rgba(10, 10, 15, 0.88)',
+          borderColor: 'var(--surface-border)',
+          viewTransitionName: 'site-tabbar',
+        }}
       >
         <div className="grid grid-cols-5 h-16">
           {MOBILE_TABS.map((item) => {

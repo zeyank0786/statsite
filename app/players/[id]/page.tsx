@@ -10,7 +10,10 @@ import RadarChart from '@/components/RadarChart';
 import AchievementBadge, { AchievementData } from '@/components/AchievementBadge';
 import StatDescriptionModal from '@/components/StatDescriptionModal';
 import { STAT_DESCRIPTIONS } from '@/lib/statDescriptions';
-import { getUserColorHex } from '@/lib/userColors';
+import { getUserColorHex, getUserColorRgb } from '@/lib/userColors';
+import { ProfileSkeleton } from '@/components/Skeleton';
+import Odometer from '@/components/Odometer';
+import ShareCardButton from '@/components/ShareCardButton';
 import { orderCategories, getCategoryMeta, getValueColor, scaleMax, categoryRadarValue } from '@/lib/categories';
 import LockBadge from '@/components/LockBadge';
 import TierBadge from '@/components/TierBadge';
@@ -221,14 +224,14 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   if (status === 'loading' || loading) {
     return (
       <AppShell>
-        <div className="glass h-64 animate-pulse mb-6" />
-        <div className="glass h-96 animate-pulse" />
+        <ProfileSkeleton />
       </AppShell>
     );
   }
 
   const orderedCategories = orderCategories(categories);
   const hex = getUserColorHex(playerId);
+  const rgb = getUserColorRgb(playerId);
   const earned = achievements.filter((a) => a.earned);
   const radarLabels = orderedCategories.map((c) => getCategoryMeta(c.code).short);
   const radarColors = orderedCategories.map((c) => getCategoryMeta(c.code).hex);
@@ -237,10 +240,26 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
 
   return (
     <AppShell>
+      {/* Every profile wears its owner's colour. Only the *decorative* accents
+          are rebound — the semantic green/red for gains and losses stay fixed,
+          since recolouring those would make a drop look like a win on a
+          player whose identity colour happens to be green. */}
+      <div
+        style={
+          {
+            '--profile-accent': hex,
+            '--profile-accent-rgb': rgb,
+            '--accent-cyan': hex,
+            '--accent-cyan-rgb': rgb,
+            '--brand-gradient': `linear-gradient(120deg, ${hex}, ${hex}aa 55%, var(--accent-purple))`,
+          } as React.CSSProperties
+        }
+      >
       <Link
         href="/players"
+        transitionTypes={['nav-back']}
         className="inline-flex items-center gap-1 text-sm font-medium mb-5 hover:underline"
-        style={{ color: 'var(--accent-cyan)' }}
+        style={{ color: 'var(--profile-accent)' }}
       >
         <ChevronLeftIcon size={15} />
         All players
@@ -255,7 +274,13 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8">
           <div>
             <div className="flex items-center gap-4 mb-4">
-              <Avatar id={playerId} name={playerName} size={64} ring />
+              <Avatar
+                id={playerId}
+                name={playerName}
+                size={64}
+                ring
+                morphKey={`player-avatar-${playerId}`}
+              />
               <div className="min-w-0">
                 {editingName ? (
                   <div className="flex gap-2 items-center flex-wrap">
@@ -307,7 +332,13 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                   Overall Score
                 </p>
                 <p className="font-display text-5xl md:text-6xl font-bold leading-none" style={{ color: hex }}>
-                  {overallScore}
+                  {/* The API can hand back a placeholder string for a profile
+                      with no scored stats yet — only roll real numbers. */}
+                  {Number.isFinite(Number(overallScore)) ? (
+                    <Odometer value={Number(overallScore)} decimals={1} />
+                  ) : (
+                    overallScore
+                  )}
                 </p>
               </div>
               {streakWeeks > 0 && (
@@ -332,10 +363,11 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                   </>
                 )}
                 {isOwnProfile && (
-                  <Link href="/targets" className="btn-ghost text-sm">
+                  <Link href="/targets" transitionTypes={['nav-forward']} className="btn-ghost text-sm">
                     Set targets
                   </Link>
                 )}
+                <ShareCardButton playerId={playerId} playerName={playerName} />
               </div>
             </div>
 
@@ -729,6 +761,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
             </div>
           </section>
         )}
+      </div>
       </div>
     </AppShell>
   );

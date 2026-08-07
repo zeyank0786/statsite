@@ -9,7 +9,8 @@ import RadarChart from '@/components/RadarChart';
 import Sparkline from '@/components/Sparkline';
 import AchievementBadge, { AchievementData } from '@/components/AchievementBadge';
 import AmbitionCelebration from '@/components/AmbitionCelebration';
-import CountUp from '@/components/CountUp';
+import Odometer from '@/components/Odometer';
+import { DashboardSkeleton } from '@/components/Skeleton';
 import ActivityTicker from '@/components/ActivityTicker';
 import WrappedBanner from '@/components/WrappedBanner';
 import {
@@ -96,11 +97,11 @@ export default function Dashboard() {
     }
   };
 
-  if (status === 'loading') {
+  if (status === 'loading' || (loading && !playerStats)) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
-      </div>
+      <AppShell>
+        <DashboardSkeleton />
+      </AppShell>
     );
   }
 
@@ -155,7 +156,7 @@ export default function Dashboard() {
                   Overall Score
                 </p>
                 <p className="font-display text-6xl md:text-7xl font-bold text-gradient leading-none">
-                  {overall ? <CountUp value={overall} decimals={1} /> : '—'}
+                  {overall ? <Odometer value={overall} decimals={1} /> : '—'}
                 </p>
               </div>
 
@@ -184,6 +185,7 @@ export default function Dashboard() {
 
             <Link
               href={`/players/${playerId}`}
+              transitionTypes={['nav-forward']}
               className="btn-gradient mt-6 inline-flex"
             >
               View full profile
@@ -342,7 +344,8 @@ export default function Dashboard() {
             <Link
               key={action.href}
               href={action.href}
-              className="glass glass-hover card-shadow p-4 group"
+              transitionTypes={['nav-forward']}
+              className="glass glass-hover card-shadow tilt p-4 group"
             >
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition group-hover:scale-110"

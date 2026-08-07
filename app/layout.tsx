@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import { Providers } from "./providers";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import Effects from "@/components/Effects";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -59,8 +60,23 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
+      <head>
+        {/* Applied before first paint so a device set to "reduce effects" never
+            flashes the full aurora/grain treatment on load. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{document.documentElement.dataset.effects=localStorage.getItem('4ward-effects')==='reduced'?'reduced':'full'}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
+        {/* Fixed backdrop layers, painted behind all content (z-index -1 against
+            the transparent body — see globals.css). */}
+        <div className="backdrop-aurora" aria-hidden="true" />
+        <div className="backdrop-grain" aria-hidden="true" />
+        <div className="backdrop-vignette" aria-hidden="true" />
         <ServiceWorkerRegistrar />
+        <Effects />
         <Providers>{children}</Providers>
       </body>
     </html>

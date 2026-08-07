@@ -7,6 +7,7 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
+import { PlayerCardsSkeleton } from '@/components/Skeleton';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, scaleMax } from '@/lib/categories';
 import { CompareIcon, ChevronRightIcon, AwardIcon } from '@/components/icons';
@@ -60,11 +61,7 @@ export default function PlayersPage() {
     return (
       <AppShell>
         <PageHeader title="Players" subtitle="The crew" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="glass h-64 animate-pulse" />
-          ))}
-        </div>
+        <PlayerCardsSkeleton />
       </AppShell>
     );
   }
@@ -98,7 +95,8 @@ export default function PlayersPage() {
               <Link
                 key={player.id}
                 href={`/players/${player.id}`}
-                className={`glass glass-hover card-shadow p-6 relative overflow-hidden group animate-rise animate-rise-${Math.min(idx + 1, 4)}`}
+                transitionTypes={['nav-forward']}
+                className={`glass glass-hover card-shadow tilt p-6 relative overflow-hidden group animate-rise animate-rise-${Math.min(idx + 1, 4)}`}
               >
                 <div
                   className="absolute -top-20 -right-20 w-48 h-48 rounded-full opacity-15 blur-2xl transition group-hover:opacity-30 pointer-events-none"
@@ -106,7 +104,13 @@ export default function PlayersPage() {
                 />
                 <div className="relative z-10">
                   <div className="flex items-start justify-between mb-4">
-                    <Avatar id={player.id} name={player.username} size={52} ring />
+                    <Avatar
+                      id={player.id}
+                      name={player.username}
+                      size={52}
+                      ring
+                      morphKey={`player-avatar-${player.id}`}
+                    />
                     {isYou && (
                       <span
                         className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full"

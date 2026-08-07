@@ -6,26 +6,11 @@ import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import CountUp from '@/components/CountUp';
-import { SparklesIcon, TrophyIcon, CameraIcon, LightbulbIcon, ScaleIcon, TrendUpIcon, MedalIcon, HandIcon, StarIcon } from '@/components/icons';
+import WrappedStory, { WrappedData } from '@/components/WrappedStory';
+import { WrappedSkeleton } from '@/components/Skeleton';
+import { SparklesIcon, TrophyIcon, CameraIcon, LightbulbIcon, ScaleIcon, TrendUpIcon, MedalIcon, HandIcon, StarIcon, PlayIcon } from '@/components/icons';
 
-interface Wrapped {
-  season: { key: string; label: string; months: string };
-  netPoints: number;
-  changeCount: number;
-  tierUps: number;
-  topStat: { label: string; delta: number } | null;
-  topCategory: { label: string; delta: number } | null;
-  evidenceCount: number;
-  suggestionsProposed: number;
-  suggestionsApproved: number;
-  votesCast: number;
-  achievements: string[];
-  commitmentsKept: number;
-  crewRank: number | null;
-  crewSize: number;
-  topCrew: { name: string; net: number } | null;
-  hasData: boolean;
-}
+type Wrapped = WrappedData;
 
 interface SeasonOpt {
   key: string;
@@ -73,6 +58,10 @@ export default function WrappedPage() {
   const [seasons, setSeasons] = useState<SeasonOpt[]>([]);
   const [seasonKey, setSeasonKey] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [storyOpen, setStoryOpen] = useState(false);
+  // Autoplay is once per season per device — the story should feel like an
+  // event on arrival, not a modal you have to dismiss on every visit.
+  const [autoPlayed, setAutoPlayed] = useState(false);
 
   const load = async (key?: string) => {
     setLoading(true);
@@ -83,6 +72,26 @@ export default function WrappedPage() {
         setData(json.wrapped);
         setSeasons(json.seasons || []);
         setSeasonKey(json.wrapped?.season?.key || '');
+
+        const wrapped: Wrapped | null = json.wrapped ?? null;
+        if (wrapped?.hasData && !autoPlayed) {
+          let alreadyPlayed = false;
+          try {
+            alreadyPlayed =
+              localStorage.getItem(`wrapped-story-${wrapped.season.key}`) === '1';
+          } catch {
+            /* private mode — just play it */
+          }
+          if (!alreadyPlayed) {
+            setStoryOpen(true);
+            setAutoPlayed(true);
+            try {
+              localStorage.setItem(`wrapped-story-${wrapped.season.key}`, '1');
+            } catch {
+              /* ignore */
+            }
+          }
+        }
         // Remember the latest so the dashboard banner can stop nagging.
         try {
           if (json.seasons?.[0]?.key) localStorage.setItem(`wrapped-seen-${json.seasons[0].key}`, '1');
@@ -110,12 +119,7 @@ export default function WrappedPage() {
     return (
       <AppShell>
         <PageHeader title="Season Wrapped" eyebrow="Your quarter" eyebrowColor="#a855f7" />
-        <div className="glass h-64 animate-pulse mb-6" />
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="glass h-32 animate-pulse" />
-          ))}
-        </div>
+        <WrappedSkeleton />
       </AppShell>
     );
   }
@@ -125,28 +129,40 @@ export default function WrappedPage() {
 
   return (
     <AppShell>
+      {storyOpen && w?.hasData && (
+        <WrappedStory data={w} onClose={() => setStoryOpen(false)} />
+      )}
+
       <PageHeader
         title="Season Wrapped"
         subtitle={w ? `${w.season.label} · ${w.season.months}` : 'Your quarter, wrapped up.'}
         eyebrow="Your quarter"
         eyebrowColor="#a855f7"
         actions={
-          seasons.length > 1 ? (
-            <select
-              value={seasonKey}
-              onChange={(e) => {
-                setSeasonKey(e.target.value);
-                load(e.target.value);
-              }}
-              className="field w-auto py-2 text-sm"
-            >
-              {seasons.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {w?.hasData && (
+              <button onClick={() => setStoryOpen(true)} className="btn-gradient text-sm">
+                <PlayIcon size={15} />
+                Play
+              </button>
+            )}
+            {seasons.length > 1 && (
+              <select
+                value={seasonKey}
+                onChange={(e) => {
+                  setSeasonKey(e.target.value);
+                  load(e.target.value);
+                }}
+                className="field w-auto py-2 text-sm"
+              >
+                {seasons.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         }
       />
 

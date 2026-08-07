@@ -152,6 +152,19 @@ export const CheckIcon = (p: IconProps) => (
   </Base>
 );
 
+export const PauseIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M10 4v16" />
+    <path d="M14 4v16" />
+  </Base>
+);
+
+export const PlayIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M6 4l14 8-14 8V4z" />
+  </Base>
+);
+
 export const ChevronDownIcon = (p: IconProps) => (
   <Base {...p}>
     <path d="M6 9l6 6 6-6" />

@@ -1,5 +1,6 @@
 'use client';
 
+import { ViewTransition } from 'react';
 import { getUserColorHex, getUserColorBg, getInitials } from '@/lib/userColors';
 
 interface AvatarProps {
@@ -8,11 +9,28 @@ interface AvatarProps {
   size?: number;
   ring?: boolean;
   className?: string;
+  /**
+   * Opt into the shared-element morph between pages. Pass the same key on the
+   * list avatar and the profile hero avatar and the browser animates one
+   * element moving, instead of two swapping.
+   *
+   * Names must be unique per rendered page — only tag the *primary* occurrence
+   * of a player on a screen (e.g. the leaderboard podium, not the "fastest
+   * riser" callout that repeats the same person).
+   */
+  morphKey?: string;
 }
 
-export default function Avatar({ id, name, size = 40, ring = false, className = '' }: AvatarProps) {
+export default function Avatar({
+  id,
+  name,
+  size = 40,
+  ring = false,
+  className = '',
+  morphKey,
+}: AvatarProps) {
   const hex = getUserColorHex(id);
-  return (
+  const el = (
     <span
       className={`inline-flex items-center justify-center rounded-full font-semibold text-white shrink-0 select-none ${className}`}
       style={{
@@ -28,5 +46,13 @@ export default function Avatar({ id, name, size = 40, ring = false, className = 
     >
       {getInitials(name)}
     </span>
+  );
+
+  if (!morphKey) return el;
+
+  return (
+    <ViewTransition name={morphKey} share="morph">
+      {el}
+    </ViewTransition>
   );
 }

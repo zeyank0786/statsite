@@ -11,6 +11,7 @@ import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, CATEGORY_ORDER } from '@/lib/categories';
 import { CrownIcon, TrendUpIcon, TrendDownIcon, AwardIcon, ZapIcon } from '@/components/icons';
 import CountUp from '@/components/CountUp';
+import { LeaderboardSkeleton } from '@/components/Skeleton';
 
 interface LeaderboardPlayer {
   id: string;
@@ -64,8 +65,7 @@ export default function LeaderboardPage() {
     return (
       <AppShell>
         <PageHeader title="Leaderboard" eyebrow="Rankings" eyebrowColor="var(--accent-yellow)" />
-        <div className="glass h-64 animate-pulse mb-6" />
-        <div className="glass h-96 animate-pulse" />
+        <LeaderboardSkeleton />
       </AppShell>
     );
   }
@@ -105,6 +105,7 @@ export default function LeaderboardPage() {
                 <Link
                   key={player.id}
                   href={`/players/${player.id}`}
+                  transitionTypes={['nav-forward']}
                   className="relative rounded-2xl border p-5 text-center transition hover:-translate-y-1"
                   style={{
                     borderColor: idx === 0 ? 'rgba(251,191,36,0.4)' : 'var(--surface-border)',
@@ -121,7 +122,16 @@ export default function LeaderboardPage() {
                     {rankStyles.label}
                   </p>
                   <div className="flex justify-center mb-3">
-                    <Avatar id={player.id} name={player.username} size={56} ring />
+                    {/* Only the podium tags a morph name — the "fastest riser"
+                        callout below repeats a player already shown here, and
+                        duplicate view-transition names abort the transition. */}
+                    <Avatar
+                      id={player.id}
+                      name={player.username}
+                      size={56}
+                      ring
+                      morphKey={`player-avatar-${player.id}`}
+                    />
                   </div>
                   <p className="font-display font-bold text-white truncate">
                     {player.username}

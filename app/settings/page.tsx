@@ -7,6 +7,7 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import PushToggle from '@/components/PushToggle';
+import EffectsToggle from '@/components/EffectsToggle';
 import { EyeIcon, EyeOffIcon, CheckIcon, BellIcon, ChevronRightIcon } from '@/components/icons';
 
 function PasswordField({
@@ -200,6 +201,8 @@ export default function SettingsPage() {
       </div>
 
       <PushToggle />
+
+      <EffectsToggle />
 
       <Link
         href="/reminders"
