@@ -155,8 +155,15 @@ export default function Dashboard() {
                 <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
                   Overall Score
                 </p>
-                <p className="font-display text-6xl md:text-7xl font-bold text-gradient leading-none">
-                  {overall ? <Odometer value={overall} decimals={1} /> : '—'}
+                {/* The gradient is passed to Odometer rather than applied via
+                    `.text-gradient` here — see the `gradient` prop for why an
+                    ancestor's background-clip can't reach the rolling digits. */}
+                <p className="font-display text-6xl md:text-7xl font-bold leading-none">
+                  {overall ? (
+                    <Odometer value={overall} decimals={1} gradient="var(--brand-gradient)" />
+                  ) : (
+                    <span className="text-gradient">—</span>
+                  )}
                 </p>
               </div>
 

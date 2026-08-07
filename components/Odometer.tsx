@@ -20,6 +20,7 @@ export default function Odometer({
   prefix = '',
   suffix = '',
   className = '',
+  gradient,
 }: {
   value: number;
   decimals?: number;
@@ -27,6 +28,17 @@ export default function Odometer({
   prefix?: string;
   suffix?: string;
   className?: string;
+  /**
+   * CSS image for gradient-filled digits, e.g. `var(--brand-gradient)`.
+   *
+   * Required instead of wrapping the odometer in `.text-gradient`: that class
+   * clips the *parent's* background to the parent's own text run, and the
+   * digits sit inside `overflow: hidden` + `transform` boxes that paint as
+   * separate layers. They'd inherit `color: transparent` with no background of
+   * their own and vanish, leaving only the decimal point visible. Here each
+   * glyph carries its own background and clips it itself.
+   */
+  gradient?: string;
 }) {
   // Render parked at the start of the strip, then flip to the real value on the
   // next frame so the CSS transition has two states to animate between. Without
@@ -53,6 +65,24 @@ export default function Odometer({
 
   const chars = `${prefix}${text}${suffix}`.split('');
 
+  /**
+   * Per-glyph slice of one continuous gradient. Each glyph paints the whole
+   * gradient scaled to the full number's width, then shifts to its own column,
+   * so the run reads as a single sweep rather than repeating per character.
+   */
+  const glyphFill = (i: number): React.CSSProperties | undefined => {
+    if (!gradient) return undefined;
+    return {
+      backgroundImage: gradient,
+      backgroundSize: `${chars.length * 100}% 100%`,
+      backgroundPosition:
+        chars.length > 1 ? `${(i / (chars.length - 1)) * 100}% 0` : '0 0',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      color: 'transparent',
+    };
+  };
+
   return (
     <span className={`odometer ${className}`}>
       {/* The strip contains 30 glyphs per digit — announce the real number instead. */}
@@ -60,7 +90,11 @@ export default function Odometer({
       <span aria-hidden="true" className="inline-flex items-baseline">
         {chars.map((char, i) => {
           if (!/\d/.test(char)) {
-            return <span key={i}>{char}</span>;
+            return (
+              <span key={i} style={glyphFill(i)}>
+                {char}
+              </span>
+            );
           }
           const digit = Number(char);
           // Land on the last cycle so mount spins forward through the strip;
@@ -78,8 +112,13 @@ export default function Odometer({
                   '--roll-duration': reduced ? '0ms' : `${duration}ms`,
                 } as React.CSSProperties}
               >
+                {/* The fill goes on each glyph, not the track: the track is
+                    30em tall, so clipping the gradient to it would stretch the
+                    sweep vertically across the whole strip. */}
                 {DIGITS.map((d, j) => (
-                  <span key={j}>{d}</span>
+                  <span key={j} style={glyphFill(i)}>
+                    {d}
+                  </span>
                 ))}
               </span>
             </span>
