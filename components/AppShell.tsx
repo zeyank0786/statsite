@@ -32,6 +32,7 @@ import {
   StarIcon,
   SparklesIcon,
   SearchIcon,
+  ZapIcon,
 } from './icons';
 
 interface NavItem {
@@ -53,6 +54,7 @@ const PRIMARY_NAV: NavItem[] = [
 
 const MORE_NAV: NavItem[] = [
   { href: '/commitments', label: 'Commitments', icon: HandIcon },
+  { href: '/automations', label: 'Automations', icon: ZapIcon },
   { href: '/reminders', label: 'Reminders', icon: BellIcon },
   { href: '/achievements', label: 'Achievements', icon: AwardIcon },
   { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
@@ -73,6 +75,7 @@ const MOBILE_TABS: NavItem[] = [
 
 const MOBILE_MORE: NavItem[] = [
   { href: '/commitments', label: 'Commitments', icon: HandIcon },
+  { href: '/automations', label: 'Automations', icon: ZapIcon },
   { href: '/reminders', label: 'Reminders', icon: BellIcon },
   { href: '/players', label: 'Players', icon: UsersIcon },
   { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },

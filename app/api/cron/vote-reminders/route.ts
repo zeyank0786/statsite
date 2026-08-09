@@ -4,6 +4,7 @@ import { getEligibleVoterIds } from '@/lib/suggestionEngine';
 import { sendPushToPlayers } from '@/lib/push';
 import { runCommitmentUpkeep } from '@/lib/commitments';
 import { runDueReminders } from '@/lib/reminders';
+import { runDueAutomations } from '@/lib/automations';
 import { maybeAnnounceNewSeason } from '@/lib/wrapped';
 import { errorPayload } from '@/lib/apiError';
 
@@ -63,6 +64,17 @@ export async function GET(request: Request) {
     console.error('Reminder upkeep failed (vote reminders continue):', e);
   }
 
+  // Automatic stat rules ride along too. Slots are whole days, so this daily
+  // pass is enough on its own — /api/cron/automations exists only for anyone
+  // who wants them landing earlier in the day. Firing twice is a no-op, since
+  // a qualifier's next slot moves into the future the moment it runs.
+  let automations: { fired: number; players: number; rules: number } | null = null;
+  try {
+    automations = await runDueAutomations();
+  } catch (e) {
+    console.error('Automation run failed (vote reminders continue):', e);
+  }
+
   // Once a quarter rolls over, announce that Season Wrapped is ready.
   let wrapped: { announced: boolean; season: string } | null = null;
   try {
@@ -80,7 +92,7 @@ export async function GET(request: Request) {
       [cutoff]
     );
     if (pending.length === 0) {
-      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments, reminders, wrapped });
+      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments, reminders, automations, wrapped });
     }
 
     const votes = await queryAll('SELECT suggestionId, userId FROM Vote');
@@ -140,6 +152,7 @@ export async function GET(request: Request) {
       reminded,
       commitments,
       reminders,
+      automations,
       wrapped,
     });
   } catch (error: any) {

@@ -34,7 +34,7 @@ export default function EffectsToggle() {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-white">Reduce effects</p>
         <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-          Turns off the cursor glow, card tilt, drifting background and grain on this device.
+          Turns off card tilt, the drifting background and grain on this device.
         </p>
       </div>
       <button

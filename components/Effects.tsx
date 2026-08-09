@@ -13,13 +13,16 @@ export const EFFECTS_STORAGE_KEY = '4ward-effects';
  * re-renders — we write CSS custom properties straight onto the hovered node
  * and let the compositor do the work.
  *
- * Reads:  .glass / .glass-strong  -> --mx, --my  (cursor spotlight)
- *         .tilt                   -> --tilt-x, --tilt-y  (3D tilt)
- *         .holo                   -> --fx, --fy  (holographic foil)
+ * Reads:  .tilt  -> --tilt-x, --tilt-y  (3D tilt)
+ *         .holo  -> --fx, --fy          (holographic foil glare)
  *
- * The three lookups are independent rather than one closest() call, because a
- * holo card sits inside a glass section: a single lookup would return the card
- * and the section's spotlight would die the moment the cursor entered a card.
+ * The two lookups are independent rather than one closest() call: a holo card
+ * can itself be the tilting element, and a shared lookup would make whichever
+ * selector matched first suppress the other.
+ *
+ * There used to be a third: a cursor-tracking spotlight on every .glass surface.
+ * It was removed — a flashlight following the pointer across every card on the
+ * page read as aggressive rather than tactile.
  */
 export default function Effects() {
   useEffect(() => {
@@ -30,8 +33,7 @@ export default function Effects() {
     let frame = 0;
     let pending: PointerEvent | null = null;
     // Tracked so we can clear vars when the pointer leaves a card — otherwise
-    // the highlight freezes in place instead of fading out.
-    let lastSurface: HTMLElement | null = null;
+    // the effect freezes in place instead of settling back.
     let lastTilt: HTMLElement | null = null;
     let lastFoil: HTMLElement | null = null;
 
@@ -39,12 +41,6 @@ export default function Effects() {
       if (!el) return;
       el.style.removeProperty('--tilt-x');
       el.style.removeProperty('--tilt-y');
-    };
-
-    const clearSurface = (el: HTMLElement | null) => {
-      if (!el) return;
-      el.style.removeProperty('--mx');
-      el.style.removeProperty('--my');
     };
 
     const clearFoil = (el: HTMLElement | null) => {
@@ -61,17 +57,6 @@ export default function Effects() {
 
       const target = e.target as HTMLElement | null;
       if (!target?.closest) return;
-
-      const surface = target.closest<HTMLElement>('.glass, .glass-strong');
-      if (surface !== lastSurface) {
-        clearSurface(lastSurface);
-        lastSurface = surface;
-      }
-      if (surface) {
-        const r = surface.getBoundingClientRect();
-        surface.style.setProperty('--mx', `${e.clientX - r.left}px`);
-        surface.style.setProperty('--my', `${e.clientY - r.top}px`);
-      }
 
       const tilt = target.closest<HTMLElement>('.tilt');
       if (tilt !== lastTilt) {
@@ -112,18 +97,16 @@ export default function Effects() {
     };
 
     const onLeave = () => {
-      clearSurface(lastSurface);
       clearTilt(lastTilt);
       clearFoil(lastFoil);
-      lastSurface = null;
       lastTilt = null;
       lastFoil = null;
     };
 
     document.addEventListener('pointermove', onMove, { passive: true });
     document.addEventListener('pointerleave', onLeave);
-    // Scrolling moves cards out from under a stationary cursor, stranding the
-    // highlight at coordinates that no longer correspond to anything.
+    // Scrolling moves cards out from under a stationary cursor, leaving them
+    // tilted at an angle that no longer corresponds to where the pointer is.
     window.addEventListener('scroll', onLeave, { passive: true });
 
     return () => {

@@ -149,29 +149,10 @@ body {
 
 .glass-hover:hover {
   border-color: var(--surface-border-strong);
-  /* background-color, not the `background` shorthand: the shorthand resets
-     background-image, and at :hover specificity it would beat the spotlight
-     rule below — killing the highlight exactly when the cursor is on the card. */
+  /* background-color, not the `background` shorthand: several cards paint their
+     own background-image (gradient washes, category tints) and the shorthand
+     would reset it out from under them on hover. */
   background-color: var(--surface-strong);
-}
-
-/* ---------- Cursor spotlight ---------- */
-/* A highlight that tracks the pointer across every glass surface. Implemented
-   as a background-image layer rather than a ::before so it needs no
-   `position: relative` — adding that to .glass would re-parent the absolutely
-   positioned glow blobs several pages rely on.
-   --mx/--my are written by components/Effects.tsx; the -1000px default parks
-   the highlight off-canvas so untouched cards render exactly as before. */
-.glass,
-.glass-strong {
-  background-image: radial-gradient(
-    240px circle at var(--mx, -1000px) var(--my, -1000px),
-    rgba(255, 255, 255, 0.07),
-    transparent 60%
-  );
-  /* Deliberately no transition: --mx/--my are rewritten every frame, so a
-     transition would restart continuously and leave the glow trailing the
-     cursor instead of tracking it. */
 }
 
 /* Opt-in pointer tilt. Deliberately not on every .glass — full-width sections
@@ -885,11 +866,6 @@ select.field {
 [data-effects="reduced"] .backdrop-grain,
 [data-effects="reduced"] .backdrop-vignette {
   display: none;
-}
-
-[data-effects="reduced"] .glass,
-[data-effects="reduced"] .glass-strong {
-  background-image: none;
 }
 
 [data-effects="reduced"] .tilt {

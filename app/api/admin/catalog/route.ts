@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { query, queryOne, queryAll } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
-import { errorPayload } from '@/lib/apiError';
+import { adminErrorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +29,84 @@ export const dynamic = 'force-dynamic';
 async function columnExists(table: string, column: string): Promise<boolean> {
   const cols = await queryAll(`PRAGMA table_info(${table})`);
   return (cols as any[]).some((c) => String(c.name) === column);
+}
+
+/**
+ * Every table in this app that exists in *some* environments but not others.
+ *
+ * Most tables here are created lazily, on first use, by their owning lib module
+ * (`ensureCommitmentTables`, `ensureAmbitionTables`, …) or by a one-shot admin
+ * route. So a deployment that has never used commitments genuinely has no
+ * `CommitmentStat` table, and `DELETE FROM CommitmentStat` there is not a
+ * no-op — SQLite raises "no such table" and the whole delete 500s.
+ *
+ * That was the deleteStat/deleteCategory bug: only the `Target` delete was
+ * wrapped against this, and every other statement was one missing table away
+ * from failing the action outright. Reading the live table list once per delete
+ * and skipping what isn't there costs a single query and removes the whole
+ * class of failure.
+ */
+async function existingTables(): Promise<Set<string>> {
+  const rows = await queryAll("SELECT name FROM sqlite_master WHERE type = 'table'");
+  return new Set((rows as any[]).map((r) => String(r.name)));
+}
+
+/**
+ * Run a delete only if its table exists. Records what was skipped so the
+ * response can tell an admin exactly which tables were absent — silence here
+ * would just be a quieter version of the original bug.
+ */
+async function deleteFrom(
+  tables: Set<string>,
+  table: string,
+  sql: string,
+  params: any[],
+  skipped: string[]
+): Promise<void> {
+  if (!tables.has(table)) {
+    skipped.push(table);
+    return;
+  }
+  await query(sql, params);
+}
+
+/**
+ * Drop a stat out of every saved suggestion preset.
+ *
+ * `SuggestionPreset.changes` is a JSON array of `{ statId, delta }`, so there is
+ * no row to delete — the reference is inside a blob and has to be rewritten.
+ * A preset left holding only the deleted stat has nothing to apply, so it goes.
+ */
+async function pruneStatFromPresets(tables: Set<string>, statId: string): Promise<number> {
+  if (!tables.has('SuggestionPreset')) return 0;
+
+  const presets = await queryAll('SELECT id, changes FROM SuggestionPreset');
+  let touched = 0;
+
+  for (const preset of presets as any[]) {
+    let changes: { statId: string; delta: number }[];
+    try {
+      changes = JSON.parse(String(preset.changes));
+    } catch {
+      continue; // unparseable blob — leave it exactly as found
+    }
+    if (!Array.isArray(changes)) continue;
+
+    const kept = changes.filter((c) => String(c?.statId) !== statId);
+    if (kept.length === changes.length) continue;
+
+    if (kept.length === 0) {
+      await query('DELETE FROM SuggestionPreset WHERE id = ?', [preset.id]);
+    } else {
+      await query('UPDATE SuggestionPreset SET changes = ? WHERE id = ?', [
+        JSON.stringify(kept),
+        preset.id,
+      ]);
+    }
+    touched++;
+  }
+
+  return touched;
 }
 
 async function ensureCatalogColumns() {
@@ -88,7 +166,7 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error('Error loading catalog:', error);
-    return NextResponse.json(errorPayload('Failed to load catalog', error), { status: 500 });
+    return NextResponse.json(adminErrorPayload('Failed to load catalog', error), { status: 500 });
   }
 }
 
@@ -175,6 +253,8 @@ export async function POST(request: Request) {
 
       case 'deleteCategory': {
         const { categoryId } = body;
+        if (!categoryId) return NextResponse.json({ error: 'categoryId required' }, { status: 400 });
+
         const statCount = await queryOne('SELECT COUNT(*) as c FROM Stat WHERE categoryId = ?', [categoryId]);
         if (Number(statCount?.c) > 0) {
           return NextResponse.json(
@@ -182,10 +262,15 @@ export async function POST(request: Request) {
             { status: 400 }
           );
         }
-        await query('DELETE FROM EvidenceCategory WHERE categoryId = ?', [categoryId]);
-        await query('DELETE FROM StatPrerequisite WHERE requiredCategoryId = ?', [categoryId]);
+
+        const tables = await existingTables();
+        const skipped: string[] = [];
+
+        await deleteFrom(tables, 'EvidenceCategory', 'DELETE FROM EvidenceCategory WHERE categoryId = ?', [categoryId], skipped);
+        await deleteFrom(tables, 'StatPrerequisite', 'DELETE FROM StatPrerequisite WHERE requiredCategoryId = ?', [categoryId], skipped);
         await query('DELETE FROM Category WHERE id = ?', [categoryId]);
-        return NextResponse.json({ success: true });
+
+        return NextResponse.json({ success: true, skippedTables: skipped });
       }
 
       case 'createStat': {
@@ -224,36 +309,59 @@ export async function POST(request: Request) {
 
         // Destructive: removes the stat AND all data tied to it, everywhere.
         // The admin UI warns loudly and suggests hiding instead.
-        const statValueIds = (
-          await queryAll('SELECT id FROM StatValue WHERE statId = ?', [statId])
-        ).map((r: any) => String(r.id));
-
-        for (const svId of statValueIds) {
-          await query('DELETE FROM StatHistory WHERE statValueId = ?', [svId]);
-        }
-        await query('DELETE FROM StatValue WHERE statId = ?', [statId]);
-        await query('DELETE FROM ReviewSessionStat WHERE statId = ?', [statId]);
-        await query('DELETE FROM StatVisibility WHERE statId = ?', [statId]);
-        await query('DELETE FROM StatPrerequisite WHERE statId = ? OR requiredStatId = ?', [statId, statId]);
-        await query('DELETE FROM StatLockOverride WHERE statId = ?', [statId]);
-        const suggestionIds = (
-          await queryAll('SELECT id FROM Suggestion WHERE statId = ?', [statId])
-        ).map((r: any) => String(r.id));
-        for (const sgId of suggestionIds) {
-          await query('DELETE FROM Vote WHERE suggestionId = ?', [sgId]);
-          await query('DELETE FROM SuggestionEvidence WHERE suggestionId = ?', [sgId]);
-        }
-        await query('DELETE FROM Suggestion WHERE statId = ?', [statId]);
         const stat = await queryOne('SELECT code FROM Stat WHERE id = ?', [statId]);
-        if (stat) {
-          try {
-            await query('DELETE FROM Target WHERE statCode = ?', [String(stat.code)]);
-          } catch {
-            /* Target table may not exist in older environments */
+        if (!stat) return NextResponse.json({ error: 'Stat not found' }, { status: 404 });
+
+        const tables = await existingTables();
+        const skipped: string[] = [];
+
+        // --- history hangs off StatValue, so it goes first ---
+        if (tables.has('StatValue')) {
+          const statValueIds = (
+            await queryAll('SELECT id FROM StatValue WHERE statId = ?', [statId])
+          ).map((r: any) => String(r.id));
+          for (const svId of statValueIds) {
+            await deleteFrom(tables, 'StatHistory', 'DELETE FROM StatHistory WHERE statValueId = ?', [svId], skipped);
           }
         }
+        await deleteFrom(tables, 'StatValue', 'DELETE FROM StatValue WHERE statId = ?', [statId], skipped);
+
+        // --- votes and evidence hang off Suggestion, so they go before it ---
+        if (tables.has('Suggestion')) {
+          const suggestionIds = (
+            await queryAll('SELECT id FROM Suggestion WHERE statId = ?', [statId])
+          ).map((r: any) => String(r.id));
+          for (const sgId of suggestionIds) {
+            await deleteFrom(tables, 'Vote', 'DELETE FROM Vote WHERE suggestionId = ?', [sgId], skipped);
+            await deleteFrom(tables, 'SuggestionEvidence', 'DELETE FROM SuggestionEvidence WHERE suggestionId = ?', [sgId], skipped);
+          }
+        }
+        await deleteFrom(tables, 'Suggestion', 'DELETE FROM Suggestion WHERE statId = ?', [statId], skipped);
+
+        // --- everything else that names the stat directly ---
+        await deleteFrom(tables, 'ReviewSessionStat', 'DELETE FROM ReviewSessionStat WHERE statId = ?', [statId], skipped);
+        await deleteFrom(tables, 'StatNote', 'DELETE FROM StatNote WHERE statId = ?', [statId], skipped);
+        await deleteFrom(tables, 'StatVisibility', 'DELETE FROM StatVisibility WHERE statId = ?', [statId], skipped);
+        await deleteFrom(tables, 'StatPrerequisite', 'DELETE FROM StatPrerequisite WHERE statId = ? OR requiredStatId = ?', [statId, statId], skipped);
+        await deleteFrom(tables, 'StatLockOverride', 'DELETE FROM StatLockOverride WHERE statId = ?', [statId], skipped);
+        await deleteFrom(tables, 'CommitmentStat', 'DELETE FROM CommitmentStat WHERE statId = ?', [statId], skipped);
+        await deleteFrom(tables, 'CommitmentOriginalStat', 'DELETE FROM CommitmentOriginalStat WHERE statId = ?', [statId], skipped);
+        await deleteFrom(tables, 'AutomationStat', 'DELETE FROM AutomationStat WHERE statId = ?', [statId], skipped);
+        // Targets are keyed by stat CODE, not id.
+        await deleteFrom(tables, 'Target', 'DELETE FROM Target WHERE statCode = ?', [String(stat.code)], skipped);
+
+        // An ambition survives losing its stat — it keeps `statLabel` as prose,
+        // so null the dead link rather than destroying someone's goal.
+        if (tables.has('Ambition')) {
+          await query('UPDATE Ambition SET statId = NULL WHERE statId = ?', [statId]);
+        } else {
+          skipped.push('Ambition');
+        }
+
+        const prunedPresets = await pruneStatFromPresets(tables, String(statId));
+
         await query('DELETE FROM Stat WHERE id = ?', [statId]);
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, skippedTables: skipped, prunedPresets });
       }
 
       default:
@@ -261,6 +369,8 @@ export async function POST(request: Request) {
     }
   } catch (error: any) {
     console.error('Error in catalog action:', error);
-    return NextResponse.json(errorPayload('Catalog action failed', error), { status: 500 });
+    // Admin-gated route, so the real reason crosses the wire — see
+    // adminErrorPayload. "Catalog action failed" on its own is undebuggable.
+    return NextResponse.json(adminErrorPayload('Catalog action failed', error), { status: 500 });
   }
 }

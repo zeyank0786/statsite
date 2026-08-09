@@ -38,3 +38,19 @@ export function errorPayload(publicMessage: string, error?: unknown): ApiErrorPa
   }
   return { error: publicMessage };
 }
+
+/**
+ * Same, but keeps the detail in production too.
+ *
+ * Only for routes that have already rejected non-admins — the reason the public
+ * helper hides detail is that anyone can reach most endpoints, which does not
+ * apply once `requireAdmin()` has passed. An admin debugging their own instance
+ * needs to see "no such table: Target", not "Action failed"; that is the whole
+ * difference between a fixable report and a shrug.
+ *
+ * Never call this from a route a non-admin can reach.
+ */
+export function adminErrorPayload(publicMessage: string, error?: unknown): ApiErrorPayload {
+  if (error === undefined) return { error: publicMessage };
+  return { error: publicMessage, details: messageOf(error) };
+}

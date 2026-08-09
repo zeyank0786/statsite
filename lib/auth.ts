@@ -23,6 +23,34 @@ export async function requireAdmin() {
   return session;
 }
 
+export interface Actor {
+  playerId: string;
+  isAdmin: boolean;
+}
+
+/**
+ * The signed-in player plus a freshly-read admin flag, or null when nobody is
+ * signed in / the account has no player linked.
+ *
+ * Same shape several routes had been declaring privately. Like requireAdmin, the
+ * admin bit comes from the database rather than the JWT, so revoking admin takes
+ * effect on the next request instead of the next sign-in.
+ */
+export async function getActor(): Promise<Actor | null> {
+  const authOptions = await getAuthOptions();
+  const session = await getServerSession(authOptions);
+  const playerId = (session?.user as any)?.playerId;
+  const userId = (session?.user as any)?.id;
+  if (!playerId) return null;
+
+  let isAdmin = false;
+  if (userId) {
+    const row = await queryOne('SELECT isAdmin FROM User WHERE id = ?', [userId]);
+    isAdmin = Boolean(row && Number(row.isAdmin));
+  }
+  return { playerId: String(playerId), isAdmin };
+}
+
 export async function getAuthOptions(): Promise<NextAuthOptions> {
   return {
     providers: [

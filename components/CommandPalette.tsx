@@ -29,6 +29,7 @@ import {
   SparklesIcon,
   PlusIcon,
   CornerDownLeftIcon,
+  ZapIcon,
 } from './icons';
 
 type Icon = (p: { size?: number; className?: string }) => React.ReactNode;
@@ -63,6 +64,7 @@ const PAGES: { href: string; label: string; icon: Icon; adminOnly?: boolean }[] 
   { href: '/suggestions', label: 'Suggestions', icon: LightbulbIcon },
   { href: '/messages', label: 'Messages', icon: MessageIcon },
   { href: '/commitments', label: 'Commitments', icon: HandIcon },
+  { href: '/automations', label: 'Automations', icon: ZapIcon },
   { href: '/reminders', label: 'Reminders', icon: BellIcon },
   { href: '/achievements', label: 'Achievements', icon: AwardIcon },
   { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },

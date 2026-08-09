@@ -8,6 +8,57 @@ file should always answer one question at a glance: what still needs telling?
 
 ---
 
+## Automatic stats, a calmer surface, and a catalog fix — 9 August 2026
+
+### ⚡ Automations — stats that change themselves
+
+New `/automations` page (More menu and ⌘K). A rule is a standing
+*entitlement*: while you qualify, its deltas land on your stats on a schedule,
+and when you're removed you keep everything already earned.
+
+- **Applies directly, no vote.** Approving the rule is the approval — re-voting
+  the same recurring change every week is busywork. Every application still
+  lands in history with `source = 'automation'`, next to suggestion- and
+  review-sourced changes.
+- **Per-stat deltas, negatives allowed** (±1 / ±2), so one rule can reward and
+  penalise at once.
+- **Cadences:** daily, weekly, monthly, or every N days, with start and optional
+  end dates, plus a per-rule *apply the first change straight away*.
+- **Admin picks who qualifies.** Adding someone is "you now qualify for X";
+  removing them is "you are disqualified from X". Both push.
+- **Requests.** Anyone can ask to join a rule or propose a whole new one; both
+  land in the admin's queue, and the requester is told either way.
+- **Pause, edit, delete** — none of which touch applied history. Resuming
+  **skips** whatever was missed rather than paying arrears: at most one cycle
+  fires per person per run, and the next slot is computed from *now*. That also
+  makes a cron outage harmless.
+- Runs off the existing daily Vercel cron; `/api/cron/automations` exists for an
+  external pinger if changes should land earlier in the day. Firing twice a day
+  is a no-op.
+
+### 🐛 Deleting a stat or category no longer fails
+
+"Catalog action failed" was a missing table. Only the `Target` delete was
+wrapped against tables that exist in some environments and not others (most are
+created lazily on first use) — every other statement would 500 the whole action
+if its table was absent. Reproduced by dropping `StatVisibility` from a copy of
+the DB: the old code fails with exactly that error, the new code succeeds.
+
+Deleting a stat now also clears references it used to leave dangling —
+`StatNote`, `CommitmentStat`, `CommitmentOriginalStat`, and `SuggestionPreset`
+(a JSON blob, so it's rewritten, and a preset left empty is dropped). An
+ambition keeps its `statLabel` prose and only has its dead `statId` nulled.
+
+Failures from the admin catalog route now carry the real reason in production.
+Safe because the route already rejects non-admins — see `adminErrorPayload`.
+
+### 🔦 The cursor flashlight is gone
+
+The spotlight that tracked the pointer across every glass card has been removed.
+Card tilt, the hover border and the achievement holo foil are untouched.
+
+---
+
 ## Search, speed and a floor under the app — 7 August 2026
 
 One release covering a user-facing addition and a batch of foundation work.
