@@ -9,6 +9,103 @@ needs telling — without losing the record of everything that came before.
 
 ---
 
+## Automatic stats, a calmer surface, and a catalog fix — 9 August 2026
+
+Announced 9 August 2026. The catalog fix was left out of the message — it's
+admin-only plumbing and the crew never saw the bug.
+
+<details>
+<summary>What the crew was actually told</summary>
+
+```
+⚡ New on the stats app — stats that change themselves
+
+Some of your stats can now look after themselves.
+
+⚡ What an "automatic stat" is
+A standing rule — something like "Gym 3x a week: +1 Discipline every Monday".
+While you qualify for it, it applies itself on schedule. No suggestion, no vote,
+nothing to remember.
+You get a notification the moment you qualify ("You now qualify for Gym 3x a
+week"), and another every time one actually moves your stats.
+
+📋 They work like any other change
+Same ±1 / ±2 as a normal suggestion, and one rule can touch several stats at
+once — negatives included. "Sunday long run: +2 Stamina, +1 Discipline,
+−1 Recovery" is a single rule.
+Every automatic change lands in your history like everything else, labelled as
+automatic. Nothing happens invisibly.
+
+🙋 You can ask for one
+Go to Automations (More menu, or ⌘K and search for it). You can:
+• Ask to qualify for a rule that already exists — say why, and it comes to me
+• Propose a whole new rule yourself — stats, deltas, how often, all of it
+I approve or reject it and you get told which.
+
+⏸️ Qualifying isn't forever
+If you stop doing the thing, I can disqualify you — you'll get a "you're
+disqualified from X" notification.
+Important bit: you keep every point it already gave you. Nothing gets clawed
+back. It just stops.
+Rules can be paused too. A paused rule doesn't stockpile — if it's off for three
+weeks you don't get three weeks of points in one lump when it comes back.
+
+🔦 The torch is gone
+That light that followed your cursor around every card has been removed — it was
+too much. Card tilt and the holographic achievement cards are all still there.
+```
+
+</details>
+
+### ⚡ Automations — stats that change themselves
+
+New `/automations` page (More menu and ⌘K). A rule is a standing
+*entitlement*: while you qualify, its deltas land on your stats on a schedule,
+and when you're removed you keep everything already earned.
+
+- **Applies directly, no vote.** Approving the rule is the approval — re-voting
+  the same recurring change every week is busywork. Every application still
+  lands in history with `source = 'automation'`, next to suggestion- and
+  review-sourced changes.
+- **Per-stat deltas, negatives allowed** (±1 / ±2), so one rule can reward and
+  penalise at once.
+- **Cadences:** daily, weekly, monthly, or every N days, with start and optional
+  end dates, plus a per-rule *apply the first change straight away*.
+- **Admin picks who qualifies.** Adding someone is "you now qualify for X";
+  removing them is "you are disqualified from X". Both push.
+- **Requests.** Anyone can ask to join a rule or propose a whole new one; both
+  land in the admin's queue, and the requester is told either way.
+- **Pause, edit, delete** — none of which touch applied history. Resuming
+  **skips** whatever was missed rather than paying arrears: at most one cycle
+  fires per person per run, and the next slot is computed from *now*. That also
+  makes a cron outage harmless.
+- Runs off the existing daily Vercel cron; `/api/cron/automations` exists for an
+  external pinger if changes should land earlier in the day. Firing twice a day
+  is a no-op.
+
+### 🐛 Deleting a stat or category no longer fails
+
+"Catalog action failed" was a missing table. Only the `Target` delete was
+wrapped against tables that exist in some environments and not others (most are
+created lazily on first use) — every other statement would 500 the whole action
+if its table was absent. Reproduced by dropping `StatVisibility` from a copy of
+the DB: the old code fails with exactly that error, the new code succeeds.
+
+Deleting a stat now also clears references it used to leave dangling —
+`StatNote`, `CommitmentStat`, `CommitmentOriginalStat`, and `SuggestionPreset`
+(a JSON blob, so it's rewritten, and a preset left empty is dropped). An
+ambition keeps its `statLabel` prose and only has its dead `statId` nulled.
+
+Failures from the admin catalog route now carry the real reason in production.
+Safe because the route already rejects non-admins — see `adminErrorPayload`.
+
+### 🔦 The cursor flashlight is gone
+
+The spotlight that tracked the pointer across every glass card has been removed.
+Card tilt, the hover border and the achievement holo foil are untouched.
+
+---
+
 ## Sent to the group chat — 7 August 2026
 
 Covered all three releases below: the visual pass, draw-on charts, and the
