@@ -8,6 +8,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import PushToggle from '@/components/PushToggle';
 import EffectsToggle from '@/components/EffectsToggle';
+import ProfileCustomizer from '@/components/ProfileCustomizer';
 import { EyeIcon, EyeOffIcon, CheckIcon, BellIcon, ChevronRightIcon } from '@/components/icons';
 
 function PasswordField({
@@ -137,7 +138,11 @@ export default function SettingsPage() {
 
   return (
     <AppShell width="narrow">
-      <PageHeader title="Account Settings" subtitle="Update your email or password." eyebrow="Account" />
+      <PageHeader
+        title="Account Settings"
+        subtitle="Update your login details, or make the app look like you."
+        eyebrow="Account"
+      />
 
       <div className="glass card-shadow p-6 md:p-8 max-w-2xl animate-rise">
         <form onSubmit={handleSave} className="space-y-6">
@@ -199,6 +204,8 @@ export default function SettingsPage() {
           </button>
         </form>
       </div>
+
+      <ProfileCustomizer />
 
       <PushToggle />
 

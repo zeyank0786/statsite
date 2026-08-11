@@ -10,6 +10,8 @@ import RadarChart from '@/components/RadarChart';
 import Reveal from '@/components/Reveal';
 import { orderCategories, getCategoryMeta, computeOverallScore, scaleMax, categoryRadarValue } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
+import Link from 'next/link';
+import { ClockIcon } from '@/components/icons';
 
 interface Player {
   id: string;
@@ -160,6 +162,15 @@ function CompareContent() {
         subtitle="Pick two of the crew and see exactly where each one leads."
         eyebrow="Compare"
       />
+
+      <Link
+        href="/wayback"
+        className="inline-flex items-center gap-1.5 text-sm font-medium mb-5 hover:underline"
+        style={{ color: 'var(--accent-cyan)' }}
+      >
+        <ClockIcon size={15} />
+        Or compare yourself to any point in your own history
+      </Link>
 
       {/* Pickers */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

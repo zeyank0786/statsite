@@ -8,6 +8,10 @@
  * larger than the palette get deterministic golden-angle HSL colors.
  * Without a roster (e.g. archived players in old history), falls back to the
  * original hash so colors stay consistent with what people are used to.
+ *
+ * A player who has picked a custom accent color (setCustomColors) overrides
+ * all of that — their pick wins everywhere, and the automatic assignment still
+ * runs underneath so anyone who hasn't chosen keeps a stable, distinct color.
  */
 
 interface ColorEntry {
@@ -60,6 +64,31 @@ function goldenAngleEntry(position: number): ColorEntry {
 }
 
 const assigned = new Map<string, ColorEntry>();
+/** Explicit player picks; consulted before anything automatic. */
+const custom = new Map<string, ColorEntry>();
+
+/** #rrggbb → a palette entry, so custom picks flow through the same helpers. */
+function hexToEntry(hex: string): ColorEntry {
+  const clean = hex.trim().toLowerCase();
+  const r = parseInt(clean.slice(1, 3), 16);
+  const g = parseInt(clean.slice(3, 5), 16);
+  const b = parseInt(clean.slice(5, 7), 16);
+  return { color: clean, hex: clean, rgb: `${r}, ${g}, ${b}` };
+}
+
+/**
+ * Register players' chosen accent colors. Pass the full map each time — it
+ * replaces the previous set, so clearing a pick takes effect immediately.
+ * Ignores anything that isn't a #rrggbb value.
+ */
+export function setCustomColors(colors: Record<string, string | null | undefined>) {
+  custom.clear();
+  for (const [id, hex] of Object.entries(colors)) {
+    if (!id || typeof hex !== 'string') continue;
+    if (!/^#[0-9a-f]{6}$/i.test(hex.trim())) continue;
+    custom.set(id, hexToEntry(hex));
+  }
+}
 
 /**
  * Register the current roster (any stable id list — active players at minimum).
@@ -96,8 +125,56 @@ export function setKnownRoster(userIds: string[]) {
 }
 
 function entryFor(userId: string): ColorEntry {
-  return assigned.get(userId) || PALETTE[hashIndex(userId)];
+  return custom.get(userId) || assigned.get(userId) || PALETTE[hashIndex(userId)];
 }
+
+/**
+ * The rest of a player's cosmetic identity, registered the same way colours
+ * are so any component can render a picture or title without prop-drilling a
+ * profile through the tree.
+ */
+const avatars = new Map<string, string>();
+const flairs = new Map<string, string>();
+
+export function setPlayerProfiles(
+  profiles: { playerId: string; avatarUrl?: string | null; flairLabel?: string | null }[]
+) {
+  avatars.clear();
+  flairs.clear();
+  for (const p of profiles) {
+    if (!p.playerId) continue;
+    if (p.avatarUrl) avatars.set(p.playerId, p.avatarUrl);
+    if (p.flairLabel) flairs.set(p.playerId, p.flairLabel);
+  }
+}
+
+/** Uploaded profile picture, or null when they're still on initials. */
+export function getUserAvatarUrl(userId: string): string | null {
+  return avatars.get(userId) || null;
+}
+
+/** The earned title a player chose to wear, or null. */
+export function getUserFlair(userId: string): string | null {
+  return flairs.get(userId) || null;
+}
+
+/** The palette people choose from in settings — the app's own accent family. */
+export const PICKABLE_COLORS: string[] = [
+  '#22d3ee',
+  '#3b82f6',
+  '#6366f1',
+  '#a855f7',
+  '#ec4899',
+  '#f43f5e',
+  '#ef4444',
+  '#f97316',
+  '#f59e0b',
+  '#eab308',
+  '#84cc16',
+  '#34d399',
+  '#14b8a6',
+  '#0ea5e9',
+];
 
 export function getUserColor(userId: string): string {
   return entryFor(userId).color;

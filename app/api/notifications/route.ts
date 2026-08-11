@@ -8,7 +8,9 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET  → { events, unseenCount, celebrations } for the signed-in player
- * POST { seen?: true, celebrated?: true } → advance the respective marker
+ * POST { seen?: true, celebrated?: true, section?: string } → advance a marker.
+ *       `seen` clears the whole feed (the bell was opened); `section` clears
+ *       just one page's items (that page was opened).
  */
 
 async function getPlayerId(): Promise<string | null> {
@@ -36,8 +38,18 @@ export async function POST(request: Request) {
   if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { seen, celebrated } = await request.json();
-    await markSeen(playerId, { seen: Boolean(seen), celebrated: Boolean(celebrated) });
+    const { seen, celebrated, section } = await request.json();
+    // Sections are free-form path segments; bound the length so a junk value
+    // can't bloat the table.
+    const cleanSection =
+      typeof section === 'string' && /^[a-z0-9-]{1,40}$/i.test(section.trim())
+        ? section.trim()
+        : undefined;
+    await markSeen(playerId, {
+      seen: Boolean(seen),
+      celebrated: Boolean(celebrated),
+      section: cleanSection,
+    });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error marking notifications:', error);

@@ -6,23 +6,24 @@ import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { resolveSuggestion } from '@/lib/suggestionEngine';
 import { recordMentions } from '@/lib/mentionsServer';
+import { mergeAccount } from '@/lib/suggestionText';
 import { v4 as uuid } from 'uuid';
 import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_DELTAS = [-2, -1, 1, 2];
-const MIN_TESTIMONY_LENGTH = 1;
+const MIN_ACCOUNT_LENGTH = 1;
 
 /**
- * PATCH: edit a suggestion the current player proposed — change the reason,
- * testimony, evidence, the set of stats, and each stat's delta.
+ * PATCH: edit a suggestion the current player proposed — change the written
+ * account, evidence, the set of stats, and each stat's delta.
  *
  * A suggestion is really a batch of per-stat rows (auto-split at creation),
- * sharing one reason / testimony / evidence set. Editing therefore edits the
- * WHOLE batch: [id] is any row in it (usually the anchor). We reconcile the
- * batch's rows against the submitted stats — updating kept ones, inserting
- * added ones (each with the proposer's implicit yes), deleting removed ones.
+ * sharing one account / evidence set. Editing therefore edits the WHOLE batch:
+ * [id] is any row in it (usually the anchor). We reconcile the batch's rows
+ * against the submitted stats — updating kept ones, inserting added ones (each
+ * with the proposer's implicit yes), deleting removed ones.
  *
  * Allowed ONLY while the proposal is untouched: the proposer owns every row,
  * every row is still pending, and NO eligible voter other than the proposer
@@ -43,6 +44,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
     const { changes, reason, evidenceIds, testimony } = await request.json();
+
+    // One account per suggestion. `testimony` is still read so a stale tab on
+    // the old two-box form doesn't drop what was typed into it.
+    const account = mergeAccount(reason, testimony);
 
     // The referenced row anchors the batch and its shared grounding.
     const anchor = await queryOne(
@@ -86,8 +91,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     // ---- Validate the submitted payload (mirrors POST /api/suggestions) ----
-    if (!reason?.trim()) {
-      return NextResponse.json({ error: 'A reason is required' }, { status: 400 });
+    if (account.length < MIN_ACCOUNT_LENGTH) {
+      return NextResponse.json({ error: 'A written account is required' }, { status: 400 });
     }
     if (!Array.isArray(changes) || changes.length === 0) {
       return NextResponse.json({ error: 'Keep at least one stat to change' }, { status: 400 });
@@ -102,13 +107,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
     }
     const hasEvidence = Array.isArray(evidenceIds) && evidenceIds.length > 0;
-    const cleanTestimony = typeof testimony === 'string' ? testimony.trim() : '';
-    if (!hasEvidence && cleanTestimony.length < MIN_TESTIMONY_LENGTH) {
-      return NextResponse.json(
-        { error: 'Ground the suggestion: attach an evidence post, or write what you witnessed first-hand' },
-        { status: 400 }
-      );
-    }
 
     const subject = await queryOne('SELECT active FROM Player WHERE id = ?', [subjectId]);
     if (!subject || !Number(subject.active)) {
@@ -156,8 +154,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // ---- Reconcile the batch against the submitted stats ----
     const now = new Date().toISOString();
-    const cleanReason = reason.trim();
-    const testimonyValue = cleanTestimony || null;
+    // Editing collapses any legacy split on this batch: the merged account is
+    // written to `reason` and the old testimony column is cleared.
+    const cleanReason = account;
+    const testimonyValue = null;
 
     // Legacy single suggestion (no batchId): adopt its id as the batch key so
     // any stats added during this edit group with it going forward.

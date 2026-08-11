@@ -25,6 +25,13 @@ import { v4 as uuid } from 'uuid';
  *   lastSeenAt       — bell badge counts events newer than this
  *   lastCelebratedAt — popups fire for YOUR events newer than this
  * Both start at "now" on first contact, so history never re-celebrates.
+ *
+ * NotificationSectionSeen adds a second, finer watermark per section (the
+ * first path segment of an event's href). Opening /suggestions marks the
+ * "suggestions" section read, so its items stop counting toward the badge even
+ * though the bell was never clicked. Events stay in the list either way — the
+ * feed doubles as the crew's recent-activity log, so being read greys an item
+ * rather than removing it.
  */
 
 export interface FeedEvent {
@@ -50,6 +57,22 @@ export interface FeedEvent {
   body?: string;
   href?: string;
   hex: string;
+  /** Which page this belongs to; opening that page marks it read. */
+  section: string;
+  /** False = still counts toward the bell badge. */
+  seen: boolean;
+}
+
+/**
+ * The page an event belongs to, derived from its link's first path segment so
+ * a new feed source needs no mapping table — /commitments/abc → "commitments".
+ * Events with nowhere to go (lockouts) land in "general" and are only cleared
+ * by opening the bell itself.
+ */
+export function sectionOfHref(href?: string): string {
+  if (!href) return 'general';
+  const segment = href.split('?')[0].split('#')[0].split('/').filter(Boolean)[0];
+  return segment ? segment.toLowerCase() : 'home';
 }
 
 export interface Celebration {
@@ -80,6 +103,16 @@ async function ensureTables() {
        playerId        TEXT PRIMARY KEY,
        lastSeenAt      TEXT NOT NULL,
        lastCelebratedAt TEXT NOT NULL
+     )`
+  );
+  // Per-section watermarks: opening a page clears its own items without
+  // touching anything else in the feed.
+  await query(
+    `CREATE TABLE IF NOT EXISTS NotificationSectionSeen (
+       playerId   TEXT NOT NULL,
+       section    TEXT NOT NULL,
+       lastSeenAt TEXT NOT NULL,
+       PRIMARY KEY (playerId, section)
      )`
   );
   // Which achievement IDs the system has ever computed. Without this there's
@@ -160,7 +193,9 @@ export async function buildFeed(currentPlayerId: string): Promise<{
   const nameById = new Map((nameRows as any[]).map((p) => [String(p.id), String(p.username)]));
   const nameOf = (id: string) => nameById.get(id) || 'Unknown';
 
-  const events: FeedEvent[] = [];
+  // Sources build plain events; section and read-state are derived in one place
+  // once the whole feed is assembled, so a new source can't forget to set them.
+  const events: Omit<FeedEvent, 'section' | 'seen'>[] = [];
 
   // Stat changes (+ tier-up derivation)
   const changes = await queryAll(
@@ -448,8 +483,13 @@ export async function buildFeed(currentPlayerId: string): Promise<{
     /* lockouts degrade gracefully */
   }
 
-  events.sort((a, b) => (a.at < b.at ? 1 : -1));
-  const feed = events.slice(0, FEED_LIMIT);
+  const enriched: FeedEvent[] = events.map((e) => ({
+    ...e,
+    section: sectionOfHref(e.href),
+    seen: false, // resolved against the watermarks below
+  }));
+  enriched.sort((a, b) => (a.at < b.at ? 1 : -1));
+  const feed = enriched.slice(0, FEED_LIMIT);
 
   // Markers — first contact starts both at "now" so history never floods
   let seen = await queryOne('SELECT lastSeenAt, lastCelebratedAt FROM NotificationSeen WHERE playerId = ?', [
@@ -466,11 +506,26 @@ export async function buildFeed(currentPlayerId: string): Promise<{
   const lastSeenAt = String(seen!.lastSeenAt);
   const lastCelebratedAt = String(seen!.lastCelebratedAt);
 
-  const unseenCount = feed.filter((e) => e.at > lastSeenAt).length;
+  // An event is read once EITHER the bell was opened after it (global marker)
+  // or its own page was visited after it (section marker) — whichever is later
+  // wins, so neither route can un-read something the other already cleared.
+  const sectionRows = await queryAll(
+    'SELECT section, lastSeenAt FROM NotificationSectionSeen WHERE playerId = ?',
+    [currentPlayerId]
+  );
+  const sectionSeenAt = new Map(
+    (sectionRows as any[]).map((r) => [String(r.section), String(r.lastSeenAt)])
+  );
+  for (const e of feed) {
+    const sectionMark = sectionSeenAt.get(e.section) || '';
+    e.seen = e.at <= lastSeenAt || e.at <= sectionMark;
+  }
+
+  const unseenCount = feed.filter((e) => !e.seen).length;
 
   // Personal celebrations: YOUR wins newer than the celebration marker
   const celebrations: Celebration[] = [];
-  for (const e of events) {
+  for (const e of enriched) {
     if (e.playerId !== currentPlayerId || e.at <= lastCelebratedAt) continue;
     if (e.type === 'achievement') {
       celebrations.push({ id: e.id, kind: 'achievement', title: 'Achievement unlocked!', subtitle: e.title.replace(/^🎖️ /, ''), hex: e.hex });
@@ -485,7 +540,10 @@ export async function buildFeed(currentPlayerId: string): Promise<{
   return { events: feed, unseenCount, celebrations: celebrations.slice(0, CELEBRATION_CAP) };
 }
 
-export async function markSeen(playerId: string, what: { seen?: boolean; celebrated?: boolean }): Promise<void> {
+export async function markSeen(
+  playerId: string,
+  what: { seen?: boolean; celebrated?: boolean; section?: string }
+): Promise<void> {
   await ensureTables();
   const now = new Date().toISOString();
   await query(
@@ -494,4 +552,12 @@ export async function markSeen(playerId: string, what: { seen?: boolean; celebra
   );
   if (what.seen) await query('UPDATE NotificationSeen SET lastSeenAt = ? WHERE playerId = ?', [now, playerId]);
   if (what.celebrated) await query('UPDATE NotificationSeen SET lastCelebratedAt = ? WHERE playerId = ?', [now, playerId]);
+  // Visiting a page clears that page's items without touching the rest.
+  if (what.section) {
+    await query(
+      `INSERT INTO NotificationSectionSeen (playerId, section, lastSeenAt) VALUES (?, ?, ?)
+       ON CONFLICT(playerId, section) DO UPDATE SET lastSeenAt = excluded.lastSeenAt`,
+      [playerId, what.section.toLowerCase(), now]
+    );
+  }
 }

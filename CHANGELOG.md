@@ -8,6 +8,96 @@ file should always answer one question at a glance: what still needs telling?
 
 ---
 
+## Seven changes — 11 August 2026
+
+A batch covering a long-standing data loss in suggestions, three new
+destinations, and profile customisation.
+
+### One box on a suggestion, not two
+
+The bug worth fixing first. A suggestion carried **two** text fields — the
+witness `testimony` (step 2) and the `reason` (step 4) — but only `reason` was
+ever written to `StatHistory`. So whenever someone put the real account in the
+testimony box and "see other relevant box" in the reason, the permanent record
+kept the pointer and lost the substance.
+
+- The form now has **one** required box, and it's the one that reaches history.
+  Evidence is optional supporting material rather than half of a grounding
+  rule.
+- `lib/suggestionText.ts` merges the two fields on read, so every existing
+  suggestion shows everything that was typed. A pointer on either side defers
+  to the side with real content; two real accounts are joined, not truncated.
+- `lib/suggestionBackfill.ts` runs once (marker row in a new `AppMigration`
+  table) and **repairs `StatHistory` rows whose reason was a pointer**, pulling
+  in the testimony that had the actual story. Rows already carrying a real
+  explanation are never touched — the pointer patterns are anchored and capped
+  at 80 characters because mistaking content for a placeholder would overwrite
+  genuine history.
+- `POST`/`PATCH` still read `testimony` off the wire so a stale open tab can't
+  silently drop what someone typed into it; it's folded into the one field.
+
+### The bell clears per page
+
+Read state was a single `lastSeenAt` watermark, so the badge only cleared by
+opening the bell itself. `NotificationSectionSeen` adds a second watermark per
+section — the first path segment of an event's link — and landing on `/suggestions`
+now clears the suggestion items without a click. Items **stay in the list**
+(greyed, no dot) because the feed doubles as the crew's recent-activity log;
+removing them would gut that.
+
+### Share a message as an image
+
+`/api/og/message/[messageId]` renders any board message as a quote card —
+author, colour, milestone badge, attached stat, reaction counts. Auth-gated and
+downloaded as a file like the stat card, because a public URL would let anyone
+holding a link read the board. The font loader is now shared (`lib/ogFont.ts`).
+
+### Profile customisation
+
+Accent colour, uploaded profile picture, banner, bio and an earned title, all
+self-served in Settings (cosmetic, so no vote). Stored as additive columns on
+`Player`. A custom colour follows you onto every chart, leaderboard and share
+card; colours already claimed by someone else are blocked, since two people
+sharing one makes them indistinguishable everywhere. Titles can only be
+achievements you've actually earned — verified server-side, not trusted from
+the client.
+
+### Compare to past you — `/wayback`
+
+Any two dates, the whole stat sheet on each, and everything that moved between
+them. Values are **rewound exactly** from `StatHistory` (the value on date T is
+the `oldValue` of the earliest change after T), not sampled — so a date shows
+what was really on the board that day.
+
+### Crew goals — `/group-goals`
+
+One shared target the whole crew chips away at. Every contribution **requires**
+an evidence post, and it has to be your own. Contributions count on sight so a
+month-long goal keeps moving; the counterweight is that anyone can strike one
+they don't believe, which pulls it from the total and leaves the challenge on
+the record.
+
+Payout is per-goal: **split by contribution** (largest-remainder, so the awards
+sum to exactly the pool) or **podium**. Ties break in favour of whoever got
+there first. Crucially the payout does **not** move stats directly — it files
+ordinary uncapped suggestions linked by `groupGoalId` that still clear a vote,
+and you can never file your own share.
+
+### Training Facility — `/training`
+
+Four playable drills: **Recall** (memory), **Deduce** (mastermind-style
+deduction), **Focus** (2-back attention) and **Reflex** (hand-eye). Each keeps
+its own scores and crew leaderboard.
+
+Deliberately a **separate track** from stats. A game that paid out points
+directly would be the first thing in the app that awards itself, and the first
+thing worth grinding — so a strong run produces a record and a board position,
+and a crewmate turns that into a normal suggestion the crew votes on. That's
+also why client-reported scores are fine: a faked run buys a line your mates
+can see, and anything trying to become points goes past them anyway.
+
+---
+
 ## Search, speed and a floor under the app — 7 August 2026
 
 One release covering a user-facing addition and a batch of foundation work.

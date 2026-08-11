@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { BellIcon, XIcon } from './icons';
 import { usePoll } from '@/lib/usePoll';
 
@@ -11,6 +11,12 @@ import { usePoll } from '@/lib/usePoll';
  * celebrations — full-screen confetti modal for achievements/tier-ups,
  * compact toasts for your stat changes. Self-contained: mounts in the
  * AppShell header and does its own fetching.
+ *
+ * Read-state has two routes. Opening the bell clears everything; simply
+ * visiting a page clears that page's items, so the badge stops nagging about
+ * suggestions the moment you land on /suggestions. Read items stay in the list
+ * (greyed, no dot) — the feed is the crew's recent-activity log as well as a
+ * personal inbox, and dropping items would gut the former.
  */
 
 interface FeedEvent {
@@ -22,6 +28,8 @@ interface FeedEvent {
   body?: string;
   href?: string;
   hex: string;
+  section: string;
+  seen: boolean;
 }
 
 interface Celebration {
@@ -73,8 +81,15 @@ function Confetti() {
   );
 }
 
+/** The page an event belongs to — mirrors sectionOfHref on the server. */
+function sectionOfPath(pathname: string): string {
+  const segment = pathname.split('?')[0].split('/').filter(Boolean)[0];
+  return segment ? segment.toLowerCase() : 'home';
+}
+
 export default function NotificationCenter() {
   const router = useRouter();
+  const pathname = usePathname();
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [unseen, setUnseen] = useState(0);
   const [open, setOpen] = useState(false);
@@ -123,6 +138,23 @@ export default function NotificationCenter() {
   // landed while you were away shows up immediately rather than up to 30s later.
   usePoll(load, 30000);
 
+  // Landing on a page clears that page's items, bell or no bell. Marked
+  // locally first so the badge drops instantly, and only sent when there's
+  // actually something unread here — otherwise every navigation would write.
+  useEffect(() => {
+    const section = sectionOfPath(pathname);
+    const stale = events.filter((e) => !e.seen && e.section === section);
+    if (stale.length === 0) return;
+
+    setEvents((prev) => prev.map((e) => (e.section === section ? { ...e, seen: true } : e)));
+    setUnseen((prev) => Math.max(0, prev - stale.length));
+    fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ section }),
+    }).catch(() => {});
+  }, [pathname, events]);
+
   // Close the panel on outside click (panel is portaled, so check both trees)
   useEffect(() => {
     if (!open) return;
@@ -141,6 +173,7 @@ export default function NotificationCenter() {
     setOpen(next);
     if (next && unseen > 0) {
       setUnseen(0);
+      setEvents((prev) => prev.map((e) => ({ ...e, seen: true })));
       fetch('/api/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -217,20 +250,43 @@ export default function NotificationCenter() {
                   className={`w-full text-left px-4 py-3 border-b last:border-0 transition ${
                     e.href ? 'hover:bg-white/[0.04] cursor-pointer' : 'cursor-default'
                   }`}
-                  style={{ borderColor: 'var(--surface-border)' }}
+                  style={{
+                    borderColor: 'var(--surface-border)',
+                    // Read items stay in the list as activity history, just
+                    // visibly settled rather than demanding attention.
+                    backgroundColor: e.seen ? 'transparent' : 'rgba(34,211,238,0.05)',
+                  }}
                 >
                   <span className="flex items-start gap-2.5">
-                    <span className="w-1 self-stretch rounded-full shrink-0" style={{ background: e.hex }} />
+                    <span
+                      className="w-1 self-stretch rounded-full shrink-0"
+                      style={{ background: e.hex, opacity: e.seen ? 0.45 : 1 }}
+                    />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] text-neutral-200 leading-snug">{e.title}</span>
+                      <span
+                        className={`block text-[13px] leading-snug ${
+                          e.seen ? 'text-neutral-400' : 'text-neutral-100 font-medium'
+                        }`}
+                      >
+                        {e.title}
+                      </span>
                       {e.body && (
                         <span className="block text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>
                           {e.body}
                         </span>
                       )}
                     </span>
-                    <span className="text-[10px] shrink-0 mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                      {timeAgo(e.at)}
+                    <span className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                      <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                        {timeAgo(e.at)}
+                      </span>
+                      {!e.seen && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ background: 'var(--accent-cyan)' }}
+                          aria-label="Unread"
+                        />
+                      )}
                     </span>
                   </span>
                 </button>

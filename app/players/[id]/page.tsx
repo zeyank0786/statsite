@@ -14,6 +14,7 @@ import { getUserColorHex, getUserColorRgb } from '@/lib/userColors';
 import { ProfileSkeleton } from '@/components/Skeleton';
 import Odometer from '@/components/Odometer';
 import ShareCardButton from '@/components/ShareCardButton';
+import { cldImage } from '@/lib/cloudinary';
 import { orderCategories, getCategoryMeta, getValueColor, scaleMax, categoryRadarValue } from '@/lib/categories';
 import LockBadge from '@/components/LockBadge';
 import TierBadge from '@/components/TierBadge';
@@ -68,6 +69,11 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [playerName, setPlayerName] = useState('');
   const [email, setEmail] = useState('');
   const [createdAt, setCreatedAt] = useState('');
+  const [profile, setProfile] = useState<{
+    bannerUrl: string | null;
+    bio: string | null;
+    flairLabel: string | null;
+  } | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [overallScore, setOverallScore] = useState<number | string>(0);
@@ -127,6 +133,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
       setPlayerName(data.player.username);
       setEmail(data.player.email || 'No email set');
       setCreatedAt(data.player.createdAt);
+      setProfile(data.player.profile || null);
       setCategories(data.categories);
       setOverallScore(data.overallScore);
       setHistory(data.history || []);
@@ -267,7 +274,20 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
       </Link>
 
       {/* ===== Profile hero ===== */}
-      <section className="glass card-shadow-lg relative overflow-hidden p-6 md:p-8 mb-6 animate-rise">
+      <section className="glass card-shadow-lg relative overflow-hidden mb-6 animate-rise">
+        {/* Uploaded banner, faded into the card so the hero text stays legible
+            no matter what image someone picks. */}
+        {profile?.bannerUrl && (
+          <div
+            className="absolute inset-x-0 top-0 h-40 pointer-events-none"
+            style={{
+              background: `url(${cldImage(profile.bannerUrl, 1400)}) center/cover`,
+              maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)',
+              WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)',
+            }}
+          />
+        )}
+        <div className="p-6 md:p-8">
         <div
           className="absolute -top-24 -right-24 w-80 h-80 rounded-full opacity-15 blur-3xl pointer-events-none"
           style={{ backgroundColor: hex }}
@@ -306,10 +326,20 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     <h1 className="font-display text-3xl md:text-4xl font-bold text-white truncate">
                       {playerName}
                     </h1>
+                    {/* An earned title they chose to wear */}
+                    {profile?.flairLabel && (
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border"
+                        style={{ borderColor: `${hex}66`, background: `${hex}1a`, color: hex }}
+                        title="Achievement worn as a title"
+                      >
+                        {profile.flairLabel}
+                      </span>
+                    )}
                     {isOwnProfile && (
                       <button
                         onClick={() => setEditingName(true)}
@@ -320,6 +350,9 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                       </button>
                     )}
                   </div>
+                )}
+                {profile?.bio && (
+                  <p className="text-sm mt-1.5 text-neutral-300 break-words">{profile.bio}</p>
                 )}
                 <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
                   {email} · joined {createdAt ? new Date(createdAt).toLocaleDateString() : '—'}
@@ -412,6 +445,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
               size={300}
             />
           </div>
+        </div>
         </div>
       </section>
 

@@ -42,7 +42,6 @@ interface Suggestion {
   appliedNewValue: number | null;
   delta: number;
   reason: string;
-  testimony: string | null;
   status: string;
   createdAt: string;
   resolvedAt: string | null;
@@ -59,7 +58,7 @@ interface Suggestion {
   youMissed: boolean;
 }
 
-/** A batch = suggestions created together (shared reason/evidence/testimony). */
+/** A batch = suggestions created together (shared account + evidence). */
 interface Batch {
   key: string;
   items: Suggestion[];
@@ -446,21 +445,14 @@ export default function SuggestionsPage() {
                   </div>
                 </div>
 
-                <p className="text-sm italic mb-3" style={{ color: 'var(--text-secondary)' }}>
+                {/* One account per suggestion — the API merges any legacy
+                    reason/testimony split before it reaches here. */}
+                <p
+                  className="text-sm italic mb-3 whitespace-pre-wrap break-words"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
                   &quot;<MentionText content={first.reason} players={players} />&quot;
                 </p>
-
-                {first.testimony && (
-                  <div
-                    className="rounded-xl px-3.5 py-2.5 mb-3 text-sm border"
-                    style={{ borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.06)' }}
-                  >
-                    <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent-yellow)' }}>
-                      Witness testimony — {first.proposerName}
-                    </p>
-                    <p className="text-neutral-200 whitespace-pre-wrap break-words">{first.testimony}</p>
-                  </div>
-                )}
 
                 {first.evidence.length > 0 && (
                   <div className="flex gap-2 mb-3 flex-wrap">

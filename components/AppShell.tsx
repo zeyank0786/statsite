@@ -8,7 +8,7 @@ import Logo from './Logo';
 import Avatar from './Avatar';
 import NotificationCenter from './NotificationCenter';
 import CommandPalette from './CommandPalette';
-import { setKnownRoster } from '@/lib/userColors';
+import { setKnownRoster, setCustomColors, setPlayerProfiles } from '@/lib/userColors';
 import { usePoll } from '@/lib/usePoll';
 import {
   HomeIcon,
@@ -53,6 +53,8 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const MORE_NAV: NavItem[] = [
+  { href: '/group-goals', label: 'Crew Goals', icon: TargetIcon },
+  { href: '/training', label: 'Training', icon: ZapIcon },
   { href: '/commitments', label: 'Commitments', icon: HandIcon },
   { href: '/automations', label: 'Automations', icon: ZapIcon },
   { href: '/reminders', label: 'Reminders', icon: BellIcon },
@@ -62,6 +64,7 @@ const MORE_NAV: NavItem[] = [
   { href: '/ambitions', label: 'Ambitions', icon: StarIcon },
   { href: '/wrapped', label: 'Wrapped', icon: SparklesIcon },
   { href: '/compare', label: 'Compare', icon: CompareIcon },
+  { href: '/wayback', label: 'Past You', icon: ClockIcon },
   { href: '/history', label: 'History', icon: ClockIcon },
   { href: '/admin', label: 'Admin', icon: ShieldIcon, adminOnly: true },
 ];
@@ -74,6 +77,8 @@ const MOBILE_TABS: NavItem[] = [
 ];
 
 const MOBILE_MORE: NavItem[] = [
+  { href: '/group-goals', label: 'Crew Goals', icon: TargetIcon },
+  { href: '/training', label: 'Training', icon: ZapIcon },
   { href: '/commitments', label: 'Commitments', icon: HandIcon },
   { href: '/automations', label: 'Automations', icon: ZapIcon },
   { href: '/reminders', label: 'Reminders', icon: BellIcon },
@@ -82,6 +87,7 @@ const MOBILE_MORE: NavItem[] = [
   { href: '/achievements', label: 'Achievements', icon: AwardIcon },
   { href: '/reviews', label: 'Reviews', icon: ClipboardIcon },
   { href: '/compare', label: 'Compare', icon: CompareIcon },
+  { href: '/wayback', label: 'Past You', icon: ClockIcon },
   { href: '/targets', label: 'Targets', icon: TargetIcon },
   { href: '/ambitions', label: 'Ambitions', icon: StarIcon },
   { href: '/wrapped', label: 'Wrapped', icon: SparklesIcon },
@@ -169,6 +175,27 @@ export default function AppShell({
       })
       .catch(() => {});
   }, [status, rosterIds]);
+
+  // Chosen accent colours, profile pictures and titles, registered once for the
+  // whole app. Loaded after the roster on purpose: setKnownRoster clears the
+  // automatic assignments, and custom picks live in a separate map that
+  // overrides them, so the order of these two effects doesn't matter — but a
+  // re-render must follow either one for the new identities to paint.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    fetch('/api/profile')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const profiles = data?.profiles;
+        if (!Array.isArray(profiles)) return;
+        setCustomColors(
+          Object.fromEntries(profiles.map((p: any) => [String(p.playerId), p.accentColor]))
+        );
+        setPlayerProfiles(profiles);
+        setRosterTick((t) => t + 1);
+      })
+      .catch(() => {});
+  }, [status]);
 
   // Close menus on navigation
   useEffect(() => {

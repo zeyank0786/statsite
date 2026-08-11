@@ -6,6 +6,7 @@ import { featureLockMessage, getPlayersLockedFrom } from '@/lib/featureLocks';
 import { isStatLockedForPlayer, describeLock } from '@/lib/locks';
 import { getEligibleVoterIds, resolveSuggestion, notifyApprovedChanges } from '@/lib/suggestionEngine';
 import { sendPushToPlayers } from '@/lib/push';
+import { mergeAccount } from '@/lib/suggestionText';
 import { v4 as uuid } from 'uuid';
 import { errorPayload } from '@/lib/apiError';
 
@@ -17,10 +18,10 @@ const ALLOWED_DELTAS = [-2, -1, 1, 2];
  * Add a stat the original proposer missed to an existing suggestion.
  *
  * A suggestion is really a batch of per-stat rows (auto-split), so "adding a
- * stat" = adding another row to the same batch: same subject, same evidence
- * and testimony, same written reason. The person who adds it becomes that
- * row's proposer, their add counts as their implicit yes, and the crew votes
- * on it independently like every other stat in the batch.
+ * stat" = adding another row to the same batch: same subject, same evidence,
+ * same written account. The person who adds it becomes that row's proposer,
+ * their add counts as their implicit yes, and the crew votes on it
+ * independently like every other stat in the batch.
  *
  * Only an eligible voter can add — never the affected player, and never
  * someone locked out of suggesting.
@@ -99,7 +100,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    // Create the new row, inheriting the batch's reason / testimony / evidence
+    // Create the new row, inheriting the batch's account + evidence. An anchor
+    // written back when there were two boxes is merged into the single field
+    // the new row stores, so the addition carries the whole story.
     const newId = uuid();
     const now = new Date().toISOString();
     await query(
@@ -111,8 +114,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         String(adderId),
         String(statId),
         Number(delta),
-        String(anchor.reason),
-        anchor.testimony ? String(anchor.testimony) : null,
+        mergeAccount(
+          anchor.reason ? String(anchor.reason) : '',
+          anchor.testimony ? String(anchor.testimony) : null
+        ),
+        null,
         batchId,
         now,
         now,

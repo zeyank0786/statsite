@@ -1,7 +1,8 @@
 'use client';
 
 import { ViewTransition } from 'react';
-import { getUserColorHex, getUserColorBg, getInitials } from '@/lib/userColors';
+import { getUserColorHex, getUserColorBg, getInitials, getUserAvatarUrl } from '@/lib/userColors';
+import { cldThumb } from '@/lib/cloudinary';
 
 interface AvatarProps {
   id: string;
@@ -19,6 +20,11 @@ interface AvatarProps {
    * riser" callout that repeats the same person).
    */
   morphKey?: string;
+  /**
+   * Override the registered picture. Pass null to force initials — used by the
+   * settings preview, which has to show a pending upload before it's saved.
+   */
+  imageUrl?: string | null;
 }
 
 export default function Avatar({
@@ -28,15 +34,22 @@ export default function Avatar({
   ring = false,
   className = '',
   morphKey,
+  imageUrl,
 }: AvatarProps) {
   const hex = getUserColorHex(id);
+  // `undefined` means "use whatever is registered"; an explicit null means
+  // "show initials", which is how the settings preview clears a picture.
+  const picture = imageUrl === undefined ? getUserAvatarUrl(id) : imageUrl;
+
   const el = (
     <span
-      className={`inline-flex items-center justify-center rounded-full font-semibold text-white shrink-0 select-none ${className}`}
+      className={`inline-flex items-center justify-center rounded-full font-semibold text-white shrink-0 select-none overflow-hidden ${className}`}
       style={{
         width: size,
         height: size,
         fontSize: size * 0.38,
+        // The gradient stays behind an uploaded picture: it shows through
+        // transparent PNGs and covers the gap while the image loads.
         background: `linear-gradient(135deg, ${hex}, ${hex}99)`,
         boxShadow: ring
           ? `0 0 0 2px var(--background), 0 0 0 4px ${hex}66`
@@ -44,7 +57,19 @@ export default function Avatar({
       }}
       title={name}
     >
-      {getInitials(name)}
+      {picture ? (
+        // Square-cropped by Cloudinary at twice the rendered size, so it stays
+        // sharp on retina without shipping a full-resolution photo.
+        <img
+          src={cldThumb(picture, Math.round(size * 2))}
+          alt=""
+          width={size}
+          height={size}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        getInitials(name)
+      )}
     </span>
   );
 

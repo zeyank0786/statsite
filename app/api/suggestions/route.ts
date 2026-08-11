@@ -13,6 +13,8 @@ import {
 import { featureLockMessage, getPlayersLockedFrom } from '@/lib/featureLocks';
 import { sendPushToPlayers } from '@/lib/push';
 import { recordMentions } from '@/lib/mentionsServer';
+import { mergeAccount } from '@/lib/suggestionText';
+import { backfillPointerHistory } from '@/lib/suggestionBackfill';
 import { v4 as uuid } from 'uuid';
 import { errorPayload } from '@/lib/apiError';
 
@@ -38,6 +40,15 @@ export async function GET() {
       await expireStaleSuggestions();
     } catch (e) {
       console.error('Stale-suggestion expiry failed (listing continues):', e);
+    }
+
+    // One-shot: repair stat history that recorded "see other box" back when
+    // suggestions had two text fields. Self-marking, so this is a no-op after
+    // the first run.
+    try {
+      await backfillPointerHistory();
+    } catch (e) {
+      console.error('Pointer-reason backfill failed (listing continues):', e);
     }
 
     // Recap watermark: a suggestion that resolved WITHOUT your vote after this
@@ -185,8 +196,10 @@ export async function GET() {
         appliedOldValue: applied ? applied.oldValue : null,
         appliedNewValue: applied ? applied.newValue : null,
         delta: Number(sg.delta),
-        reason: String(sg.reason),
-        testimony: sg.testimony ? String(sg.testimony) : null,
+        // One account per suggestion. Rows written while there were two boxes
+        // are folded together here, so every surface reads a single field and
+        // nothing that was typed goes unseen.
+        reason: mergeAccount(String(sg.reason), sg.testimony ? String(sg.testimony) : null),
         status: String(sg.status),
         createdAt: sg.createdAt,
         resolvedAt: sg.resolvedAt || null,
@@ -227,13 +240,16 @@ export async function GET() {
 
 /**
  * POST: create a suggestion. Enforces the full trust model:
- * proposer ≠ subject, both active, delta ∈ {-2,-1,1,2}, reason required,
- * grounding required — EITHER ≥1 evidence post (all posted BY the subject and
- * tagged with the stat's category) OR a written witness testimony (for things
- * seen in real life with no media) — and the stat must be visible and
- * unlocked for the subject.
+ * proposer ≠ subject, both active, delta ∈ {-2,-1,1,2}, a written account
+ * required, and the stat must be visible and unlocked for the subject.
+ *
+ * The account is ONE field. It used to be two — a `reason` plus a separate
+ * witness `testimony` — and because only `reason` reached StatHistory, people
+ * writing the real story in the other box lost it from the permanent record.
+ * Evidence posts (which must belong to the subject) are optional supporting
+ * material attached alongside.
  */
-const MIN_TESTIMONY_LENGTH = 1;
+const MIN_ACCOUNT_LENGTH = 1;
 
 export async function POST(request: Request) {
   const proposerId = await getSessionPlayerId();
@@ -245,8 +261,16 @@ export async function POST(request: Request) {
 
     const { subjectPlayerId, changes, reason, evidenceIds, testimony } = await request.json();
 
-    if (!subjectPlayerId || !reason?.trim()) {
-      return NextResponse.json({ error: 'subjectPlayerId and reason are required' }, { status: 400 });
+    // `testimony` is only still read so a stale browser tab holding the old
+    // two-box form doesn't silently drop what someone typed — it's folded into
+    // the single account rather than stored separately.
+    const account = mergeAccount(reason, testimony);
+
+    if (!subjectPlayerId || account.length < MIN_ACCOUNT_LENGTH) {
+      return NextResponse.json(
+        { error: 'subjectPlayerId and a written account are required' },
+        { status: 400 }
+      );
     }
     if (subjectPlayerId === proposerId) {
       return NextResponse.json({ error: "You can't make suggestions about your own stats" }, { status: 403 });
@@ -266,18 +290,6 @@ export async function POST(request: Request) {
       }
     }
     const hasEvidence = Array.isArray(evidenceIds) && evidenceIds.length > 0;
-    const cleanTestimony = typeof testimony === 'string' ? testimony.trim() : '';
-    if (!hasEvidence && cleanTestimony.length < MIN_TESTIMONY_LENGTH) {
-      return NextResponse.json(
-        {
-          error:
-            cleanTestimony.length > 0
-              ? `Witness testimony needs at least ${MIN_TESTIMONY_LENGTH} characters — describe what actually happened`
-              : 'Ground the suggestion: attach an evidence post, or write what you witnessed first-hand',
-        },
-        { status: 400 }
-      );
-    }
 
     const [proposer, subject] = await Promise.all([
       queryOne('SELECT active FROM Player WHERE id = ?', [proposerId]),
@@ -334,8 +346,8 @@ export async function POST(request: Request) {
     }
 
     // Auto-split: one Suggestion row per stat change, all sharing the same
-    // reason / testimony / evidence links AND a batchId so the UI can group
-    // them under a single card. The crew still votes on each independently.
+    // account / evidence links AND a batchId so the UI can group them under a
+    // single card. The crew still votes on each independently.
     const now = new Date().toISOString();
     const created: { id: string; statId: string; resolution: any }[] = [];
     const batchId = uuid();
@@ -343,14 +355,16 @@ export async function POST(request: Request) {
 
     for (const change of changes) {
       const id = uuid();
+      // testimony is written NULL: the account lives in `reason`, which is the
+      // field that reaches StatHistory when the suggestion is approved.
       const insertArgs = [
         id,
         subjectPlayerId,
         proposerId,
         String(change.statId),
         Number(change.delta),
-        reason.trim(),
-        cleanTestimony || null,
+        account,
+        null,
         batchId,
         now,
         now,
@@ -435,10 +449,10 @@ export async function POST(request: Request) {
       console.error('Approval push failed (ignored):', e);
     }
 
-    // @mentions in the reason
+    // @mentions in the account
     const proposerRow = await queryOne('SELECT username FROM Player WHERE id = ?', [proposerId]);
     recordMentions({
-      content: reason.trim(),
+      content: account,
       byId: proposerId,
       byName: String(proposerRow?.username || 'Someone'),
       context: 'suggestion',

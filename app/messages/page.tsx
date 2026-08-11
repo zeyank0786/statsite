@@ -14,6 +14,7 @@ import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import MentionTextarea from '@/components/MentionTextarea';
 import MentionText from '@/components/MentionText';
 import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
+import { ShareMessageButton } from '@/components/ShareCardButton';
 import {
   XIcon,
   PencilIcon,
@@ -940,18 +941,23 @@ function MessagesContent() {
                           : `${message.replies.length} ${message.replies.length === 1 ? 'reply' : 'replies'}`
                         : 'No replies yet'}
                     </button>
-                    {replyingTo !== message.id && (
-                      <button
-                        onClick={() => {
-                          setReplyingTo(message.id);
-                          setExpandedReplies(new Set(expandedReplies).add(message.id));
-                        }}
-                        className="flex items-center gap-1 text-xs font-semibold text-neutral-400 hover:text-white transition"
-                      >
-                        <ReplyIcon size={13} />
-                        Reply
-                      </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {/* Saves a PNG rather than a link — the board is private,
+                          so sharing has to be an explicit act of posting a file. */}
+                      <ShareMessageButton messageId={message.id} authorName={message.authorName} />
+                      {replyingTo !== message.id && (
+                        <button
+                          onClick={() => {
+                            setReplyingTo(message.id);
+                            setExpandedReplies(new Set(expandedReplies).add(message.id));
+                          }}
+                          className="flex items-center gap-1 text-xs font-semibold text-neutral-400 hover:text-white transition"
+                        >
+                          <ReplyIcon size={13} />
+                          Reply
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {(expandedReplies.has(message.id) || replyingTo === message.id) && (

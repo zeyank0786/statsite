@@ -4,7 +4,10 @@ import { getAuthOptions } from '@/lib/auth';
 import { queryAll } from '@/lib/db';
 import { fetchAllPlayerStats, buildPlayerAggregates } from '@/lib/serverStats';
 import { getCategoryMeta, getStatTier, categoryRadarValue } from '@/lib/categories';
-import { setKnownRoster, getUserColorHex, getInitials } from '@/lib/userColors';
+import { setKnownRoster, setCustomColors, getUserColorHex, getInitials } from '@/lib/userColors';
+import { loadDisplayFont } from '@/lib/ogFont';
+import { getAllProfiles } from '@/lib/profile';
+import { cldThumb } from '@/lib/cloudinary';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,9 +36,12 @@ export async function GET(
 
     // Colour identity is assigned across the whole roster, so the card only
     // matches the avatar in-app if the server seeds the same roster the client
-    // registers in AppShell.
+    // registers in AppShell — then custom picks override on top, exactly as
+    // they do in the browser.
     const roster = await queryAll('SELECT id FROM Player');
     setKnownRoster(roster.map((r) => String((r as Record<string, unknown>).id)));
+    const profiles = await getAllProfiles();
+    setCustomColors(Object.fromEntries(profiles.map((p) => [p.playerId, p.accentColor])));
 
     const aggregates = buildPlayerAggregates(await fetchAllPlayerStats());
     const player = aggregates.find((p) => p.id === playerId);
@@ -46,6 +52,7 @@ export async function GET(
     const rank = aggregates.findIndex((p) => p.id === playerId) + 1;
     const accent = getUserColorHex(playerId);
     const overall = player.overall;
+    const avatarUrl = profiles.find((p) => p.playerId === playerId)?.avatarUrl || null;
 
     const topStats = player.categories
       .flatMap((c) => c.stats.map((s) => ({ ...s, categoryCode: c.code })))
@@ -135,22 +142,35 @@ export async function GET(
           <div style={{ display: 'flex', flex: 1, alignItems: 'center', marginTop: 8 }}>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    width: 76,
-                    height: 76,
-                    borderRadius: 76,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 30,
-                    fontWeight: 700,
-                    color: '#ffffff',
-                    backgroundImage: `linear-gradient(135deg, ${accent}, ${accent}99)`,
-                  }}
-                >
-                  {getInitials(player.username)}
-                </div>
+                {/* Satori can't clip a child to a parent's border-radius, so an
+                    uploaded picture is rendered as its own round <img> rather
+                    than layered inside the initials circle. */}
+                {avatarUrl ? (
+                  <img
+                    src={cldThumb(avatarUrl, 152)}
+                    alt=""
+                    width={76}
+                    height={76}
+                    style={{ borderRadius: 76, objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      display: 'flex',
+                      width: 76,
+                      height: 76,
+                      borderRadius: 76,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 30,
+                      fontWeight: 700,
+                      color: '#ffffff',
+                      backgroundImage: `linear-gradient(135deg, ${accent}, ${accent}99)`,
+                    }}
+                  >
+                    {getInitials(player.username)}
+                  </div>
+                )}
                 <div
                   style={{
                     display: 'flex',
@@ -346,29 +366,4 @@ export async function GET(
     console.error('Failed to render share card:', error);
     return new Response('Failed to generate card', { status: 500 });
   }
-}
-
-/**
- * Space Grotesk to match the app's display face. Fetched at request time rather
- * than bundled because ImageResponse caps the whole bundle at 500KB. A failure
- * here is cosmetic, so we fall back to Satori's built-in sans.
- */
-let fontCache: ArrayBuffer | null | undefined;
-
-async function loadDisplayFont(): Promise<ArrayBuffer | null> {
-  if (fontCache !== undefined) return fontCache ?? null;
-  try {
-    // Deliberately no browser User-Agent: Google serves woff2 to modern UAs and
-    // Satori only parses ttf/otf/woff. The default runtime UA gets the legacy
-    // truetype variant.
-    const css = await fetch(
-      'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&display=swap'
-    ).then((r) => r.text());
-    const url = css.match(/src:\s*url\((https:[^)]+\.(?:ttf|otf|woff))\)/)?.[1];
-    if (!url) throw new Error('no font url in css');
-    fontCache = await fetch(url).then((r) => r.arrayBuffer());
-  } catch {
-    fontCache = null;
-  }
-  return fontCache ?? null;
 }

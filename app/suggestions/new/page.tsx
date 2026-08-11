@@ -74,7 +74,6 @@ function NewSuggestionContent() {
 
   const [subjectId, setSubjectId] = useState('');
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
-  const [testimony, setTestimony] = useState('');
   // statId → delta for every stat attached to this proposal (default +1)
   const [changes, setChanges] = useState<Record<string, number>>({});
   const [reason, setReason] = useState('');
@@ -87,6 +86,9 @@ function NewSuggestionContent() {
   const suggestLocked = 'suggest' in myLockouts;
   const paramSubject = searchParams.get('subject');
   const paramEvidence = searchParams.get('evidenceId');
+  // Starting text for the account, so deep-links from elsewhere in the app
+  // (a training-facility record, say) arrive with the context already written.
+  const paramReason = searchParams.get('reason');
 
   // Edit mode: ?edit=<suggestionId> reopens an existing proposal (whole batch)
   // for the proposer to change — allowed only while no one else has voted yet.
@@ -155,8 +157,9 @@ function NewSuggestionContent() {
           return;
         }
         setSubjectId(String(anchor.subjectId));
+        // The API returns one merged account, so a batch written back when
+        // there were two boxes prefills as a single editable block.
         setReason(anchor.reason || '');
-        setTestimony(anchor.testimony || '');
         const ch: Record<string, number> = {};
         for (const s of rows) ch[String(s.statId)] = Number(s.delta);
         setChanges(ch);
@@ -182,7 +185,9 @@ function NewSuggestionContent() {
     if (paramSubject && paramSubject !== currentPlayerId && !subjectId) {
       setSubjectId(paramSubject);
     }
-  }, [paramSubject, currentPlayerId, subjectId]);
+    // Only ever seeds an empty box — never overwrites what someone has typed.
+    if (paramReason && !reason) setReason(paramReason);
+  }, [paramSubject, paramReason, currentPlayerId, subjectId, reason, editMode]);
 
   useEffect(() => {
     if (paramEvidence && evidence.length > 0 && selectedEvidenceIds.length === 0) {
@@ -221,14 +226,11 @@ function NewSuggestionContent() {
     };
   }, [subjectId]);
 
-  const MIN_TESTIMONY = 1;
   const eligibleSubjects = players.filter((p) => p.id !== currentPlayerId);
   const subjectEvidence = evidence.filter((e) => e.playerId === subjectId);
-  const testimonyReady = testimony.trim().length >= MIN_TESTIMONY;
-  const grounded = selectedEvidenceIds.length > 0 || testimonyReady;
 
   // Stats are picked manually — evidence tags don't constrain the choice
-  // (written testimony has no tags, and the crew's vote vets relevance).
+  // (a written account has no tags, and the crew's vote vets relevance).
   const changeCount = Object.keys(changes).length;
   const selectedStats = subjectStats.filter((s) => changes[s.id] !== undefined);
 
@@ -236,7 +238,6 @@ function NewSuggestionContent() {
     if (editMode) return; // subject is fixed while editing an existing proposal
     setSubjectId(id);
     setSelectedEvidenceIds([]);
-    setTestimony('');
     setChanges({});
     setError('');
     setPresetNote('');
@@ -322,8 +323,8 @@ function NewSuggestionContent() {
 
   const handleSubmit = async () => {
     setError('');
-    if (!subjectId || changeCount === 0 || !grounded || !reason.trim()) {
-      setError('Complete every step: subject, evidence (or witness testimony), stats, and a reason.');
+    if (!subjectId || changeCount === 0 || !reason.trim()) {
+      setError('Complete every step: subject, stats, and what happened.');
       return;
     }
     setSubmitting(true);
@@ -332,7 +333,6 @@ function NewSuggestionContent() {
         changes: Object.entries(changes).map(([statId, delta]) => ({ statId, delta })),
         reason: reason.trim(),
         evidenceIds: selectedEvidenceIds,
-        testimony: testimony.trim() || null,
       };
       const res = await fetch(
         editMode ? `/api/suggestions/${editAnchor}` : '/api/suggestions',
@@ -507,14 +507,15 @@ function NewSuggestionContent() {
           </section>
         )}
 
-        {/* Step 2: evidence or witness testimony */}
+        {/* Step 2: attach their evidence (optional — the written account in
+            step 4 is what grounds the proposal and what history keeps) */}
         {subjectId && (
           <section className="glass card-shadow p-5 animate-rise">
-            <StepLabel n={2} title="Ground it: their evidence, or what you witnessed" />
+            <StepLabel n={2} title="Attach their evidence (optional)" />
             {subjectEvidence.length === 0 ? (
               <p className="text-sm py-2 mb-3" style={{ color: 'var(--text-secondary)' }}>
-                They haven't posted any evidence yet — but you can still write what you witnessed
-                below, or nudge them on the{' '}
+                They haven't posted any evidence yet — describe what you saw in step 4 instead, or
+                nudge them on the{' '}
                 <Link href="/messages" className="underline" style={{ color: 'var(--accent-cyan)' }}>
                   message board
                 </Link>
@@ -582,33 +583,20 @@ function NewSuggestionContent() {
               </div>
             )}
 
-            {/* Witness testimony — substitutes for evidence when it happened IRL with no media */}
-            <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--surface-border)' }}>
-              <p className="text-sm font-semibold text-white mb-1">
-                {selectedEvidenceIds.length > 0 ? 'Add witness context (optional)' : 'No media? Write what you witnessed'}
+            {subjectEvidence.length > 0 && (
+              <p className="text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
+                Optional. Nothing on camera is fine — write what you witnessed in step 4 and the
+                crew's vote decides if it holds up.
               </p>
-              <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
-                Saw it happen in real life with nothing on camera? Describe it first-hand — your
-                account substitutes for evidence and the crew's vote decides if it holds up.
-              </p>
-              <textarea
-                value={testimony}
-                onChange={(e) => setTestimony(e.target.value)}
-                className="field resize-none text-sm"
-                rows={3}
-                placeholder="What did you see them do, when, and why does it matter?"
-              />
-              {testimony.trim().length > 0 && !testimonyReady && (
-                <p className="text-[11px] mt-1" style={{ color: 'var(--accent-yellow)' }}>
-                  {MIN_TESTIMONY - testimony.trim().length} more characters — make it substantive
-                </p>
-              )}
-            </div>
+            )}
           </section>
         )}
 
-        {/* Step 3: pick the stats (manual — evidence tags don't constrain the choice) */}
-        {grounded && (
+        {/* Step 3: pick the stats (manual — evidence tags don't constrain the
+            choice). Gated on the subject alone now: evidence is optional and
+            the written account comes after this, so gating on either would
+            leave the form unable to open. */}
+        {subjectId && (
           <section className="glass card-shadow p-5 animate-rise">
             <StepLabel n={3} title="Which stats does it prove?" />
             <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
@@ -754,14 +742,22 @@ function NewSuggestionContent() {
               })}
             </div>
 
-            <label className="block text-sm font-semibold text-white mb-2">Reason (required)</label>
+            {/* The one and only text box. This is what the crew votes on and
+                what gets written into the stat's permanent history. */}
+            <label className="block text-sm font-semibold text-white mb-1">
+              What happened (required)
+            </label>
+            <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
+              Everything in one place — what you saw or what the evidence shows, and why it earns
+              these changes. This exact text is saved to the stat history forever.
+            </p>
             <MentionTextarea
               value={reason}
               onChange={setReason}
               players={players}
               className="field resize-none"
-              rows={3}
-              placeholder="Why does the evidence / what you witnessed justify these changes? @ to mention"
+              rows={5}
+              placeholder="What did they do, when, and why does it justify these changes? @ to mention"
             />
 
             {error && (

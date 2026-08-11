@@ -3,6 +3,7 @@ import { queryOne, queryAll, query } from '@/lib/db';
 import { computeLocksForPlayer } from '@/lib/locks';
 import { getNextTier } from '@/lib/categories';
 import { computeStreakWeeks } from '@/lib/streaks';
+import { getProfile } from '@/lib/profile';
 import { v4 as uuid } from 'uuid';
 import { errorPayload } from '@/lib/apiError';
 
@@ -73,6 +74,14 @@ export async function GET(
 
     if (!player) {
       return NextResponse.json({ error: 'Player not found' }, { status: 404 });
+    }
+
+    // Never let a cosmetic lookup take down a profile page.
+    let profile = null;
+    try {
+      profile = await getProfile(String(player.id));
+    } catch (e) {
+      console.error('Failed to load profile customisation (page continues):', e);
     }
 
     // Stats visible for this player (StatVisibility row with hidden=1 excludes)
@@ -233,6 +242,10 @@ export async function GET(
         archivedAt: player.archivedAt || null,
         email: player.email || 'No email set',
         createdAt: player.createdAt,
+        // Cosmetic profile, folded into the response the page already makes so
+        // the banner and bio paint with everything else instead of popping in
+        // after a second round trip.
+        profile,
       },
       categories,
       overallScore,
