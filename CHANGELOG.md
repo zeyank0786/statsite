@@ -13,6 +13,99 @@ file should always answer one question at a glance: what still needs telling?
 A batch covering a long-standing data loss in suggestions, three new
 destinations, and profile customisation.
 
+<details>
+<summary>Message for the crew — copy everything in the block</summary>
+
+Plain text on purpose: `##` and `**` don't render in WhatsApp / iMessage /
+Discord.
+
+```
+🚀 4WARD UPDATE — seven things
+
+Decent sized one this time. Nothing you need to do, just have a read.
+
+✍️ SUGGESTIONS NOW HAVE ONE BOX, NOT TWO
+
+You know how there were two text boxes, and half of us were writing "see other
+box" in one of them? Gone. There's one box now, and whatever you write in it is
+what gets saved to the stat's history forever.
+
+Two things worth knowing:
+• Evidence is now optional. Write what actually happened and the crew votes on
+  whether it holds up — same as before, just without the second box to fill in.
+• I've gone back and fixed the old ones. Any change in your history that just
+  said "see other relevant box" now shows what was actually written at the time.
+  Nothing was ever lost, it was just saved in the wrong field.
+
+🎯 CREW GOALS — new
+
+One target, all of us chipping away at it. Think "10,000 push-ups this month".
+
+• Anyone can set one — the target, what's being counted, and what it pays out
+• Every contribution needs one of your own evidence posts attached to it.
+  No proof, no count.
+• It counts the second you log it, no waiting on a vote. But anyone can
+  challenge a contribution they don't buy, and it comes straight back off the
+  total until it's sorted.
+• When it's finished it either splits the points by how much you each did, or
+  pays out 1st / 2nd / 3rd — whoever sets the goal decides that up front.
+
+The payout still goes through a normal vote, and you can never file your own.
+Someone else files yours, you file theirs.
+
+🧠 TRAINING FACILITY — new
+
+Four games, each with its own crew leaderboard:
+• Recall — watch a sequence of tiles, repeat it back, it gets one longer each
+  time
+• Deduce — crack a hidden colour code from the clues you get back
+• Focus — letters stream past, call it when one repeats from two back
+• Reflex — hit ten targets as fast as they land
+
+These do NOT hand out points on their own. You get a record and a spot on the
+board, and if someone puts up a run that genuinely deserves something, one of us
+proposes the stat change and we all vote on it like normal. Otherwise it'd just
+turn into a grind.
+
+⏳ COMPARE TO PAST YOU — new
+
+Pick any two dates and see your whole stat sheet on both, plus everything that
+moved in between. It's not an estimate — it's exactly what was on the board
+those days.
+
+It's under Compare, or "Past You" in the menu.
+
+🎨 MAKE IT YOURS
+
+Settings, then Profile:
+• Pick your own colour — it follows you onto every chart, leaderboard and share
+  card in the app
+• Upload a proper profile picture instead of your initials
+• Add a banner and a one-line bio
+• Wear an achievement as a title next to your name (only ones you've actually
+  earned, obviously)
+
+Colours are first come first served — if someone's already got it, it'll tell
+you.
+
+📸 SHARE ANY MESSAGE AS AN IMAGE
+
+Every message on the board has a Share button now. It saves the message as a
+proper image — handy when someone hits a milestone and you want it somewhere
+outside the app.
+
+🔔 THE BELL FINALLY SHUTS UP
+
+Before, the only way to clear that badge was to open the bell itself. Now just
+opening the page clears those ones — open Suggestions and the suggestion
+notifications go quiet on their own.
+
+They stay in the list so you can still scroll back through what's been
+happening. They just stop nagging you.
+```
+
+</details>
+
 ### One box on a suggestion, not two
 
 The bug worth fixing first. A suggestion carried **two** text fields — the
