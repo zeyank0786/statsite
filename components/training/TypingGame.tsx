@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { scoreTyping } from '@/lib/training';
+import { netWpm } from '@/lib/training';
 
 /**
  * Typing Sprint — type the passage, scored on words per minute scaled by
@@ -59,7 +59,7 @@ export default function TypingGame({ onFinish }: { onFinish: (score: number) => 
       const elapsed = performance.now() - began;
       const correctChars = [...next].filter((ch, i) => ch === passage[i]).length;
       const totalTyped = passage.length + mistakes.current;
-      const score = scoreTyping(correctChars, totalTyped, elapsed);
+      const score = netWpm(correctChars, totalTyped, elapsed);
       setResult({
         wpm: Math.round(correctChars / 5 / (elapsed / 60000)),
         accuracy: Math.round((correctChars / Math.max(1, totalTyped)) * 100),

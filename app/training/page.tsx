@@ -39,6 +39,8 @@ interface Game {
   category: string;
   statCategoryCode: string;
   scoreLabel: string;
+  /** Reaction time and timing drift: the smallest number is the best run. */
+  lowerIsBetter?: boolean;
   emoji: string;
   hex: string;
 }
@@ -230,6 +232,9 @@ export default function TrainingPage() {
                   >
                     {CATEGORY_LABELS[game.category] || game.category}
                   </span>
+                  <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                    {game.lowerIsBetter ? 'lowest' : 'highest'} {game.scoreLabel} wins
+                  </span>
                   <button
                     onClick={() => {
                       setPlaying(game);
@@ -268,13 +273,16 @@ export default function TrainingPage() {
                           className="text-sm font-bold tabular-nums shrink-0"
                           style={{ color: getUserColorHex(entry.playerId) }}
                         >
-                          {entry.best}
+                          {entry.best.toLocaleString()}
+                          <span className="font-normal text-[10px] ml-1" style={{ color: 'var(--text-secondary)' }}>
+                            {game.scoreLabel}
+                          </span>
                         </span>
                         {/* Only a crewmate can propose for someone — never yourself. */}
                         {entry.playerId !== currentPlayerId && entry.rank === 1 && (
                           <Link
                             href={`/suggestions/new?subject=${entry.playerId}&reason=${encodeURIComponent(
-                              `Holds the crew record in ${game.name} (${entry.best} ${game.scoreLabel}) in the training facility.`
+                              `Holds the crew record in ${game.name} — ${entry.best.toLocaleString()} ${game.scoreLabel} in the training facility.`
                             )}`}
                             className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg shrink-0 transition hover:bg-white/5"
                             style={{ color: 'var(--accent-purple)' }}
@@ -290,8 +298,8 @@ export default function TrainingPage() {
 
                 {mine && (
                   <p className="text-[11px] mt-3 pt-3 border-t" style={{ borderColor: 'var(--surface-border)', color: 'var(--text-secondary)' }}>
-                    Your best: <span className="text-white font-semibold">{mine.best}</span> {game.scoreLabel} over{' '}
-                    {mine.runs} run{mine.runs === 1 ? '' : 's'}
+                    Your best: <span className="text-white font-semibold">{mine.best.toLocaleString()}</span>{' '}
+                    {game.scoreLabel} over {mine.runs} run{mine.runs === 1 ? '' : 's'}
                   </p>
                 )}
               </section>
@@ -361,7 +369,7 @@ export default function TrainingPage() {
               <div className="text-center py-6">
                 <p className="text-5xl mb-3">{outcome.crewRecord ? '🏆' : outcome.personalBest ? '🎉' : '✅'}</p>
                 <p className="font-display text-4xl font-bold mb-1" style={{ color: playing.hex }}>
-                  {outcome.score}
+                  {outcome.score.toLocaleString()}
                 </p>
                 <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
                   {playing.scoreLabel}
@@ -370,8 +378,12 @@ export default function TrainingPage() {
                   {outcome.crewRecord
                     ? 'Crew record. Nobody has beaten that.'
                     : outcome.personalBest
-                    ? `Personal best${outcome.previousBest !== null ? ` — up from ${outcome.previousBest}` : ''}.`
-                    : `Logged. Your best is still ${outcome.previousBest}.`}
+                    ? `Personal best${
+                        outcome.previousBest !== null
+                          ? ` — ${playing.lowerIsBetter ? 'down' : 'up'} from ${outcome.previousBest.toLocaleString()}`
+                          : ''
+                      }.`
+                    : `Logged. Your best is still ${outcome.previousBest?.toLocaleString()}.`}
                 </p>
                 {(outcome.crewRecord || outcome.personalBest) && (
                   <p

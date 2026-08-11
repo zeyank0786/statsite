@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { scoreStroop } from '@/lib/training';
 
 /**
  * Stroop — the word RED printed in blue ink; the answer is blue.
@@ -56,12 +55,8 @@ export default function StroopGame({ onFinish }: { onFinish: (score: number) => 
   const [done, setDone] = useState(false);
   const [flash, setFlash] = useState<'hit' | 'miss' | null>(null);
 
-  const shownAt = useRef(0);
-  const totalMs = useRef(0);
-
   const nextTrial = useCallback(() => {
     setTrial(buildTrial());
-    shownAt.current = performance.now();
   }, []);
 
   const start = () => {
@@ -70,7 +65,6 @@ export default function StroopGame({ onFinish }: { onFinish: (score: number) => 
     setRemaining(DURATION_MS);
     setDone(false);
     setFlash(null);
-    totalMs.current = 0;
     setRunning(true);
     nextTrial();
   };
@@ -95,8 +89,9 @@ export default function StroopGame({ onFinish }: { onFinish: (score: number) => 
   // Score once the run is over and the tallies have settled.
   useEffect(() => {
     if (!done) return;
-    const answered = correct + wrong;
-    onFinish(scoreStroop(correct, wrong, answered > 0 ? totalMs.current / answered : 0));
+    // Net correct: the count you'd quote out loud, with wrong answers taken
+    // back off so answering at random can't beat reading the ink properly.
+    onFinish(Math.max(0, correct - wrong));
     // onFinish is excluded deliberately — it changes identity on every parent
     // render and would re-post the same result.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,7 +99,6 @@ export default function StroopGame({ onFinish }: { onFinish: (score: number) => 
 
   const answer = (choice: (typeof INKS)[number]) => {
     if (!running || !trial) return;
-    totalMs.current += performance.now() - shownAt.current;
     if (choice.name === trial.ink.name) {
       setCorrect((c) => c + 1);
       setFlash('hit');
@@ -122,7 +116,7 @@ export default function StroopGame({ onFinish }: { onFinish: (score: number) => 
         {running
           ? 'Tap the colour of the INK, not the word.'
           : done
-          ? `${correct} right · ${wrong} wrong`
+          ? `${Math.max(0, correct - wrong)} net · ${correct} right, ${wrong} wrong`
           : `${DURATION_MS / 1000} seconds. Name the ink colour, ignore what it says.`}
       </p>
 

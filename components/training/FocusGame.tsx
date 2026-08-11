@@ -1,139 +1,131 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { scoreFocus } from '@/lib/training';
 
 /**
  * Focus — a 2-back attention drill.
  *
- * Letters arrive one at a time; call a match when the current letter is the
- * same as the one two before it. Both misses and false alarms cost you, so
+ * Letters arrive one at a time; call a match when the current one is the same
+ * as the one two before it. Both misses and false alarms count as mistakes, so
  * hammering the button is worse than not playing.
+ *
+ * The stream never ends on its own — it runs until you've made three mistakes,
+ * and the score is how many letters you survived. That keeps the number open
+ * ended and means a long clean run is worth more than a short one, which a
+ * fixed-length accuracy percentage could never express.
  */
 
 const LETTERS = 'BCDFGHJKLMNPQRSTVWXZ'.split('');
 const N_BACK = 2;
-const TRIAL_COUNT = 26;
 const TRIAL_MS = 2200;
+const MAX_MISTAKES = 3;
 /** Roughly a third of trials are real matches — enough to stay honest. */
 const MATCH_RATE = 0.3;
 
-/** Pre-generate the stream so the match count is known and fair every run. */
-function buildStream(): string[] {
-  const stream: string[] = [];
-  for (let i = 0; i < TRIAL_COUNT; i++) {
-    if (i >= N_BACK && Math.random() < MATCH_RATE) {
-      stream.push(stream[i - N_BACK]);
-    } else {
-      let letter = LETTERS[Math.floor(Math.random() * LETTERS.length)];
-      // Don't accidentally create a match we didn't intend to plant.
-      if (i >= N_BACK) {
-        while (letter === stream[i - N_BACK]) {
-          letter = LETTERS[Math.floor(Math.random() * LETTERS.length)];
-        }
-      }
-      stream.push(letter);
+/** The next letter: sometimes a planted match, otherwise deliberately not one. */
+function nextLetter(stream: string[]): string {
+  const i = stream.length;
+  if (i >= N_BACK && Math.random() < MATCH_RATE) return stream[i - N_BACK];
+
+  let letter = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+  // Don't accidentally create a match we didn't intend to plant.
+  if (i >= N_BACK) {
+    while (letter === stream[i - N_BACK]) {
+      letter = LETTERS[Math.floor(Math.random() * LETTERS.length)];
     }
   }
-  return stream;
+  return letter;
 }
 
 export default function FocusGame({ onFinish }: { onFinish: (score: number) => void }) {
   const [stream, setStream] = useState<string[]>([]);
-  const [index, setIndex] = useState(-1);
   const [running, setRunning] = useState(false);
   const [hits, setHits] = useState(0);
-  const [misses, setMisses] = useState(0);
-  const [falseAlarms, setFalseAlarms] = useState(0);
+  const [mistakes, setMistakes] = useState(0);
   const [feedback, setFeedback] = useState<'hit' | 'miss' | null>(null);
   const [done, setDone] = useState(false);
+  const [survived, setSurvived] = useState(0);
 
-  // Whether the current trial has been answered, read inside the interval —
-  // state would be stale there.
+  // Read inside the interval, where React state would be stale.
   const answered = useRef(false);
   const streamRef = useRef<string[]>([]);
-  const indexRef = useRef(-1);
+  const mistakesRef = useRef(0);
 
-  /**
-   * Whether trial `i` of `letters` repeats the letter N_BACK earlier.
-   *
-   * Takes the array rather than closing over it: the interval has to read the
-   * ref (state is stale in there), while render reads the state directly —
-   * reading the ref during render is exactly the kind of thing that quietly
-   * stops matching what's on screen.
-   */
+  /** Whether trial `i` of `letters` repeats the letter N_BACK earlier. */
   const isMatch = useCallback(
     (letters: string[], i: number) => i >= N_BACK && letters[i] === letters[i - N_BACK],
     []
   );
-  const countTargets = useCallback(
-    (letters: string[]) => letters.filter((_, i) => isMatch(letters, i)).length,
-    [isMatch]
+
+  const endRun = useCallback(
+    (lettersSeen: number) => {
+      setRunning(false);
+      setDone(true);
+      setSurvived(lettersSeen);
+      onFinish(lettersSeen);
+    },
+    [onFinish]
   );
 
   const start = () => {
-    const next = buildStream();
-    setStream(next);
-    streamRef.current = next;
+    const first = [nextLetter([])];
+    streamRef.current = first;
+    setStream(first);
     setHits(0);
-    setMisses(0);
-    setFalseAlarms(0);
+    setMistakes(0);
+    mistakesRef.current = 0;
     setFeedback(null);
     setDone(false);
-    setIndex(0);
-    indexRef.current = 0;
+    setSurvived(0);
     answered.current = false;
     setRunning(true);
   };
+
+  const addMistake = useCallback(() => {
+    mistakesRef.current += 1;
+    setMistakes(mistakesRef.current);
+    setFeedback('miss');
+    return mistakesRef.current;
+  }, []);
 
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => {
       // Grade the trial that just elapsed before moving on.
-      const current = indexRef.current;
-      if (isMatch(streamRef.current, current) && !answered.current) {
-        setMisses((m) => m + 1);
-        setFeedback('miss');
+      const letters = streamRef.current;
+      const current = letters.length - 1;
+      if (isMatch(letters, current) && !answered.current) {
+        if (addMistake() >= MAX_MISTAKES) {
+          clearInterval(timer);
+          endRun(letters.length);
+          return;
+        }
       }
 
-      const next = current + 1;
-      if (next >= streamRef.current.length) {
-        clearInterval(timer);
-        setRunning(false);
-        setDone(true);
-        return;
-      }
-      indexRef.current = next;
-      setIndex(next);
+      const grown = [...letters, nextLetter(letters)];
+      streamRef.current = grown;
+      setStream(grown);
       answered.current = false;
       setTimeout(() => setFeedback(null), 320);
     }, TRIAL_MS);
     return () => clearInterval(timer);
-  }, [running, isMatch]);
-
-  // Score once, when the run ends and the tallies have settled.
-  useEffect(() => {
-    if (!done) return;
-    onFinish(scoreFocus(hits, misses, falseAlarms, countTargets(stream)));
-    // onFinish is intentionally excluded: it's recreated on every parent render
-    // and re-running this would post the same result repeatedly.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
+  }, [running, isMatch, addMistake, endRun]);
 
   const call = () => {
     if (!running || answered.current) return;
     answered.current = true;
-    if (isMatch(streamRef.current, indexRef.current)) {
+    const letters = streamRef.current;
+    if (isMatch(letters, letters.length - 1)) {
       setHits((h) => h + 1);
       setFeedback('hit');
-    } else {
-      setFalseAlarms((f) => f + 1);
-      setFeedback('miss');
+    } else if (addMistake() >= MAX_MISTAKES) {
+      endRun(letters.length);
+      return;
     }
     setTimeout(() => setFeedback(null), 320);
   };
 
-  const targets = countTargets(stream);
+  const shown = running ? stream[stream.length - 1] : done ? '✓' : '–';
 
   return (
     <div className="flex flex-col items-center w-full">
@@ -141,8 +133,8 @@ export default function FocusGame({ onFinish }: { onFinish: (score: number) => v
         {running
           ? `Call it when the letter matches the one ${N_BACK} back.`
           : done
-          ? `${hits} caught · ${misses} missed · ${falseAlarms} false calls (${targets} matches in the run)`
-          : `A letter every ${(TRIAL_MS / 1000).toFixed(1)}s. Hit MATCH when it repeats from ${N_BACK} back.`}
+          ? `${survived} letters survived · ${hits} caught`
+          : `A letter every ${(TRIAL_MS / 1000).toFixed(1)}s. Hit MATCH when it repeats from ${N_BACK} back. ${MAX_MISTAKES} mistakes and you're out.`}
       </p>
 
       <div
@@ -158,9 +150,7 @@ export default function FocusGame({ onFinish }: { onFinish: (score: number) => v
               : 'rgba(255,255,255,0.02)',
         }}
       >
-        <span className="font-display text-6xl font-bold text-white">
-          {running && index >= 0 ? stream[index] : done ? '✓' : '–'}
-        </span>
+        <span className="font-display text-6xl font-bold text-white">{shown}</span>
       </div>
 
       {running ? (
@@ -168,9 +158,20 @@ export default function FocusGame({ onFinish }: { onFinish: (score: number) => v
           <button onClick={call} className="btn-gradient px-10 py-3 text-lg">
             MATCH
           </button>
-          <p className="text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
-            {index + 1} / {stream.length}
-          </p>
+          <div className="flex items-center gap-4 mt-3">
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {stream.length} letters
+            </span>
+            <span className="flex items-center gap-1">
+              {Array.from({ length: MAX_MISTAKES }, (_, i) => (
+                <span
+                  key={i}
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: i < mistakes ? '#ef4444' : 'rgba(255,255,255,0.18)' }}
+                />
+              ))}
+            </span>
+          </div>
         </>
       ) : (
         <button onClick={start} className="btn-gradient px-6 py-2.5">

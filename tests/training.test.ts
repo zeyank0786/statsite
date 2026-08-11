@@ -1,17 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import {
-  TRAINING_GAMES,
-  getGame,
-  scoreDeduce,
-  scoreFocus,
-  scoreReflex,
-  scoreRhythm,
-  scoreSequence,
-  scoreStroop,
-  scoreTyping,
-} from '@/lib/training';
+import { TRAINING_GAMES, getGame, isBetter, netWpm, type TrainingGame } from '@/lib/training';
 import { judge } from '@/components/training/DeduceGame';
 import { TUTORIALS } from '@/components/training/tutorials';
+
+const game = (overrides: Partial<TrainingGame> = {}): TrainingGame => ({
+  id: 'test',
+  name: 'Test',
+  tagline: '',
+  description: '',
+  category: 'memory',
+  statCategoryCode: 'mtl',
+  scoreLabel: 'points',
+  emoji: '🎮',
+  hex: '#fff',
+  ...overrides,
+});
 
 describe('the game catalog', () => {
   it('has unique ids so results can never be filed against the wrong game', () => {
@@ -20,31 +23,41 @@ describe('the game catalog', () => {
   });
 
   it('resolves every game by id', () => {
-    for (const game of TRAINING_GAMES) {
-      expect(getGame(game.id)?.name).toBe(game.name);
+    for (const g of TRAINING_GAMES) {
+      expect(getGame(g.id)?.name).toBe(g.name);
     }
     expect(getGame('nope')).toBeUndefined();
   });
 
-  it('keeps every score inside the ceiling the API enforces', () => {
-    // The API rejects anything above maxScore, so a perfect run must fit under it.
-    expect(scoreDeduce(true, 1, 8)).toBeLessThanOrEqual(getGame('deduce')!.maxScore);
-    expect(scoreFocus(10, 0, 0, 10)).toBeLessThanOrEqual(getGame('focus')!.maxScore);
-    expect(scoreReflex(100)).toBeLessThanOrEqual(getGame('reflex')!.maxScore);
-    expect(scoreStroop(200, 0, 300)).toBeLessThanOrEqual(getGame('stroop')!.maxScore);
-    expect(scoreSequence(50)).toBeLessThanOrEqual(getGame('sequence')!.maxScore);
-    expect(scoreRhythm(0)).toBeLessThanOrEqual(getGame('rhythm')!.maxScore);
-    expect(scoreTyping(2000, 2000, 10000)).toBeLessThanOrEqual(getGame('typing')!.maxScore);
+  it('labels every score with the unit the drill actually measures', () => {
+    // The whole point of the rework: no game stores abstract "points".
+    for (const g of TRAINING_GAMES) {
+      expect(g.scoreLabel.length, `${g.id} has no score label`).toBeGreaterThan(0);
+      expect(g.scoreLabel, `${g.id} still scores abstract points`).not.toBe('points');
+    }
+  });
+
+  it('imposes no score ceiling on any drill', () => {
+    // A reachable cap is what made round 46 of Sequence worth the same as
+    // round 14. Nothing in the catalog may reintroduce one.
+    for (const g of TRAINING_GAMES) {
+      expect(g, `${g.id} has a maxScore`).not.toHaveProperty('maxScore');
+    }
+  });
+
+  it('only inverts the drills measured in time', () => {
+    const inverted = TRAINING_GAMES.filter((g) => g.lowerIsBetter).map((g) => g.id);
+    expect(inverted.sort()).toEqual(['reflex', 'rhythm']);
   });
 
   it('gives every game a tutorial — a drill with no explainer is the bug we set out to fix', () => {
-    for (const game of TRAINING_GAMES) {
-      const steps = TUTORIALS[game.id];
-      expect(steps, `${game.id} has no tutorial`).toBeDefined();
-      expect(steps.length, `${game.id} tutorial is empty`).toBeGreaterThan(0);
+    for (const g of TRAINING_GAMES) {
+      const steps = TUTORIALS[g.id];
+      expect(steps, `${g.id} has no tutorial`).toBeDefined();
+      expect(steps.length, `${g.id} tutorial is empty`).toBeGreaterThan(0);
       for (const step of steps) {
-        expect(step.title.length, `${game.id} step missing a title`).toBeGreaterThan(0);
-        expect(step.visual, `${game.id} step missing its visual`).toBeTruthy();
+        expect(step.title.length, `${g.id} step missing a title`).toBeGreaterThan(0);
+        expect(step.visual, `${g.id} step missing its visual`).toBeTruthy();
       }
     }
   });
@@ -57,149 +70,59 @@ describe('the game catalog', () => {
   });
 });
 
-describe('scoreStroop', () => {
-  it('scores nothing when nothing was answered', () => {
-    expect(scoreStroop(0, 0, 0)).toBe(0);
+describe('isBetter', () => {
+  const higher = game();
+  const lower = game({ lowerIsBetter: true });
+
+  it('treats any first run as a personal best', () => {
+    expect(isBetter(higher, 1, null)).toBe(true);
+    expect(isBetter(lower, 9999, null)).toBe(true);
   });
 
-  it('rewards more correct answers', () => {
-    expect(scoreStroop(30, 0, 800)).toBeGreaterThan(scoreStroop(10, 0, 800));
+  it('ranks a bigger number higher for normal drills', () => {
+    expect(isBetter(higher, 46, 20)).toBe(true);
+    expect(isBetter(higher, 20, 46)).toBe(false);
   });
 
-  it('punishes wrong answers harder than slow ones', () => {
-    // Answering fast but sloppily should lose to answering slower and clean.
-    const sloppyFast = scoreStroop(30, 10, 400);
-    const cleanSlow = scoreStroop(30, 0, 1200);
-    expect(cleanSlow).toBeGreaterThan(sloppyFast);
+  it('ranks a smaller number higher for timed drills', () => {
+    // 210ms beats 340ms.
+    expect(isBetter(lower, 210, 340)).toBe(true);
+    expect(isBetter(lower, 340, 210)).toBe(false);
   });
 
-  it('rewards speed when accuracy is equal', () => {
-    expect(scoreStroop(20, 0, 600)).toBeGreaterThan(scoreStroop(20, 0, 1800));
+  it('does not count an equal score as an improvement', () => {
+    expect(isBetter(higher, 20, 20)).toBe(false);
+    expect(isBetter(lower, 300, 300)).toBe(false);
   });
 
-  it('never goes negative when errors outweigh hits', () => {
-    expect(scoreStroop(3, 30, 900)).toBe(0);
-  });
-});
-
-describe('scoreSequence', () => {
-  it('scores nothing for a run that cleared no rounds', () => {
-    expect(scoreSequence(0)).toBe(0);
-  });
-
-  it('makes later rounds worth more than earlier ones', () => {
-    // Round 5 alone should add more than round 1 did.
-    const gainEarly = scoreSequence(2) - scoreSequence(1);
-    const gainLate = scoreSequence(6) - scoreSequence(5);
-    expect(gainLate).toBeGreaterThan(gainEarly);
-  });
-
-  it('is monotonic', () => {
-    expect(scoreSequence(4)).toBeGreaterThan(scoreSequence(3));
-  });
-
-  it('caps rather than running away', () => {
-    expect(scoreSequence(1000)).toBe(1000);
+  it('keeps scaling with no ceiling — round 460 beats round 46', () => {
+    expect(isBetter(higher, 460, 46)).toBe(true);
+    expect(isBetter(higher, 100_000, 99_999)).toBe(true);
   });
 });
 
-describe('scoreRhythm', () => {
-  it('gives perfect timing full marks', () => {
-    expect(scoreRhythm(0)).toBe(1000);
-  });
-
-  it('scores nothing once you are wildly off the beat', () => {
-    expect(scoreRhythm(250)).toBe(0);
-    expect(scoreRhythm(9999)).toBe(0);
-  });
-
-  it('rewards tighter timing', () => {
-    expect(scoreRhythm(30)).toBeGreaterThan(scoreRhythm(120));
-  });
-
-  it('rejects nonsense input', () => {
-    expect(scoreRhythm(-5)).toBe(0);
-    expect(scoreRhythm(Number.NaN)).toBe(0);
-  });
-});
-
-describe('scoreTyping', () => {
+describe('netWpm', () => {
   it('scores nothing for an empty or instant run', () => {
-    expect(scoreTyping(0, 0, 1000)).toBe(0);
-    expect(scoreTyping(100, 100, 0)).toBe(0);
+    expect(netWpm(0, 0, 1000)).toBe(0);
+    expect(netWpm(100, 100, 0)).toBe(0);
+  });
+
+  it('computes a sane wpm — 250 chars in 60s is about 50wpm', () => {
+    expect(netWpm(250, 250, 60000)).toBe(50);
   });
 
   it('rewards faster typing at equal accuracy', () => {
-    expect(scoreTyping(300, 300, 30000)).toBeGreaterThan(scoreTyping(300, 300, 60000));
+    expect(netWpm(300, 300, 30000)).toBeGreaterThan(netWpm(300, 300, 60000));
   });
 
   it('makes clean typing beat fast-but-sloppy', () => {
     // 80wpm at 85% accuracy vs 70wpm at 100% — accuracy is squared, so clean wins.
-    const sloppy = scoreTyping(400, 470, 30000);
-    const clean = scoreTyping(350, 350, 30000);
-    expect(clean).toBeGreaterThan(sloppy);
+    expect(netWpm(350, 350, 30000)).toBeGreaterThan(netWpm(400, 470, 30000));
   });
 
-  it('computes a sane wpm — 250 chars in 60s is about 50wpm', () => {
-    expect(scoreTyping(250, 250, 60000)).toBe(50);
-  });
-});
-
-describe('scoreDeduce', () => {
-  it('scores nothing for an unsolved code', () => {
-    expect(scoreDeduce(false, 8, 8)).toBe(0);
-  });
-
-  it('rewards solving in fewer guesses', () => {
-    expect(scoreDeduce(true, 2, 8)).toBeGreaterThan(scoreDeduce(true, 6, 8));
-  });
-
-  it('still pays out for a last-guess solve', () => {
-    expect(scoreDeduce(true, 8, 8)).toBeGreaterThan(0);
-  });
-});
-
-describe('scoreFocus', () => {
-  it('gives a clean sweep full marks', () => {
-    expect(scoreFocus(10, 0, 0, 10)).toBe(1000);
-  });
-
-  it('punishes false alarms, so spamming the button is worse than not playing', () => {
-    expect(scoreFocus(10, 0, 5, 10)).toBeLessThan(scoreFocus(10, 0, 0, 10));
-  });
-
-  it('punishes misses', () => {
-    expect(scoreFocus(6, 4, 0, 10)).toBeLessThan(scoreFocus(10, 0, 0, 10));
-  });
-
-  it('never goes negative', () => {
-    expect(scoreFocus(0, 20, 40, 10)).toBe(0);
-  });
-
-  it('handles a run with no targets', () => {
-    expect(scoreFocus(0, 0, 0, 0)).toBe(0);
-  });
-});
-
-describe('scoreReflex', () => {
-  it('gives a perfect score at the fast end and zero at the slow end', () => {
-    expect(scoreReflex(150)).toBe(1000);
-    expect(scoreReflex(600)).toBe(0);
-  });
-
-  it('clamps beyond either end rather than going out of range', () => {
-    expect(scoreReflex(50)).toBe(1000);
-    expect(scoreReflex(5000)).toBe(0);
-  });
-
-  it('is monotonic — faster always scores higher', () => {
-    expect(scoreReflex(200)).toBeGreaterThan(scoreReflex(300));
-    expect(scoreReflex(300)).toBeGreaterThan(scoreReflex(450));
-  });
-
-  it('rejects nonsense input', () => {
-    expect(scoreReflex(0)).toBe(0);
-    expect(scoreReflex(Number.NaN)).toBe(0);
+  it('has no upper bound', () => {
+    // A superhuman run must still record rather than being rejected.
+    expect(netWpm(5000, 5000, 30000)).toBeGreaterThan(250);
   });
 });
 

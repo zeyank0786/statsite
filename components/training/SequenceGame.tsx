@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { scoreSequence } from '@/lib/training';
 
 /**
  * Sequence — work out the rule, pick what comes next.
@@ -150,7 +149,9 @@ export default function SequenceGame({ onFinish }: { onFinish: (score: number) =
     if (value !== puzzle.answer) {
       setWrongPick(value);
       setPhase('over');
-      onFinish(scoreSequence(round));
+      // The round you reached IS the score. Round 46 has to be worth more than
+      // round 20, and no formula in between can be allowed to flatten that.
+      onFinish(round);
       return;
     }
     const nextRound = round + 1;

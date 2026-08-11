@@ -1,13 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { scoreDeduce } from '@/lib/training';
 
 /**
  * Deduce — break a hidden four-colour code from exact/partial feedback.
  *
  * Colours can repeat, which is what stops it collapsing into simple
  * process-of-elimination and makes the partial-match count actually matter.
+ *
+ * Cracking one deals another, so the score is how many you broke in a row —
+ * an open-ended number that keeps meaning something however good you get,
+ * rather than a rating that tops out.
  */
 
 /** Exported so the tutorial can show the exact colours the game uses. */
@@ -58,7 +61,9 @@ export default function DeduceGame({ onFinish }: { onFinish: (score: number) => 
   const [code, setCode] = useState<number[]>(randomCode);
   const [draft, setDraft] = useState<number[]>([0, 0, 0, 0]);
   const [guesses, setGuesses] = useState<Guess[]>([]);
-  const [state, setState] = useState<'playing' | 'won' | 'lost'>('playing');
+  const [state, setState] = useState<'playing' | 'cracked' | 'lost'>('playing');
+  /** Codes broken this run — the score. */
+  const [cracked, setCracked] = useState(0);
 
   const submit = () => {
     if (state !== 'playing') return;
@@ -67,19 +72,27 @@ export default function DeduceGame({ onFinish }: { onFinish: (score: number) => 
     setGuesses(next);
 
     if (exact === CODE_LENGTH) {
-      setState('won');
-      onFinish(scoreDeduce(true, next.length, MAX_GUESSES));
+      setCracked((c) => c + 1);
+      setState('cracked');
     } else if (next.length >= MAX_GUESSES) {
+      // The run ends here; the score is everything broken before this one.
       setState('lost');
-      onFinish(0);
+      onFinish(cracked);
     }
   };
 
-  const reset = () => {
+  /** Deal the next code in the same run. */
+  const nextCode = () => {
     setCode(randomCode());
     setDraft([0, 0, 0, 0]);
     setGuesses([]);
     setState('playing');
+  };
+
+  /** Start a fresh run from zero. */
+  const restart = () => {
+    setCracked(0);
+    nextCode();
   };
 
   const cycle = (slot: number) => {
@@ -92,13 +105,21 @@ export default function DeduceGame({ onFinish }: { onFinish: (score: number) => 
       <p className="text-sm mb-4 text-center max-w-sm" style={{ color: 'var(--text-secondary)' }}>
         {state === 'playing' && (
           <>
+            {cracked > 0 && (
+              <span className="text-white font-semibold">
+                {cracked} cracked ·{' '}
+              </span>
+            )}
             Tap a slot to cycle its colour. <strong className="text-white">●</strong> = right colour,
             right place. <span style={{ color: 'var(--text-secondary)' }}>○</span> = right colour,
             wrong place. Colours can repeat.
           </>
         )}
-        {state === 'won' && `Cracked it in ${guesses.length}.`}
-        {state === 'lost' && 'Out of guesses.'}
+        {state === 'cracked' && `Cracked in ${guesses.length} — that's ${cracked}. Keep going.`}
+        {state === 'lost' &&
+          (cracked === 0
+            ? 'Out of guesses.'
+            : `Out of guesses — ${cracked} code${cracked === 1 ? '' : 's'} cracked.`)}
       </p>
 
       {/* Guess history */}
@@ -168,9 +189,15 @@ export default function DeduceGame({ onFinish }: { onFinish: (score: number) => 
               <span key={i} className="w-14 h-14 rounded-2xl" style={{ background: COLORS[c] }} />
             ))}
           </div>
-          <button onClick={reset} className="btn-gradient px-6 py-2.5">
-            New code
-          </button>
+          {state === 'cracked' ? (
+            <button onClick={nextCode} className="btn-gradient px-6 py-2.5">
+              Next code →
+            </button>
+          ) : (
+            <button onClick={restart} className="btn-gradient px-6 py-2.5">
+              Go again
+            </button>
+          )}
         </>
       )}
     </div>

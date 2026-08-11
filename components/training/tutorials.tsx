@@ -285,6 +285,33 @@ const DEDUCE_STEPS: TutorialStep[] = [
       </>
     ),
   },
+  {
+    title: 'Crack it and another appears',
+    visual: (
+      <div className="flex items-center gap-3">
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="flex items-center gap-3">
+            <span className="flex gap-1">
+              {[0, 2, 3, 5].map((c) => (
+                <Swatch key={c} hex={COLORS[c]} size={16} dim={i === 2} />
+              ))}
+            </span>
+            {i < 2 && (
+              <span className="text-sm" style={{ color: '#34d399' }}>
+                ✓→
+              </span>
+            )}
+          </span>
+        ))}
+      </div>
+    ),
+    body: (
+      <>
+        Breaking a code deals a fresh one straight away. Your score is how many you crack in a row
+        before eight guesses runs out on you — there&apos;s no cap, so keep going.
+      </>
+    ),
+  },
 ];
 
 const FOCUS_STEPS: TutorialStep[] = [
@@ -344,7 +371,34 @@ const FOCUS_STEPS: TutorialStep[] = [
     body: (
       <>
         R doesn&apos;t match the K from two back, so leave it alone. Pressing when there&apos;s no
-        match costs you more than missing one — you can&apos;t just hammer the button.
+        match counts as a mistake, so you can&apos;t just hammer the button.
+      </>
+    ),
+  },
+  {
+    title: 'Three mistakes and you’re out',
+    visual: (
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex items-center gap-2">
+          {[true, true, false].map((used, i) => (
+            <span
+              key={i}
+              className="w-3.5 h-3.5 rounded-full"
+              style={{ background: used ? '#ef4444' : 'rgba(255,255,255,0.18)' }}
+            />
+          ))}
+        </div>
+        <span className="font-display text-3xl font-bold text-white tabular-nums">128</span>
+        <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+          letters survived
+        </span>
+      </div>
+    ),
+    body: (
+      <>
+        The stream never stops on its own — a missed match and a wrong press both cost you one of
+        three lives. Your score is how many letters you lasted, so there&apos;s no ceiling on a
+        good run.
       </>
     ),
   },
@@ -453,30 +507,36 @@ const REFLEX_STEPS: TutorialStep[] = [
     body: <>A target appears somewhere at random. Hit it as fast as you can — ten of them in a run.</>,
   },
   {
-    title: 'Fastest average wins',
+    title: 'Your score is your average — lowest wins',
     visual: (
-      <div className="flex flex-col gap-2 w-full max-w-[240px]">
+      <div className="flex flex-col gap-2 w-full max-w-[250px]">
         {[
-          ['150ms', 1000, '#34d399'],
-          ['300ms', 660, '#eab308'],
-          ['500ms', 220, '#f97316'],
-        ].map(([label, score, hex]) => (
+          ['210ms', 'crew record', '#34d399', 30],
+          ['340ms', 'solid', '#eab308', 55],
+          ['520ms', 'sluggish', '#f97316', 85],
+        ].map(([label, note, hex, width]) => (
           <div key={label as string} className="flex items-center gap-2">
-            <span className="text-[11px] w-12 tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-              {label}
-            </span>
+            <span className="text-[11px] w-14 tabular-nums text-white">{label}</span>
             <span className="h-2.5 rounded-full flex-1" style={{ background: 'rgba(255,255,255,0.06)' }}>
               <span
                 className="block h-full rounded-full"
-                style={{ width: `${(score as number) / 10}%`, background: hex as string }}
+                style={{ width: `${width}%`, background: hex as string }}
               />
             </span>
-            <span className="text-[11px] w-9 text-right tabular-nums text-white">{score}</span>
+            <span className="text-[10px] w-16" style={{ color: 'var(--text-secondary)' }}>
+              {note}
+            </span>
           </div>
         ))}
       </div>
     ),
-    body: <>Score comes from your average across all ten. Every early click adds time to that average.</>,
+    body: (
+      <>
+        Your average reaction time across all ten, in milliseconds — so this is one where the{' '}
+        <strong className="text-white">lowest</strong> number tops the board. Every early click adds
+        to it.
+      </>
+    ),
   },
 ];
 
@@ -605,7 +665,12 @@ const STROOP_STEPS: TutorialStep[] = [
         </span>
       </div>
     ),
-    body: <>Speed and accuracy both count. A wrong answer costs more than a slow one.</>,
+    body: (
+      <>
+        Your score is how many you get right, minus the ones you get wrong — so guessing fast to rack
+        up a number does nothing for you.
+      </>
+    ),
   },
 ];
 
@@ -677,7 +742,12 @@ const SEQUENCE_STEPS: TutorialStep[] = [
         ))}
       </div>
     ),
-    body: <>Later rounds are worth more. One wrong answer ends the run, so don&apos;t rush a hard one.</>,
+    body: (
+      <>
+        Your score is simply the round you reach — round 46 beats round 20, and nothing caps it. One
+        wrong answer ends the run, so don&apos;t rush a hard one.
+      </>
+    ),
   },
 ];
 
@@ -793,7 +863,12 @@ const RHYTHM_STEPS: TutorialStep[] = [
         </p>
       </div>
     ),
-    body: <>Score is how tightly your taps sit on the beat — average drift, in milliseconds.</>,
+    body: (
+      <>
+        Your score is how far off the beat you were on average, in milliseconds — so this is another
+        where the <strong className="text-white">lowest</strong> number wins.
+      </>
+    ),
   },
 ];
 

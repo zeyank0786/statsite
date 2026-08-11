@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { scoreRhythm } from '@/lib/training';
 
 /**
  * Rhythm — four beats set the tempo, then it goes silent and you keep it.
@@ -10,6 +9,8 @@ import { scoreRhythm } from '@/lib/training';
  * Drift is measured against the ideal grid (lead-in + n × interval), not
  * against your own previous tap: chaining tap-to-tap would let a run that
  * slides steadily off tempo score perfectly.
+ *
+ * The score IS that drift in milliseconds, so the lowest one wins.
  */
 
 const LEAD_IN_BEATS = 4;
@@ -99,7 +100,9 @@ export default function RhythmGame({ onFinish }: { onFinish: (score: number) => 
       const average = total / next.length;
       setDrift(average);
       setPhase('done');
-      onFinish(scoreRhythm(average));
+      // Milliseconds off the beat — the unit that means something here, so
+      // the lowest score wins.
+      onFinish(Math.round(average));
     }
   };
 

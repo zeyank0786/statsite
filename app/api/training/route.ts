@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import {
+  ABSURD_SCORE,
   TRAINING_GAMES,
   getGame,
   getLeaderboards,
@@ -53,11 +54,11 @@ export async function POST(request: Request) {
     if (!Number.isInteger(score) || score < 0) {
       return NextResponse.json({ error: 'Score must be a whole number' }, { status: 400 });
     }
-    if (score > game.maxScore) {
-      return NextResponse.json(
-        { error: `That score is above what ${game.name} can produce` },
-        { status: 400 }
-      );
+    // No ceiling on how well anyone can do. This only rejects values no run
+    // could ever produce, so a malformed POST can't park nonsense at the top
+    // of a board permanently.
+    if (score > ABSURD_SCORE) {
+      return NextResponse.json({ error: 'That score is not a real run' }, { status: 400 });
     }
 
     const detail =
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
         ? (body.detail as Record<string, unknown>)
         : null;
 
-    return NextResponse.json({ success: true, ...(await recordResult(playerId, game.id, score, detail)) });
+    return NextResponse.json({ success: true, ...(await recordResult(playerId, game, score, detail)) });
   } catch (error: unknown) {
     console.error('Error recording training result:', error);
     return NextResponse.json(errorPayload('Failed to record the run', error), { status: 500 });

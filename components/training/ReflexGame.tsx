@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { scoreReflex } from '@/lib/training';
 
 /**
  * Reflex — hit ten targets as fast as they land.
@@ -9,6 +8,9 @@ import { scoreReflex } from '@/lib/training';
  * The delay before each target is random so it can't be anticipated, and
  * clicking before one appears adds a penalty rather than voiding the run —
  * a void would just teach people to spam and restart.
+ *
+ * Scored in milliseconds, the unit anyone would actually quote, which means
+ * the LOWEST score wins. The leaderboard knows to invert for this drill.
  */
 
 const TARGETS = 10;
@@ -62,7 +64,7 @@ export default function ReflexGame({ onFinish }: { onFinish: (score: number) => 
     if (next.length >= TARGETS) {
       setPhase('done');
       const average = next.reduce((sum, t) => sum + t, 0) / next.length + jumps * JUMP_PENALTY_MS;
-      onFinish(scoreReflex(average));
+      onFinish(Math.round(average));
     } else {
       armNext(next.length);
     }
