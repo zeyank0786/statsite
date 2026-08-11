@@ -17,7 +17,13 @@ import { query, queryAll } from './db';
  * ceilings below exist to keep obvious junk out of the table, not to secure it.
  */
 
-export type TrainingCategory = 'memory' | 'reasoning' | 'attention' | 'reflex';
+export type TrainingCategory =
+  | 'memory'
+  | 'reasoning'
+  | 'attention'
+  | 'reflex'
+  | 'timing'
+  | 'skill';
 
 export interface TrainingGame {
   id: string;
@@ -87,6 +93,97 @@ export const TRAINING_GAMES: TrainingGame[] = [
     scoreLabel: 'points',
     maxScore: 1000,
     emoji: '⚡',
+    hex: '#34d399',
+  },
+  {
+    id: 'chimp',
+    name: 'Chimp Test',
+    tagline: 'Numbers vanish. Tap them in order anyway.',
+    description:
+      'Numbers appear scattered, then blank out the moment you start. Spatial working memory — most people fall apart somewhere past eight.',
+    category: 'memory',
+    statCategoryCode: 'mtl',
+    scoreLabel: 'numbers',
+    maxScore: 30,
+    emoji: '🐒',
+    hex: '#eab308',
+  },
+  {
+    id: 'stroop',
+    name: 'Stroop',
+    tagline: 'Name the ink, not the word.',
+    description:
+      'The word RED printed in blue: the answer is blue. Overriding the automatic read is the whole drill, and it gets harder the faster you go.',
+    category: 'attention',
+    statCategoryCode: 'mtl',
+    scoreLabel: 'points',
+    maxScore: 1000,
+    emoji: '🎨',
+    hex: '#ec4899',
+  },
+  {
+    id: 'sequence',
+    name: 'Sequence',
+    tagline: '2, 4, 8, 16 — what comes next?',
+    description:
+      'Number patterns of rising difficulty, four options each. Pure inductive reasoning; one wrong answer ends the run.',
+    category: 'reasoning',
+    statCategoryCode: 'stra',
+    scoreLabel: 'points',
+    maxScore: 1000,
+    emoji: '🔢',
+    hex: '#3b82f6',
+  },
+  {
+    id: 'arithmetic',
+    name: 'Mental Maths',
+    tagline: 'As many as you can in sixty seconds.',
+    description:
+      'Sums that get bigger the better you do. Speed and accuracy under a clock, with no working out on paper.',
+    category: 'reasoning',
+    statCategoryCode: 'kno',
+    scoreLabel: 'correct',
+    maxScore: 300,
+    emoji: '➗',
+    hex: '#a855f7',
+  },
+  {
+    id: 'rhythm',
+    name: 'Rhythm',
+    tagline: 'The beat stops. You keep it.',
+    description:
+      'Four beats set the tempo, then silence — carry it on from memory. Scores how tightly your taps sit on the beat.',
+    category: 'timing',
+    statCategoryCode: 'ski',
+    scoreLabel: 'points',
+    maxScore: 1000,
+    emoji: '🥁',
+    hex: '#f97316',
+  },
+  {
+    id: 'typing',
+    name: 'Typing Sprint',
+    tagline: 'Words per minute, docked for errors.',
+    description:
+      'Type the passage as fast and as cleanly as you can. Raw speed scaled by accuracy, so hammering it blind scores worse than typing properly.',
+    category: 'skill',
+    statCategoryCode: 'ski',
+    scoreLabel: 'wpm',
+    maxScore: 250,
+    emoji: '⌨️',
+    hex: '#22d3ee',
+  },
+  {
+    id: 'search',
+    name: 'Odd One Out',
+    tagline: 'Find the tile that doesn’t belong.',
+    description:
+      'One tile is a slightly different shade. The grid grows and the difference shrinks every round, and a wrong tap ends it.',
+    category: 'attention',
+    statCategoryCode: 'strs',
+    scoreLabel: 'rounds',
+    maxScore: 40,
+    emoji: '👁️',
     hex: '#34d399',
   },
 ];
@@ -270,9 +367,63 @@ export function scoreFocus(hits: number, misses: number, falseAlarms: number, ta
  * between. Jumping the gun is penalised in the game itself.
  */
 export function scoreReflex(averageMs: number): number {
-  if (!Number.isFinite(averageMs) || averageMs <= 0) return 0;
-  const best = 150;
-  const worst = 600;
-  const clamped = Math.min(worst, Math.max(best, averageMs));
+  return rampDown(averageMs, 150, 600);
+}
+
+/**
+ * Shared shape for "faster is better" drills: `best` ms or quicker is a full
+ * 1000, `worst` or slower is 0, linear between. Clamped at both ends so an
+ * outlier can't produce a negative or out-of-range score the API would reject.
+ */
+function rampDown(ms: number, best: number, worst: number): number {
+  if (!Number.isFinite(ms) || ms <= 0) return 0;
+  const clamped = Math.min(worst, Math.max(best, ms));
   return Math.round(((worst - clamped) / (worst - best)) * 1000);
+}
+
+/**
+ * Stroop: correct answers carry the score, wrong ones cost roughly three
+ * right answers apiece. Naming the ink is easy if you go slowly, so the
+ * penalty is what stops "answer instantly and eat the errors" winning.
+ */
+export function scoreStroop(correct: number, wrong: number, averageMs: number): number {
+  if (correct <= 0) return 0;
+  const net = Math.max(0, correct - wrong * 3);
+  // Speed is a multiplier on the net, not a separate term: 600ms or quicker
+  // is full value, 2s is half.
+  const speed = 0.5 + rampDown(averageMs, 600, 2000) / 2000;
+  return Math.min(1000, Math.round(net * 22 * speed));
+}
+
+/**
+ * Sequence: later rounds are worth more than earlier ones, so surviving deep
+ * beats grinding easy ones. Triangular growth — round n is worth 10n points.
+ */
+export function scoreSequence(roundsCleared: number): number {
+  if (roundsCleared <= 0) return 0;
+  return Math.min(1000, 10 * ((roundsCleared * (roundsCleared + 1)) / 2));
+}
+
+/**
+ * Rhythm: average absolute drift from the beat. Dead on is 1000, 250ms out
+ * scores nothing — beyond that you aren't keeping time in any meaningful sense.
+ */
+export function scoreRhythm(averageDriftMs: number): number {
+  if (!Number.isFinite(averageDriftMs) || averageDriftMs < 0) return 0;
+  const worst = 250;
+  const clamped = Math.min(worst, averageDriftMs);
+  return Math.round(((worst - clamped) / worst) * 1000);
+}
+
+/**
+ * Typing: words per minute scaled by accuracy, so clean typing beats fast
+ * nonsense. Accuracy is applied squared — 90% accurate at 80wpm should not
+ * beat 98% accurate at 70wpm.
+ */
+export function scoreTyping(correctChars: number, totalTyped: number, elapsedMs: number): number {
+  if (elapsedMs <= 0 || totalTyped <= 0 || correctChars <= 0) return 0;
+  // The standard definition: a "word" is five characters.
+  const wpm = correctChars / 5 / (elapsedMs / 60000);
+  const accuracy = Math.min(1, correctChars / totalTyped);
+  return Math.max(0, Math.min(250, Math.round(wpm * accuracy * accuracy)));
 }

@@ -11,8 +11,17 @@ import RecallGame from '@/components/training/RecallGame';
 import DeduceGame from '@/components/training/DeduceGame';
 import FocusGame from '@/components/training/FocusGame';
 import ReflexGame from '@/components/training/ReflexGame';
+import ChimpGame from '@/components/training/ChimpGame';
+import StroopGame from '@/components/training/StroopGame';
+import SequenceGame from '@/components/training/SequenceGame';
+import ArithmeticGame from '@/components/training/ArithmeticGame';
+import RhythmGame from '@/components/training/RhythmGame';
+import TypingGame from '@/components/training/TypingGame';
+import SearchGame from '@/components/training/SearchGame';
+import GameTutorial, { hasSeenTutorial } from '@/components/training/GameTutorial';
+import { TUTORIALS } from '@/components/training/tutorials';
 import { getUserColorHex } from '@/lib/userColors';
-import { CheckIcon, LightbulbIcon, TrophyIcon, XIcon } from '@/components/icons';
+import { CheckIcon, InfoIcon, LightbulbIcon, TrophyIcon, XIcon } from '@/components/icons';
 
 /**
  * The Training Facility.
@@ -60,6 +69,30 @@ interface RunOutcome {
 
 const MEDAL = ['🥇', '🥈', '🥉'];
 
+/** Every drill's board, keyed by id so adding a game is one line here. */
+const GAME_COMPONENTS: Record<string, (props: { onFinish: (score: number) => void }) => React.ReactNode> = {
+  recall: RecallGame,
+  deduce: DeduceGame,
+  focus: FocusGame,
+  reflex: ReflexGame,
+  chimp: ChimpGame,
+  stroop: StroopGame,
+  sequence: SequenceGame,
+  arithmetic: ArithmeticGame,
+  rhythm: RhythmGame,
+  typing: TypingGame,
+  search: SearchGame,
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  memory: 'Memory',
+  reasoning: 'Reasoning',
+  attention: 'Attention',
+  reflex: 'Reflex',
+  timing: 'Timing',
+  skill: 'Skill',
+};
+
 export default function TrainingPage() {
   const { status, data: session } = useSession();
   const router = useRouter();
@@ -72,6 +105,9 @@ export default function TrainingPage() {
   const [playing, setPlaying] = useState<Game | null>(null);
   const [outcome, setOutcome] = useState<RunOutcome | null>(null);
   const [error, setError] = useState('');
+  // The walkthrough opens automatically until it's been completed once for
+  // that game, and is reachable again from "How it works".
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/auth/signin');
@@ -121,9 +157,17 @@ export default function TrainingPage() {
     }
   };
 
+  const openGame = (game: Game) => {
+    setPlaying(game);
+    setOutcome(null);
+    // First time on this drill? Explain it before dropping them into it.
+    setShowTutorial(!hasSeenTutorial(game.id));
+  };
+
   const closeGame = () => {
     setPlaying(null);
     setOutcome(null);
+    setShowTutorial(false);
   };
 
   return (
@@ -170,20 +214,35 @@ export default function TrainingPage() {
                       {game.tagline}
                     </p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setPlaying(game);
-                      setOutcome(null);
-                    }}
-                    className="btn-gradient text-sm px-4 py-2 shrink-0"
-                  >
+                  <button onClick={() => openGame(game)} className="btn-gradient text-sm px-4 py-2 shrink-0">
                     Play
                   </button>
                 </div>
 
-                <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+                <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
                   {game.description}
                 </p>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                    style={{ background: `${game.hex}1f`, color: game.hex }}
+                  >
+                    {CATEGORY_LABELS[game.category] || game.category}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setPlaying(game);
+                      setOutcome(null);
+                      setShowTutorial(true);
+                    }}
+                    className="text-[11px] font-semibold hover:underline flex items-center gap-1"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <InfoIcon size={12} />
+                    How it works
+                  </button>
+                </div>
 
                 {board.length === 0 ? (
                   <p className="text-xs py-3 text-center" style={{ color: 'var(--text-secondary)' }}>
@@ -291,7 +350,14 @@ export default function TrainingPage() {
               </button>
             </div>
 
-            {outcome ? (
+            {showTutorial ? (
+              <GameTutorial
+                gameId={playing.id}
+                steps={TUTORIALS[playing.id] || []}
+                hex={playing.hex}
+                onDone={() => setShowTutorial(false)}
+              />
+            ) : outcome ? (
               <div className="text-center py-6">
                 <p className="text-5xl mb-3">{outcome.crewRecord ? '🏆' : outcome.personalBest ? '🎉' : '✅'}</p>
                 <p className="font-display text-4xl font-bold mb-1" style={{ color: playing.hex }}>
@@ -327,12 +393,29 @@ export default function TrainingPage() {
                 </div>
               </div>
             ) : (
-              <>
-                {playing.id === 'recall' && <RecallGame onFinish={(s) => submitRun(playing, s)} />}
-                {playing.id === 'deduce' && <DeduceGame onFinish={(s) => submitRun(playing, s)} />}
-                {playing.id === 'focus' && <FocusGame onFinish={(s) => submitRun(playing, s)} />}
-                {playing.id === 'reflex' && <ReflexGame onFinish={(s) => submitRun(playing, s)} />}
-              </>
+              (() => {
+                const Board = GAME_COMPONENTS[playing.id];
+                if (!Board) {
+                  return (
+                    <p className="text-sm py-6 text-center" style={{ color: 'var(--text-secondary)' }}>
+                      This drill isn&apos;t available.
+                    </p>
+                  );
+                }
+                return (
+                  <>
+                    <Board onFinish={(s: number) => submitRun(playing, s)} />
+                    <button
+                      onClick={() => setShowTutorial(true)}
+                      className="text-[11px] mt-5 mx-auto flex items-center gap-1 hover:underline"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      <InfoIcon size={12} />
+                      How it works
+                    </button>
+                  </>
+                );
+              })()
             )}
           </div>
         </div>

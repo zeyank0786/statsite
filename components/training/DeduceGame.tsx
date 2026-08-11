@@ -10,7 +10,8 @@ import { scoreDeduce } from '@/lib/training';
  * process-of-elimination and makes the partial-match count actually matter.
  */
 
-const COLORS = ['#22d3ee', '#a855f7', '#34d399', '#f97316', '#ec4899', '#eab308'];
+/** Exported so the tutorial can show the exact colours the game uses. */
+export const COLORS = ['#22d3ee', '#a855f7', '#34d399', '#f97316', '#ec4899', '#eab308'];
 const CODE_LENGTH = 4;
 const MAX_GUESSES = 8;
 
