@@ -1,4 +1,7 @@
 import { query, queryAll, queryOne } from './db';
+import { BIO_PLACE_KEYS, type BioPlace } from './bioPlaces';
+
+export { BIO_PLACES, type BioPlace } from './bioPlaces';
 
 /**
  * Per-player profile customisation.
@@ -15,9 +18,18 @@ export interface PlayerProfile {
   accentColor: string | null;
   avatarUrl: string | null;
   avatarPublicId: string | null;
+  /** "x,y,w,h" as fractions of the source image; null means centre-crop it. */
+  avatarCrop: string | null;
   bannerUrl: string | null;
   bannerPublicId: string | null;
+  bannerCrop: string | null;
   bio: string | null;
+  /**
+   * Places this player has switched their bio OFF. Stored as the exceptions
+   * rather than the inclusions so a bio shows up everywhere by default — and so
+   * a place added later starts on for everyone instead of silently missing.
+   */
+  bioHiddenPlaces: string[];
   /** Achievement id displayed as a title next to their name. */
   flairAchievementId: string | null;
   flairLabel: string | null;
@@ -30,9 +42,12 @@ const PROFILE_COLUMNS = [
   'accentColor',
   'avatarUrl',
   'avatarPublicId',
+  'avatarCrop',
   'bannerUrl',
   'bannerPublicId',
+  'bannerCrop',
   'bio',
+  'bioHiddenPlaces',
   'flairAchievementId',
   'flairLabel',
 ] as const;
@@ -69,22 +84,65 @@ export function normaliseHex(input: unknown): string | null {
   return long ? `#${long[1]}` : null;
 }
 
+/**
+ * A crop rectangle as four fractions of the source image, "x,y,w,h".
+ * Rejects anything that isn't four numbers in range, so a hand-crafted PATCH
+ * can't smuggle arbitrary text into a delivery URL.
+ */
+export function normaliseCrop(input: unknown): string | null {
+  if (typeof input !== 'string') return null;
+  const parts = input.split(',').map((p) => Number(p.trim()));
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [x, y, w, h] = parts;
+  if (w <= 0 || h <= 0 || x < 0 || y < 0 || x > 1 || y > 1 || w > 1 || h > 1) return null;
+  const round = (n: number) => String(Math.round(n * 10000) / 10000);
+  return [x, y, w, h].map(round).join(',');
+}
+
+/** CSV of known place keys, or null when the bio shows everywhere. */
+export function normaliseBioHiddenPlaces(input: unknown): string | null {
+  const raw = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+      ? input.split(',')
+      : [];
+  const keys = [
+    ...new Set(
+      raw
+        .map((v) => String(v).trim())
+        .filter((v) => BIO_PLACE_KEYS.includes(v))
+    ),
+  ];
+  return keys.length > 0 ? keys.join(',') : null;
+}
+
 function mapRow(row: Record<string, unknown>): PlayerProfile {
   const text = (key: string) => {
     const value = row[key];
     return value === null || value === undefined || String(value) === '' ? null : String(value);
   };
+  const hidden = text('bioHiddenPlaces');
   return {
     playerId: String(row.id),
     accentColor: normaliseHex(text('accentColor')),
     avatarUrl: text('avatarUrl'),
     avatarPublicId: text('avatarPublicId'),
+    avatarCrop: normaliseCrop(text('avatarCrop')),
     bannerUrl: text('bannerUrl'),
     bannerPublicId: text('bannerPublicId'),
+    bannerCrop: normaliseCrop(text('bannerCrop')),
     bio: text('bio'),
+    bioHiddenPlaces: hidden
+      ? hidden.split(',').filter((k) => BIO_PLACE_KEYS.includes(k))
+      : [],
     flairAchievementId: text('flairAchievementId'),
     flairLabel: text('flairLabel'),
   };
+}
+
+/** Whether a player's bio should render in a given place. */
+export function bioVisibleIn(profile: Pick<PlayerProfile, 'bio' | 'bioHiddenPlaces'>, place: BioPlace) {
+  return Boolean(profile.bio) && !profile.bioHiddenPlaces.includes(place);
 }
 
 /**
@@ -137,9 +195,12 @@ export interface ProfileUpdate {
   accentColor?: string | null;
   avatarUrl?: string | null;
   avatarPublicId?: string | null;
+  avatarCrop?: string | null;
   bannerUrl?: string | null;
   bannerPublicId?: string | null;
+  bannerCrop?: string | null;
   bio?: string | null;
+  bioHiddenPlaces?: string | null;
   flairAchievementId?: string | null;
   flairLabel?: string | null;
 }

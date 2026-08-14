@@ -1344,7 +1344,7 @@ function LockoutSection({ players }: { players: { id: string; username: string }
                 background: active ? 'rgba(239,68,68,0.12)' : 'transparent',
               }}
             >
-              <Avatar id={p.id} name={p.username} size={22} />
+              <Avatar id={p.id} name={p.username} size={22} profileCard={false} />
               {p.username}
               {hasLocks && <span title="Has lockouts">🚫</span>}
             </button>
@@ -1551,7 +1551,7 @@ function StatEditTab({
                   background: active ? 'rgba(34,211,238,0.12)' : 'transparent',
                 }}
               >
-                <Avatar id={p.id} name={p.username} size={22} />
+                <Avatar id={p.id} name={p.username} size={22} profileCard={false} />
                 <span className={p.active ? '' : 'line-through opacity-60'}>{p.username}</span>
               </button>
             );

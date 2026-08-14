@@ -372,6 +372,13 @@ export const ImageIcon = (p: IconProps) => (
   </Base>
 );
 
+export const CropIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+    <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+  </Base>
+);
+
 export const FilmIcon = (p: IconProps) => (
   <Base {...p}>
     <rect x="3" y="4" width="18" height="16" rx="2.5" />

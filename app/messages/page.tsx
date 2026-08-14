@@ -8,6 +8,7 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
+import PlayerBio from '@/components/PlayerBio';
 import { getUserColorHex, getUserColorBg } from '@/lib/userColors';
 import { CATEGORY_ORDER, getCategoryMeta, orderStats, categoryCodeOfStat } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
@@ -392,7 +393,9 @@ function MessagesContent() {
       {/* ===== Composer ===== */}
       <div className="glass-strong card-shadow p-5 mb-6 animate-rise animate-rise-1">
         <div className="flex gap-3">
-          {currentPlayerId && <Avatar id={currentPlayerId} name={currentPlayerName} size={38} />}
+          {currentPlayerId && (
+            <Avatar id={currentPlayerId} name={currentPlayerName} size={38} profileCard={false} />
+          )}
           <div className="flex-1 min-w-0">
             <MentionTextarea
               value={messageContent}
@@ -564,7 +567,7 @@ function MessagesContent() {
                       className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left font-medium text-white transition hover:brightness-125"
                       style={{ borderColor: `${hex}66`, background: getUserColorBg(player.id, 0.07) }}
                     >
-                      <Avatar id={player.id} name={player.username} size={32} />
+                      <Avatar id={player.id} name={player.username} size={32} profileCard={false} />
                       {player.username}
                     </button>
                   );
@@ -745,6 +748,7 @@ function MessagesContent() {
                       >
                         {message.authorName}
                       </Link>
+                      <PlayerBio playerId={message.authorId} place="feeds" className="text-[11px]" />
                       <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                         {new Date(message.createdAt).toLocaleDateString()} ·{' '}
                         {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -6,6 +6,8 @@ import {
   MAX_FLAIR_LABEL_LENGTH,
   getAllProfiles,
   getProfile,
+  normaliseBioHiddenPlaces,
+  normaliseCrop,
   normaliseHex,
   takenAccentColors,
   updateProfile,
@@ -100,22 +102,45 @@ export async function PATCH(request: Request) {
       }
     }
 
-    for (const [urlKey, idKey] of [
-      ['avatarUrl', 'avatarPublicId'],
-      ['bannerUrl', 'bannerPublicId'],
+    for (const [urlKey, idKey, cropKey] of [
+      ['avatarUrl', 'avatarPublicId', 'avatarCrop'],
+      ['bannerUrl', 'bannerPublicId', 'bannerCrop'],
     ] as const) {
-      if (!(urlKey in body)) continue;
-      const url = body[urlKey];
-      if (url === null || url === '') {
-        update[urlKey] = null;
-        update[idKey] = null;
-        continue;
+      if (urlKey in body) {
+        const url = body[urlKey];
+        if (url === null || url === '') {
+          update[urlKey] = null;
+          update[idKey] = null;
+        } else if (typeof url !== 'string' || !/^https:\/\//i.test(url)) {
+          return NextResponse.json({ error: `${urlKey} must be an https URL` }, { status: 400 });
+        } else {
+          update[urlKey] = url;
+          update[idKey] = typeof body[idKey] === 'string' ? body[idKey] : null;
+        }
+        // The picture changed, so the old framing is meaningless — a crop taken
+        // from a different photo would land somewhere arbitrary on this one. An
+        // explicit crop in the same request overrides this below.
+        update[cropKey] = null;
       }
-      if (typeof url !== 'string' || !/^https:\/\//i.test(url)) {
-        return NextResponse.json({ error: `${urlKey} must be an https URL` }, { status: 400 });
+
+      if (cropKey in body) {
+        if (body[cropKey] === null || body[cropKey] === '') {
+          update[cropKey] = null;
+        } else {
+          const crop = normaliseCrop(body[cropKey]);
+          if (!crop) {
+            return NextResponse.json(
+              { error: `${cropKey} must be four fractions "x,y,w,h" between 0 and 1` },
+              { status: 400 }
+            );
+          }
+          update[cropKey] = crop;
+        }
       }
-      update[urlKey] = url;
-      update[idKey] = typeof body[idKey] === 'string' ? body[idKey] : null;
+    }
+
+    if ('bioHiddenPlaces' in body) {
+      update.bioHiddenPlaces = normaliseBioHiddenPlaces(body.bioHiddenPlaces);
     }
 
     if ('bio' in body) {

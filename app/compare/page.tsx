@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
+import PlayerBio from '@/components/PlayerBio';
 import RadarChart from '@/components/RadarChart';
 import Reveal from '@/components/Reveal';
 import { orderCategories, getCategoryMeta, computeOverallScore, scaleMax, categoryRadarValue } from '@/lib/categories';
@@ -147,7 +148,7 @@ function CompareContent() {
               background: active ? `${hex}1f` : 'transparent',
             }}
           >
-            <Avatar id={p.id} name={p.username} size={22} />
+            <Avatar id={p.id} name={p.username} size={22} profileCard={false} />
             {p.username}
           </button>
         );
@@ -368,11 +369,12 @@ function ScoreCard({
     <div className={`text-center ${align === 'left' ? 'lg:text-left' : 'lg:text-right'}`}>
       <div className={`flex items-center gap-3 justify-center ${align === 'left' ? 'lg:justify-start' : 'lg:justify-end lg:flex-row-reverse'}`}>
         <Avatar id={id} name={name} size={52} ring />
-        <div>
+        <div className="min-w-0">
           <p className="font-display text-xl font-bold text-white">{name}</p>
           <p className="text-xs font-semibold" style={{ color: hex }}>
             leads {wins} {wins === 1 ? 'category' : 'categories'}
           </p>
+          <PlayerBio playerId={id} place="compare" className="text-[11px] mt-0.5 max-w-[24ch]" />
         </div>
       </div>
       <p className="font-display text-6xl font-bold mt-4 leading-none" style={{ color: hex }}>

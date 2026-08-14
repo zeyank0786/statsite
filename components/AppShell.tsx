@@ -378,7 +378,7 @@ export default function AppShell({
                 </button>
                 {playerId && (
                   <Link href={`/players/${playerId}`} className="ml-1" title="Your profile">
-                    <Avatar id={playerId} name={playerName} size={34} ring />
+                    <Avatar id={playerId} name={playerName} size={34} ring profileCard={false} />
                   </Link>
                 )}
               </div>

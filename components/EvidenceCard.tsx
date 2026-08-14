@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Avatar from './Avatar';
+import PlayerBio from './PlayerBio';
 import { getCategoryMeta } from '@/lib/categories';
 import { getUserColorHex } from '@/lib/userColors';
 import { cldImage, cldThumb, cldVideoThumb } from '@/lib/cloudinary';
@@ -113,6 +114,7 @@ export default function EvidenceCard({
           <Avatar id={post.playerId} name={post.playerName} size={26} />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-white truncate leading-tight">{post.playerName}</span>
+            <PlayerBio playerId={post.playerId} place="feeds" className="text-[10px]" />
             <span className="block text-[10px]" style={{ color: 'var(--text-secondary)' }}>
               {relativeTime(post.createdAt)}
             </span>

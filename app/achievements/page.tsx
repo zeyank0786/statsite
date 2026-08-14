@@ -123,7 +123,7 @@ export default function AchievementsPage() {
                 background: active ? `${hex}1f` : 'transparent',
               }}
             >
-              <Avatar id={p.id} name={p.username} size={22} />
+              <Avatar id={p.id} name={p.username} size={22} profileCard={false} />
               {p.username}
               <span
                 className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"

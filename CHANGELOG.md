@@ -80,10 +80,19 @@ It's under Compare, or "Past You" in the menu.
 Settings, then Profile:
 • Pick your own colour — it follows you onto every chart, leaderboard and share
   card in the app
-• Upload a proper profile picture instead of your initials
-• Add a banner and a one-line bio
+• Upload a proper profile picture instead of your initials, then drag it around
+  and pinch to zoom until it's framed how you want. Same for your banner. You
+  can go back and re-frame either one any time without uploading it again.
+• Add a one-line bio — and pick where it shows up. The leaderboard, your posts
+  on the message board and evidence, the compare screen, and the little card
+  people get when they hover you. Each one has its own switch, so you can put
+  it everywhere or nowhere.
 • Wear an achievement as a title next to your name (only ones you've actually
   earned, obviously)
+
+Hover anyone's avatar — or tap it on your phone — and you'll get a quick card
+with their picture, banner, title and bio, without leaving whatever page you're
+on.
 
 Colours are first come first served — if someone's already got it, it'll tell
 you.
@@ -154,6 +163,42 @@ card; colours already claimed by someone else are blocked, since two people
 sharing one makes them indistinguishable everywhere. Titles can only be
 achievements you've actually earned — verified server-side, not trusted from
 the client.
+
+**Cropping is non-destructive.** Pictures and banners keep their full upload;
+what's stored is a crop box as four fractions of the source (`avatarCrop`,
+`bannerCrop` — `"x,y,w,h"`), applied by Cloudinary at delivery time via a
+`c_crop` component ahead of the existing `c_fill`. So a photo can be re-framed
+forever without being re-uploaded, and the framing follows it to every render
+site — avatars, hover cards, the profile hero, OG share cards — because they
+all go through `cldThumb` / `cldBanner`. The editor (`ImageCropper`) is a fixed
+frame with the image panning and scaling behind it, so the viewport *is* the
+crop; drag, pinch, scroll or slider, no new dependencies. One gotcha worth
+knowing: Cloudinary reads a relative dimension of exactly `1` as **one pixel**,
+not 100%, so a full-frame crop is clamped to `0.9999`.
+
+**Bios show in four more places, each with its own toggle.** Leaderboard, the
+message board and evidence feeds, the hover card, and compare + share cards —
+listed once in `lib/bioPlaces.ts` (its own module because `lib/profile` reaches
+for the database, and the settings UI is a client component). The column stores
+the places a player has switched **off**, not on, so a bio shows everywhere by
+default and a place added later starts on for everyone instead of silently
+missing. `PlayerBio` is the only component that reads the toggle, so adding a
+place is a key plus a drop-in. Everyone sees whatever you've enabled — there's
+no per-viewer privacy layer here, same as the profile page has always been.
+
+**Hover cards.** `ProfileHoverCard` wraps `Avatar` by default (opt out with
+`profileCard={false}`, which the pickers, autocompletes and page-header avatars
+do) and portals to `document.body`, since avatars sit inside cards and table
+cells with `overflow: hidden`. On touch there's no hover, so the first tap opens
+the card and swallows the click that would have followed the link underneath.
+
+Two related fixes fell out of this: saving your profile used to call
+`setPlayerProfiles` / `setCustomColors` with just yourself, which **wiped
+everyone else's** picture and colour from the registry until the next full load
+— now `upsertPlayerProfile` / `setCustomColor` merge a single player. And the
+registry now notifies subscribers (`useProfileRegistry`), so identities that
+arrive from AppShell's effect after a page has painted actually repaint it,
+instead of relying on an unrelated re-render happening along.
 
 ### Compare to past you — `/wayback`
 

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
+import PlayerBio from '@/components/PlayerBio';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, CATEGORY_ORDER } from '@/lib/categories';
 import { CrownIcon, TrendUpIcon, TrendDownIcon, AwardIcon, ZapIcon } from '@/components/icons';
@@ -95,6 +96,7 @@ export default function LeaderboardView({
                       </span>
                     )}
                   </p>
+                  <PlayerBio playerId={player.id} place="leaderboard" className="text-[11px] mt-0.5" />
                   <p className="font-display text-4xl font-bold mt-2" style={{ color: hex }}>
                     <CountUp value={player.overall} decimals={1} />
                   </p>
@@ -243,12 +245,17 @@ export default function LeaderboardView({
                     <td className="px-4 py-4">
                       <span className="flex items-center gap-2.5">
                         <Avatar id={player.id} name={player.username} size={30} />
-                        <span className="font-semibold text-white">{player.username}</span>
-                        {player.id === currentPlayerId && (
-                          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: `${hex}22`, color: hex }}>
-                            you
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-2">
+                            <span className="font-semibold text-white">{player.username}</span>
+                            {player.id === currentPlayerId && (
+                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ background: `${hex}22`, color: hex }}>
+                                you
+                              </span>
+                            )}
                           </span>
-                        )}
+                          <PlayerBio playerId={player.id} place="leaderboard" className="text-[11px] max-w-[26ch]" />
+                        </span>
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right font-display font-bold text-lg" style={{ color: hex }}>

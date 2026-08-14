@@ -6,7 +6,7 @@ import { fetchAllPlayerStats, buildPlayerAggregates } from '@/lib/serverStats';
 import { getCategoryMeta, getStatTier, categoryRadarValue } from '@/lib/categories';
 import { setKnownRoster, setCustomColors, getUserColorHex, getInitials } from '@/lib/userColors';
 import { loadDisplayFont } from '@/lib/ogFont';
-import { getAllProfiles } from '@/lib/profile';
+import { bioVisibleIn, getAllProfiles } from '@/lib/profile';
 import { cldThumb } from '@/lib/cloudinary';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,11 @@ export async function GET(
     const rank = aggregates.findIndex((p) => p.id === playerId) + 1;
     const accent = getUserColorHex(playerId);
     const overall = player.overall;
-    const avatarUrl = profiles.find((p) => p.playerId === playerId)?.avatarUrl || null;
+    const profile = profiles.find((p) => p.playerId === playerId) || null;
+    const avatarUrl = profile?.avatarUrl || null;
+    const avatarCrop = profile?.avatarCrop || null;
+    // Their chosen framing, and their bio only if they've left share cards on.
+    const bio = profile && bioVisibleIn(profile, 'compare') ? profile.bio : null;
 
     const topStats = player.categories
       .flatMap((c) => c.stats.map((s) => ({ ...s, categoryCode: c.code })))
@@ -147,7 +151,7 @@ export async function GET(
                     than layered inside the initials circle. */}
                 {avatarUrl ? (
                   <img
-                    src={cldThumb(avatarUrl, 152)}
+                    src={cldThumb(avatarUrl, 152, avatarCrop)}
                     alt=""
                     width={76}
                     height={76}
@@ -174,13 +178,19 @@ export async function GET(
                 <div
                   style={{
                     display: 'flex',
+                    flexDirection: 'column',
                     marginLeft: 20,
-                    fontSize: 52,
-                    fontWeight: 700,
-                    letterSpacing: -1.5,
+                    maxWidth: 460,
                   }}
                 >
-                  {player.username}
+                  <div style={{ display: 'flex', fontSize: 52, fontWeight: 700, letterSpacing: -1.5 }}>
+                    {player.username}
+                  </div>
+                  {bio && (
+                    <div style={{ display: 'flex', fontSize: 19, color: '#a3a7b0', marginTop: 4 }}>
+                      {bio.length > 78 ? `${bio.slice(0, 77)}…` : bio}
+                    </div>
+                  )}
                 </div>
               </div>
 

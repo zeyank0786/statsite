@@ -352,7 +352,7 @@ export default function EvidenceBoardPage() {
                     className="glass p-3.5 mb-3 flex items-center gap-2.5 w-full text-left hover:bg-white/[0.03] transition"
                     style={{ borderTop: `3px solid ${hex}`, backgroundColor: 'rgba(16,16,24,0.92)' }}
                   >
-                    <Avatar id={player.id} name={player.username} size={32} />
+                    <Avatar id={player.id} name={player.username} size={32} profileCard={false} />
                     <div className="min-w-0 flex-1">
                       <p className="font-display font-bold text-white truncate">{player.username}</p>
                       <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>

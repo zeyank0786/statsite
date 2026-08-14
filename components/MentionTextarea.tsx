@@ -142,7 +142,7 @@ export default function MentionTextarea({
                 i === highlight ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]'
               }`}
             >
-              <Avatar id={p.id} name={p.username} size={22} />
+              <Avatar id={p.id} name={p.username} size={22} profileCard={false} />
               <span className="text-sm text-white">{p.username}</span>
             </button>
           ))}

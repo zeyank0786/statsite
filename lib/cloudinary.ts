@@ -50,14 +50,78 @@ function insertTransform(url: string, transform: string): string {
   return url.slice(0, insertAt) + transform + '/' + url.slice(insertAt);
 }
 
+/**
+ * A crop rectangle as fractions of the source image (0–1), so it survives the
+ * original being re-encoded or served at any size. Stored on the profile rather
+ * than baked into the file: the full upload is kept, the crop is applied at
+ * delivery, and re-adjusting it later never needs the photo again.
+ */
+export interface CropBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+/** "x,y,w,h" → a crop box, or null if it isn't four sane numbers. */
+export function parseCrop(value: string | null | undefined): CropBox | null {
+  if (typeof value !== 'string') return null;
+  const parts = value.split(',').map((p) => Number(p.trim()));
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [x, y, w, h] = parts;
+  // A zero-size box would render nothing — treat it as "no crop" instead.
+  if (w <= 0 || h <= 0) return null;
+  return {
+    x: clamp01(x),
+    y: clamp01(y),
+    // Cloudinary reads a relative dimension of exactly 1 as ONE PIXEL, not
+    // 100% — so a full-frame crop has to stop just short of the edge.
+    w: Math.min(0.9999, Math.max(0.01, w)),
+    h: Math.min(0.9999, Math.max(0.01, h)),
+  };
+}
+
+export function serialiseCrop(box: CropBox): string {
+  return [box.x, box.y, box.w, box.h].map((n) => round4(n)).join(',');
+}
+
+/** Leading `c_crop` component (with trailing slash), or '' when uncropped. */
+function cropPrefix(crop: CropBox | string | null | undefined): string {
+  const box = typeof crop === 'string' || crop == null ? parseCrop(crop) : crop;
+  if (!box) return '';
+  const n = (v: number) => round4(v).toFixed(4);
+  return `c_crop,x_${n(box.x)},y_${n(box.y)},w_${n(box.w)},h_${n(box.h)}/`;
+}
+
 /** Full-size optimized image (evidence board posts, lightboxes). */
-export function cldImage(url: string, maxSize = 1600): string {
-  return insertTransform(url, `c_limit,w_${maxSize},h_${maxSize},q_auto,f_auto`);
+export function cldImage(url: string, maxSize = 1600, crop?: CropBox | string | null): string {
+  return insertTransform(url, `${cropPrefix(crop)}c_limit,w_${maxSize},h_${maxSize},q_auto,f_auto`);
 }
 
 /** Small square image thumbnail (grids, lists). */
-export function cldThumb(url: string, size = 96): string {
-  return insertTransform(url, `c_fill,w_${size},h_${size},q_auto,f_auto`);
+export function cldThumb(url: string, size = 96, crop?: CropBox | string | null): string {
+  return insertTransform(url, `${cropPrefix(crop)}c_fill,w_${size},h_${size},q_auto,f_auto`);
+}
+
+/** Banners are cropped 3:1 everywhere they're shown; avatars 1:1. */
+export const BANNER_ASPECT = 3;
+export const AVATAR_ASPECT = 1;
+
+/**
+ * Wide image at a fixed aspect — banners. The player's crop decides what's in
+ * frame; `c_fill` then squeezes that region into the slot it's rendered in.
+ */
+export function cldBanner(
+  url: string,
+  width = 1200,
+  crop?: CropBox | string | null,
+  aspect = BANNER_ASPECT
+): string {
+  const height = Math.round(width / aspect);
+  return insertTransform(url, `${cropPrefix(crop)}c_fill,w_${width},h_${height},q_auto,f_auto`);
 }
 
 /**

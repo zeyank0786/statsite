@@ -14,7 +14,7 @@ import { getUserColorHex, getUserColorRgb } from '@/lib/userColors';
 import { ProfileSkeleton } from '@/components/Skeleton';
 import Odometer from '@/components/Odometer';
 import ShareCardButton from '@/components/ShareCardButton';
-import { cldImage } from '@/lib/cloudinary';
+import { cldBanner } from '@/lib/cloudinary';
 import { orderCategories, getCategoryMeta, getValueColor, scaleMax, categoryRadarValue } from '@/lib/categories';
 import LockBadge from '@/components/LockBadge';
 import TierBadge from '@/components/TierBadge';
@@ -71,6 +71,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
   const [createdAt, setCreatedAt] = useState('');
   const [profile, setProfile] = useState<{
     bannerUrl: string | null;
+    bannerCrop: string | null;
     bio: string | null;
     flairLabel: string | null;
   } | null>(null);
@@ -281,7 +282,7 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
           <div
             className="absolute inset-x-0 top-0 h-40 pointer-events-none"
             style={{
-              background: `url(${cldImage(profile.bannerUrl, 1400)}) center/cover`,
+              background: `url(${cldBanner(profile.bannerUrl, 1400, profile.bannerCrop)}) center/cover`,
               maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)',
               WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)',
             }}
@@ -301,6 +302,9 @@ export default function PlayerProfile({ params }: { params: Promise<{ id: string
                 size={64}
                 ring
                 morphKey={`player-avatar-${playerId}`}
+                /* Already on their profile — a card pointing back to it would
+                   just get in the way of the morph. */
+                profileCard={false}
               />
               <div className="min-w-0">
                 {editingName ? (

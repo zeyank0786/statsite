@@ -175,7 +175,7 @@ export default function EvidenceToolbar({
                       background: on ? 'rgba(249,115,22,0.12)' : 'transparent',
                     }}
                   >
-                    <Avatar id={p.id} name={p.username} size={18} />
+                    <Avatar id={p.id} name={p.username} size={18} profileCard={false} />
                     {p.username}
                     {on && <CheckIcon size={12} />}
                   </button>

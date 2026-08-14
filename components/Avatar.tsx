@@ -1,8 +1,16 @@
 'use client';
 
 import { ViewTransition } from 'react';
-import { getUserColorHex, getUserColorBg, getInitials, getUserAvatarUrl } from '@/lib/userColors';
+import {
+  getUserColorHex,
+  getUserColorBg,
+  getInitials,
+  getUserAvatarUrl,
+  getUserAvatarCrop,
+} from '@/lib/userColors';
+import { useProfileRegistry } from '@/lib/useProfileRegistry';
 import { cldThumb } from '@/lib/cloudinary';
+import ProfileHoverCard from './ProfileHoverCard';
 
 interface AvatarProps {
   id: string;
@@ -25,6 +33,17 @@ interface AvatarProps {
    * settings preview, which has to show a pending upload before it's saved.
    */
   imageUrl?: string | null;
+  /**
+   * Override the registered crop, as "x,y,w,h". Only meaningful alongside
+   * `imageUrl` — again, for previewing a crop that isn't saved yet.
+   */
+  imageCrop?: string | null;
+  /**
+   * Show the profile popover on hover/tap. On by default, since an avatar is
+   * the natural handle for "who is this?" — turn it off inside pickers and
+   * previews, where the avatar is a control rather than a person.
+   */
+  profileCard?: boolean;
 }
 
 export default function Avatar({
@@ -35,11 +54,18 @@ export default function Avatar({
   className = '',
   morphKey,
   imageUrl,
+  imageCrop,
+  profileCard = true,
 }: AvatarProps) {
+  // Pictures, crops and colours all arrive from AppShell after first paint.
+  useProfileRegistry();
+
   const hex = getUserColorHex(id);
   // `undefined` means "use whatever is registered"; an explicit null means
   // "show initials", which is how the settings preview clears a picture.
-  const picture = imageUrl === undefined ? getUserAvatarUrl(id) : imageUrl;
+  const overriding = imageUrl !== undefined;
+  const picture = overriding ? imageUrl : getUserAvatarUrl(id);
+  const crop = overriding ? imageCrop ?? null : getUserAvatarCrop(id);
 
   const el = (
     <span
@@ -58,10 +84,11 @@ export default function Avatar({
       title={name}
     >
       {picture ? (
-        // Square-cropped by Cloudinary at twice the rendered size, so it stays
-        // sharp on retina without shipping a full-resolution photo.
+        // Cropped to the player's chosen framing, then squared off by
+        // Cloudinary at twice the rendered size, so it stays sharp on retina
+        // without shipping a full-resolution photo.
         <img
-          src={cldThumb(picture, Math.round(size * 2))}
+          src={cldThumb(picture, Math.round(size * 2), crop)}
           alt=""
           width={size}
           height={size}
@@ -73,11 +100,21 @@ export default function Avatar({
     </span>
   );
 
-  if (!morphKey) return el;
-
-  return (
+  const morphed = morphKey ? (
     <ViewTransition name={morphKey} share="morph">
       {el}
     </ViewTransition>
+  ) : (
+    el
+  );
+
+  // A preview of an unsaved picture isn't a person you can look up, so it never
+  // gets a card.
+  if (!profileCard || overriding || !id) return morphed;
+
+  return (
+    <ProfileHoverCard playerId={id} name={name}>
+      {morphed}
+    </ProfileHoverCard>
   );
 }

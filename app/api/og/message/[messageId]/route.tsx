@@ -61,7 +61,9 @@ export async function GET(
     const authorId = String(message.authorId);
     const authorName = String(message.authorName);
     const accent = getUserColorHex(authorId);
-    const authorAvatar = profiles.find((p) => p.playerId === authorId)?.avatarUrl || null;
+    const authorProfile = profiles.find((p) => p.playerId === authorId) || null;
+    const authorAvatar = authorProfile?.avatarUrl || null;
+    const authorAvatarCrop = authorProfile?.avatarCrop || null;
 
     // Milestones are stored as JSON on a 'milestone' mention row.
     let milestone: { kind?: string; label?: string; tier?: string; value?: number; hex?: string } | null =
@@ -274,7 +276,7 @@ export async function GET(
                 inside the initials circle. */}
             {authorAvatar ? (
               <img
-                src={cldThumb(authorAvatar, 128)}
+                src={cldThumb(authorAvatar, 128, authorAvatarCrop)}
                 alt=""
                 width={64}
                 height={64}

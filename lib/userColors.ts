@@ -88,6 +88,22 @@ export function setCustomColors(colors: Record<string, string | null | undefined
     if (!/^#[0-9a-f]{6}$/i.test(hex.trim())) continue;
     custom.set(id, hexToEntry(hex));
   }
+  bumpRegistry();
+}
+
+/**
+ * Register one player's pick, leaving everyone else's alone — for settings,
+ * where the full map isn't in hand. Pass null to fall back to their automatic
+ * colour.
+ */
+export function setCustomColor(userId: string, hex: string | null | undefined) {
+  if (!userId) return;
+  if (typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex.trim())) {
+    custom.set(userId, hexToEntry(hex));
+  } else {
+    custom.delete(userId);
+  }
+  bumpRegistry();
 }
 
 /**
@@ -122,6 +138,7 @@ export function setKnownRoster(userIds: string[]) {
       overflow++;
     }
   }
+  bumpRegistry();
 }
 
 function entryFor(userId: string): ColorEntry {
@@ -130,32 +147,102 @@ function entryFor(userId: string): ColorEntry {
 
 /**
  * The rest of a player's cosmetic identity, registered the same way colours
- * are so any component can render a picture or title without prop-drilling a
- * profile through the tree.
+ * are so any component can render a picture, banner, title or bio without
+ * prop-drilling a profile through the tree.
  */
-const avatars = new Map<string, string>();
-const flairs = new Map<string, string>();
+export interface RegisteredProfile {
+  playerId: string;
+  avatarUrl?: string | null;
+  avatarCrop?: string | null;
+  bannerUrl?: string | null;
+  bannerCrop?: string | null;
+  bio?: string | null;
+  /** Places the player switched their bio off; absent means "everywhere". */
+  bioHiddenPlaces?: string[] | null;
+  flairLabel?: string | null;
+}
 
-export function setPlayerProfiles(
-  profiles: { playerId: string; avatarUrl?: string | null; flairLabel?: string | null }[]
-) {
-  avatars.clear();
-  flairs.clear();
+const profileRegistry = new Map<string, RegisteredProfile>();
+
+/**
+ * Registry changes land from an effect, after the pages that read them have
+ * already painted. Components subscribe through `useProfileRegistry` so a late
+ * arrival repaints them instead of waiting for an unrelated re-render.
+ */
+let registryVersion = 0;
+const registryListeners = new Set<() => void>();
+
+function bumpRegistry() {
+  registryVersion++;
+  for (const listener of registryListeners) listener();
+}
+
+export function subscribeToProfiles(listener: () => void): () => void {
+  registryListeners.add(listener);
+  return () => {
+    registryListeners.delete(listener);
+  };
+}
+
+export function getProfilesVersion(): number {
+  return registryVersion;
+}
+
+export function setPlayerProfiles(profiles: RegisteredProfile[]) {
+  profileRegistry.clear();
   for (const p of profiles) {
     if (!p.playerId) continue;
-    if (p.avatarUrl) avatars.set(p.playerId, p.avatarUrl);
-    if (p.flairLabel) flairs.set(p.playerId, p.flairLabel);
+    profileRegistry.set(String(p.playerId), p);
   }
+  bumpRegistry();
+}
+
+/**
+ * Register one player without disturbing the rest — what settings uses after a
+ * save, so the header avatar and every chart repaint immediately. (Calling
+ * setPlayerProfiles with a single entry would wipe everyone else's identity
+ * until the next full load.)
+ */
+export function upsertPlayerProfile(profile: RegisteredProfile) {
+  if (!profile.playerId) return;
+  profileRegistry.set(String(profile.playerId), profile);
+  bumpRegistry();
+}
+
+export function getPlayerProfile(userId: string): RegisteredProfile | null {
+  return profileRegistry.get(userId) || null;
 }
 
 /** Uploaded profile picture, or null when they're still on initials. */
 export function getUserAvatarUrl(userId: string): string | null {
-  return avatars.get(userId) || null;
+  return profileRegistry.get(userId)?.avatarUrl || null;
+}
+
+/** Their chosen framing for that picture, as a "x,y,w,h" fraction string. */
+export function getUserAvatarCrop(userId: string): string | null {
+  return profileRegistry.get(userId)?.avatarCrop || null;
+}
+
+export function getUserBanner(userId: string): { url: string; crop: string | null } | null {
+  const profile = profileRegistry.get(userId);
+  if (!profile?.bannerUrl) return null;
+  return { url: profile.bannerUrl, crop: profile.bannerCrop || null };
+}
+
+/**
+ * A player's bio, but only where they've allowed it. Pass the place you're
+ * rendering in; omit it for the profile page, which always shows the bio.
+ */
+export function getUserBio(userId: string, place?: string): string | null {
+  const profile = profileRegistry.get(userId);
+  if (!profile?.bio) return null;
+  if (place && (profile.bioHiddenPlaces || []).includes(place)) return null;
+  return profile.bio;
 }
 
 /** The earned title a player chose to wear, or null. */
 export function getUserFlair(userId: string): string | null {
-  return flairs.get(userId) || null;
+  return profileRegistry.get(userId)?.flairLabel || null;
 }
 
 /** The palette people choose from in settings — the app's own accent family. */

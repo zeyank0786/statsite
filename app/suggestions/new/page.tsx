@@ -419,7 +419,7 @@ function NewSuggestionContent() {
                     className="flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium text-white"
                     style={{ borderColor: hex, background: `${hex}1f` }}
                   >
-                    <Avatar id={subjectId} name={subj?.username || '?'} size={22} />
+                    <Avatar id={subjectId} name={subj?.username || '?'} size={22} profileCard={false} />
                     {subj?.username || 'Subject'}
                   </span>
                 );
@@ -445,7 +445,7 @@ function NewSuggestionContent() {
                     background: active ? `${hex}1f` : 'transparent',
                   }}
                 >
-                  <Avatar id={p.id} name={p.username} size={22} />
+                  <Avatar id={p.id} name={p.username} size={22} profileCard={false} />
                   {p.username}
                 </button>
               );

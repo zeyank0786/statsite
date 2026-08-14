@@ -3,14 +3,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Avatar from './Avatar';
-import { CheckIcon, TrashIcon, UploadIcon, AwardIcon } from './icons';
+import ImageCropper from './ImageCropper';
+import { CheckIcon, TrashIcon, UploadIcon, AwardIcon, CropIcon } from './icons';
 import {
   PICKABLE_COLORS,
   getUserColorHex,
-  setCustomColors,
-  setPlayerProfiles,
+  setCustomColor,
+  upsertPlayerProfile,
 } from '@/lib/userColors';
-import { cloudinaryConfigured, fileTooLargeError, uploadToCloudinary, cldImage } from '@/lib/cloudinary';
+import { BIO_PLACES } from '@/lib/bioPlaces';
+import {
+  cloudinaryConfigured,
+  fileTooLargeError,
+  uploadToCloudinary,
+  cldBanner,
+  AVATAR_ASPECT,
+  BANNER_ASPECT,
+} from '@/lib/cloudinary';
 
 /**
  * Profile customisation: accent colour, profile picture, banner, bio and an
@@ -18,8 +27,9 @@ import { cloudinaryConfigured, fileTooLargeError, uploadToCloudinary, cldImage }
  *
  * All cosmetic, so it's self-served — this is the one part of a player's
  * identity that doesn't go through the crew. Images upload to Cloudinary the
- * moment they're picked (so the preview is real), but nothing is persisted
- * until Save, which sends only what actually changed.
+ * moment they're picked (so the preview is real) and the crop editor opens
+ * straight after, but nothing is persisted until Save, which sends only what
+ * actually changed.
  */
 
 const MAX_BIO = 160;
@@ -29,23 +39,41 @@ interface Profile {
   accentColor: string | null;
   avatarUrl: string | null;
   avatarPublicId: string | null;
+  avatarCrop: string | null;
   bannerUrl: string | null;
   bannerPublicId: string | null;
+  bannerCrop: string | null;
   bio: string | null;
+  bioHiddenPlaces: string[];
   flairAchievementId: string | null;
   flairLabel: string | null;
 }
 
-const EMPTY: Omit<Profile, 'playerId'> = {
+type Draft = Omit<Profile, 'playerId'>;
+
+const EMPTY: Draft = {
   accentColor: null,
   avatarUrl: null,
   avatarPublicId: null,
+  avatarCrop: null,
   bannerUrl: null,
   bannerPublicId: null,
+  bannerCrop: null,
   bio: null,
+  bioHiddenPlaces: [],
   flairAchievementId: null,
   flairLabel: null,
 };
+
+/** bioHiddenPlaces is an array, so a plain !== would call every save dirty. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    const x = Array.isArray(a) ? [...a].sort() : [];
+    const y = Array.isArray(b) ? [...b].sort() : [];
+    return x.length === y.length && x.every((v, i) => v === y[i]);
+  }
+  return a === b;
+}
 
 export default function ProfileCustomizer() {
   const { data: session, status } = useSession();
@@ -56,12 +84,13 @@ export default function ProfileCustomizer() {
       'You'
   );
 
-  const [draft, setDraft] = useState<Omit<Profile, 'playerId'>>(EMPTY);
-  const [saved, setSaved] = useState<Omit<Profile, 'playerId'>>(EMPTY);
+  const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [saved, setSaved] = useState<Draft>(EMPTY);
   const [takenColors, setTakenColors] = useState<string[]>([]);
   const [flairOptions, setFlairOptions] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'avatar' | 'banner' | 'saving' | null>(null);
+  const [cropping, setCropping] = useState<'avatar' | 'banner' | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -75,7 +104,7 @@ export default function ProfileCustomizer() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
-        const mine: Omit<Profile, 'playerId'> = data.me ? { ...EMPTY, ...data.me } : EMPTY;
+        const mine: Draft = data.me ? { ...EMPTY, ...data.me } : EMPTY;
         setDraft(mine);
         setSaved(mine);
         setTakenColors(Array.isArray(data.takenColors) ? data.takenColors : []);
@@ -88,7 +117,9 @@ export default function ProfileCustomizer() {
     };
   }, [status]);
 
-  const dirty = (Object.keys(EMPTY) as (keyof typeof EMPTY)[]).some((k) => draft[k] !== saved[k]);
+  const dirty = (Object.keys(EMPTY) as (keyof Draft)[]).some(
+    (k) => !sameValue(draft[k], saved[k])
+  );
   // The live preview has to reflect the draft, not the registry — the registry
   // still holds whatever was saved last.
   const previewHex = draft.accentColor || (playerId ? getUserColorHex(playerId) : '#22d3ee');
@@ -110,15 +141,25 @@ export default function ProfileCustomizer() {
       const uploaded = await uploadToCloudinary(file);
       setDraft((prev) =>
         kind === 'avatar'
-          ? { ...prev, avatarUrl: uploaded.url, avatarPublicId: uploaded.publicId }
-          : { ...prev, bannerUrl: uploaded.url, bannerPublicId: uploaded.publicId }
+          ? { ...prev, avatarUrl: uploaded.url, avatarPublicId: uploaded.publicId, avatarCrop: null }
+          : { ...prev, bannerUrl: uploaded.url, bannerPublicId: uploaded.publicId, bannerCrop: null }
       );
+      // Straight into framing — an uncropped upload is just a centred guess.
+      setCropping(kind);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setBusy(null);
     }
   };
+
+  const toggleBioPlace = (key: string) =>
+    setDraft((prev) => {
+      const hidden = new Set(prev.bioHiddenPlaces);
+      if (hidden.has(key)) hidden.delete(key);
+      else hidden.add(key);
+      return { ...prev, bioHiddenPlaces: [...hidden] };
+    });
 
   const save = async () => {
     setBusy('saving');
@@ -128,8 +169,8 @@ export default function ProfileCustomizer() {
       // Send only what changed, so a colour tweak can't clobber a picture
       // someone else's tab saved a second earlier.
       const patch: Record<string, unknown> = {};
-      for (const key of Object.keys(EMPTY) as (keyof typeof EMPTY)[]) {
-        if (draft[key] !== saved[key]) patch[key] = draft[key];
+      for (const key of Object.keys(EMPTY) as (keyof Draft)[]) {
+        if (!sameValue(draft[key], saved[key])) patch[key] = draft[key];
       }
       const res = await fetch('/api/profile', {
         method: 'PATCH',
@@ -141,14 +182,14 @@ export default function ProfileCustomizer() {
         setError(data.error || 'Failed to save profile');
         return;
       }
-      const next: Omit<Profile, 'playerId'> = { ...EMPTY, ...data.profile };
+      const next: Draft = { ...EMPTY, ...data.profile };
       setDraft(next);
       setSaved(next);
       // Update the app-wide registry immediately so the header avatar and every
       // chart repaint without a reload.
       if (playerId) {
-        setCustomColors({ [playerId]: next.accentColor });
-        setPlayerProfiles([{ playerId, avatarUrl: next.avatarUrl, flairLabel: next.flairLabel }]);
+        setCustomColor(playerId, next.accentColor);
+        upsertPlayerProfile({ playerId, ...next });
       }
       setSuccess('Profile saved');
       setTimeout(() => setSuccess(''), 2500);
@@ -164,6 +205,7 @@ export default function ProfileCustomizer() {
   }
 
   const takenSet = new Set(takenColors.map((c) => c.toLowerCase()));
+  const croppingUrl = cropping === 'avatar' ? draft.avatarUrl : cropping === 'banner' ? draft.bannerUrl : null;
 
   return (
     <div className="glass card-shadow p-6 md:p-8 max-w-2xl mt-5 animate-rise">
@@ -182,13 +224,19 @@ export default function ProfileCustomizer() {
           className="h-24 w-full"
           style={{
             background: draft.bannerUrl
-              ? `url(${cldImage(draft.bannerUrl, 900)}) center/cover`
+              ? `url(${cldBanner(draft.bannerUrl, 900, draft.bannerCrop)}) center/cover`
               : `linear-gradient(120deg, ${previewHex}55, transparent 70%)`,
           }}
         />
         <div className="px-4 pb-4 -mt-8 flex items-end gap-3">
           <div style={{ boxShadow: `0 0 0 3px var(--background)`, borderRadius: 999 }}>
-            <Avatar id={playerId} name={playerName} size={64} imageUrl={draft.avatarUrl} />
+            <Avatar
+              id={playerId}
+              name={playerName}
+              size={64}
+              imageUrl={draft.avatarUrl}
+              imageCrop={draft.avatarCrop}
+            />
           </div>
           <div className="min-w-0 pb-1">
             <p className="font-display font-bold text-white leading-tight truncate">
@@ -252,7 +300,7 @@ export default function ProfileCustomizer() {
           Image uploads need the Cloudinary env vars — colour, bio and title still work.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
           {(
             [
               ['avatar', 'Profile picture', draft.avatarUrl, avatarInput] as const,
@@ -283,22 +331,39 @@ export default function ProfileCustomizer() {
                   {busy === kind ? 'Uploading…' : url ? 'Replace' : 'Upload'}
                 </button>
                 {url && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft((p) =>
-                        kind === 'avatar'
-                          ? { ...p, avatarUrl: null, avatarPublicId: null }
-                          : { ...p, bannerUrl: null, bannerPublicId: null }
-                      )
-                    }
-                    className="btn-ghost text-xs px-2.5"
-                    title={`Remove ${label.toLowerCase()}`}
-                  >
-                    <TrashIcon size={13} />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCropping(kind)}
+                      className="btn-ghost text-xs px-2.5"
+                      title={`Reposition ${label.toLowerCase()}`}
+                    >
+                      <CropIcon size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft((p) =>
+                          kind === 'avatar'
+                            ? { ...p, avatarUrl: null, avatarPublicId: null, avatarCrop: null }
+                            : { ...p, bannerUrl: null, bannerPublicId: null, bannerCrop: null }
+                        )
+                      }
+                      className="btn-ghost text-xs px-2.5"
+                      title={`Remove ${label.toLowerCase()}`}
+                    >
+                      <TrashIcon size={13} />
+                    </button>
+                  </>
                 )}
               </div>
+              {url && (
+                <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  {(kind === 'avatar' ? draft.avatarCrop : draft.bannerCrop)
+                    ? 'Cropped — tap the crop icon to re-frame.'
+                    : 'Centred by default — tap the crop icon to frame it.'}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -312,16 +377,55 @@ export default function ProfileCustomizer() {
         rows={2}
         onChange={(e) => setDraft((p) => ({ ...p, bio: e.target.value }))}
         className="field resize-none text-sm"
-        placeholder="One line about you — shows on your profile."
+        placeholder="One line about you — the crew sees this."
       />
-      <p className="text-[11px] mt-1 mb-6 text-right" style={{ color: 'var(--text-secondary)' }}>
+      <p className="text-[11px] mt-1 mb-4 text-right" style={{ color: 'var(--text-secondary)' }}>
         {(draft.bio || '').length}/{MAX_BIO}
       </p>
+
+      {/* Where the bio shows */}
+      <p className="text-sm font-semibold text-white mb-1">Where your bio shows</p>
+      <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+        Everyone in the crew sees it wherever you switch it on. Your profile page always shows it.
+      </p>
+      <div className="rounded-xl border divide-y mb-6" style={{ borderColor: 'var(--surface-border)' }}>
+        {BIO_PLACES.map((place) => {
+          const on = !draft.bioHiddenPlaces.includes(place.key);
+          return (
+            <button
+              key={place.key}
+              type="button"
+              role="switch"
+              aria-checked={on}
+              onClick={() => toggleBioPlace(place.key)}
+              disabled={!draft.bio}
+              className="w-full flex items-center gap-3 px-3.5 py-3 text-left transition hover:bg-white/[0.03] disabled:opacity-40 disabled:hover:bg-transparent"
+              style={{ borderColor: 'var(--surface-border)' }}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-white">{place.label}</span>
+                <span className="block text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                  {place.hint}
+                </span>
+              </span>
+              <span
+                className="relative w-10 h-6 rounded-full shrink-0 transition"
+                style={{ background: on ? previewHex : 'var(--surface-border-strong)' }}
+              >
+                <span
+                  className="absolute top-1 w-4 h-4 rounded-full bg-white transition-all"
+                  style={{ left: on ? 20 : 4 }}
+                />
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* Title / flair */}
       <label className="block text-sm font-semibold text-white mb-1">Title</label>
       <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
-        Wear an achievement next to your name. Only ones you've actually earned.
+        Wear an achievement next to your name. Only ones you&apos;ve actually earned.
       </p>
       {flairOptions.length === 0 ? (
         <p
@@ -373,6 +477,23 @@ export default function ProfileCustomizer() {
       >
         {busy === 'saving' ? 'Saving…' : dirty ? 'Save profile' : 'Saved'}
       </button>
+
+      {cropping && croppingUrl && (
+        <ImageCropper
+          src={croppingUrl}
+          aspect={cropping === 'avatar' ? AVATAR_ASPECT : BANNER_ASPECT}
+          circle={cropping === 'avatar'}
+          initialCrop={cropping === 'avatar' ? draft.avatarCrop : draft.bannerCrop}
+          title={cropping === 'avatar' ? 'Frame your profile picture' : 'Frame your banner'}
+          onCancel={() => setCropping(null)}
+          onApply={(crop) => {
+            setDraft((p) =>
+              cropping === 'avatar' ? { ...p, avatarCrop: crop } : { ...p, bannerCrop: crop }
+            );
+            setCropping(null);
+          }}
+        />
+      )}
     </div>
   );
 }
