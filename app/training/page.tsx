@@ -339,7 +339,7 @@ export default function TrainingPage() {
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div
             className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-3xl border p-6 animate-rise"
-            style={{ background: 'rgba(14,14,20,0.99)', borderColor: `${playing.hex}55` }}
+            style={{ background: 'var(--overlay)', borderColor: `${playing.hex}55` }}
           >
             <div className="flex items-center gap-3 mb-5">
               <span className="text-2xl">{playing.emoji}</span>

@@ -602,7 +602,7 @@ export default function SuggestionsPage() {
       {selectMode && selected.size > 0 && (
         <div
           className="fixed bottom-20 md:bottom-6 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 z-40 rounded-2xl border backdrop-blur-xl p-3 flex items-center gap-2.5 justify-center flex-wrap card-shadow-lg"
-          style={{ backgroundColor: 'rgba(14,14,20,0.95)', borderColor: 'rgba(168,85,247,0.5)' }}
+          style={{ backgroundColor: 'var(--overlay)', borderColor: 'rgba(168,85,247,0.5)' }}
         >
           <span className="text-sm font-semibold text-white">{selected.size} selected</span>
           <button

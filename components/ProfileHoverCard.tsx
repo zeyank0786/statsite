@@ -166,7 +166,7 @@ export default function ProfileHoverCard({
             onPointerEnter={clearTimers}
             onPointerLeave={() => close()}
           >
-            <div className="glass card-shadow overflow-hidden rounded-2xl">
+            <div className="overlay-panel card-shadow-lg overflow-hidden rounded-2xl">
               <div
                 className="h-14 w-full"
                 style={{

@@ -149,7 +149,7 @@ export default function AmbitionCelebration() {
               className="relative w-full max-w-md rounded-3xl border-2 p-8 text-center animate-rise"
               style={{
                 borderColor: 'rgba(245,196,81,0.6)',
-                background: 'linear-gradient(160deg, rgba(245,196,81,0.22), rgba(14,14,20,0.98) 60%)',
+                background: 'linear-gradient(160deg, rgba(245,196,81,0.22), var(--overlay) 60%)',
                 boxShadow: '0 0 90px rgba(245,196,81,0.4)',
               }}
             >

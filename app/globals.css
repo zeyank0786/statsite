@@ -11,6 +11,11 @@
   --surface-border: rgba(255, 255, 255, 0.09);
   --surface-border-strong: rgba(255, 255, 255, 0.16);
 
+  /* The one colour for anything that floats OVER page content — dropdowns,
+     popovers, hover cards, toasts, floating action bars. Near-opaque on
+     purpose; see .overlay-panel below for why glass doesn't work up there. */
+  --overlay: rgba(14, 14, 20, 0.98);
+
   /* Accents (aligned with rgb triplets below) */
   --accent-cyan: #22d3ee;
   --accent-pink: #ec4899;
@@ -141,6 +146,33 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-radius: 1.25rem;
+}
+
+/* Floating panels — dropdowns, popovers, hover cards, toasts.
+ *
+ * Opaque, not glass, and deliberately so. Two separate reasons:
+ *
+ * 1. A translucent panel sitting over page content leaves body text, tables
+ *    and chart lines legible straight through it. That reads as clutter, not
+ *    depth — the panel and the page compete for the same pixels.
+ *
+ * 2. backdrop-filter cannot rescue it here, which is the non-obvious half.
+ *    Every one of these panels sits inside an `animate-rise` ancestor, and
+ *    `rise` animates `transform` with fill-mode `both` — so the transform
+ *    sticks after the animation ends. A transformed element becomes a
+ *    "backdrop root": a descendant's backdrop-filter then samples only what
+ *    is inside that ancestor, which is nothing. The blur is silently dead and
+ *    the panel is exactly as see-through as its background colour alone.
+ *    Adding more blur will never fix one of these; only opacity will.
+ *
+ * `.glass` stays translucent on purpose — those cards sit in the page flow on
+ * the page background, where there is nothing behind them to bleed through.
+ * The rule of thumb: in flow, use .glass; floating above content, use this.
+ *
+ * Radius is left to the caller so existing rounded-* utilities still win. */
+.overlay-panel {
+  background-color: var(--overlay);
+  border: 1px solid var(--surface-border-strong);
 }
 
 .glass-hover {

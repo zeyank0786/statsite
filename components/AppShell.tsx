@@ -324,7 +324,7 @@ export default function AppShell({
                   {moreOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
-                      <div className="absolute right-0 top-full mt-2 z-50 w-52 glass-strong card-shadow-lg p-2 animate-rise">
+                      <div className="absolute right-0 top-full mt-2 z-50 w-52 overlay-panel rounded-2xl card-shadow-lg p-2 animate-rise">
                         {moreNav.map((item) => (
                           <Link
                             key={item.href}

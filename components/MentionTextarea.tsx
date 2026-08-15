@@ -124,7 +124,7 @@ export default function MentionTextarea({
       {menu && matches.length > 0 && (
         <div
           className="absolute left-0 right-0 top-full mt-1 z-30 rounded-xl border overflow-hidden card-shadow-lg max-h-56 overflow-y-auto"
-          style={{ backgroundColor: 'rgba(14,14,20,0.98)', borderColor: 'var(--surface-border-strong)' }}
+          style={{ backgroundColor: 'var(--overlay)', borderColor: 'var(--surface-border-strong)' }}
         >
           <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b" style={{ color: 'var(--text-secondary)', borderColor: 'var(--surface-border)' }}>
             Mention someone

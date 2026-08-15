@@ -97,7 +97,7 @@ export default function NudgeButton({
       {open && kinds.length > 0 && (
         <div
           className="absolute right-0 top-full mt-2 w-56 rounded-2xl border z-50 overflow-hidden card-shadow-lg"
-          style={{ backgroundColor: 'rgba(14,14,20,0.98)', borderColor: 'var(--surface-border-strong)' }}
+          style={{ backgroundColor: 'var(--overlay)', borderColor: 'var(--surface-border-strong)' }}
         >
           <div
             className="px-3.5 py-2.5 border-b flex items-center justify-between"
@@ -125,9 +125,14 @@ export default function NudgeButton({
 
       {(note || error) && (
         <span
-          className="absolute right-0 top-full mt-2 whitespace-nowrap text-xs font-semibold px-2.5 py-1.5 rounded-lg z-50"
+          className="absolute right-0 top-full mt-2 whitespace-nowrap text-xs font-semibold px-2.5 py-1.5 rounded-lg z-50 border"
           style={{
-            background: error ? 'rgba(239,68,68,0.15)' : 'rgba(52,211,153,0.15)',
+            // Tint mixed INTO the opaque overlay rather than laid over the
+            // page — a 15% wash on its own left the text behind it readable.
+            backgroundColor: error
+              ? 'color-mix(in srgb, var(--accent-red) 15%, var(--overlay))'
+              : 'color-mix(in srgb, var(--accent-green) 15%, var(--overlay))',
+            borderColor: error ? 'rgba(239,68,68,0.4)' : 'rgba(52,211,153,0.4)',
             color: error ? 'var(--accent-red)' : 'var(--accent-green)',
           }}
         >

@@ -211,7 +211,7 @@ export default function NotificationCenter() {
           ref={panelRef}
           className="fixed max-h-[70vh] overflow-y-auto rounded-2xl border z-[70] animate-rise card-shadow-lg"
           style={{
-            backgroundColor: 'rgba(14,14,20,0.98)',
+            backgroundColor: 'var(--overlay)',
             borderColor: 'var(--surface-border-strong)',
             // Right-anchored with a viewport-capped width: left edge can never
             // leave the screen regardless of breakpoint, zoom, scrollbars or
@@ -225,7 +225,7 @@ export default function NotificationCenter() {
         >
           <div
             className="sticky top-0 px-4 py-3 border-b flex items-center justify-between backdrop-blur-xl"
-            style={{ backgroundColor: 'rgba(14,14,20,0.97)', borderColor: 'var(--surface-border)' }}
+            style={{ backgroundColor: 'var(--overlay)', borderColor: 'var(--surface-border)' }}
           >
             <p className="font-display font-bold text-white text-sm">Recent updates</p>
             <button onClick={() => setOpen(false)} className="p-1 rounded-lg text-neutral-400 hover:text-white transition">
@@ -307,7 +307,7 @@ export default function NotificationCenter() {
               className="relative w-full max-w-sm rounded-3xl border-2 p-8 text-center animate-rise"
               style={{
                 borderColor: `${currentModal.hex}88`,
-                background: `linear-gradient(160deg, ${currentModal.hex}26, rgba(14,14,20,0.98) 55%)`,
+                background: `linear-gradient(160deg, ${currentModal.hex}26, var(--overlay) 55%)`,
                 boxShadow: `0 0 80px ${currentModal.hex}44`,
               }}
             >
@@ -340,7 +340,7 @@ export default function NotificationCenter() {
                 key={t.id}
                 className="rounded-xl border px-3.5 py-2.5 backdrop-blur-xl animate-rise flex items-center gap-2.5 card-shadow"
                 style={{
-                  backgroundColor: 'rgba(14,14,20,0.96)',
+                  backgroundColor: 'var(--overlay)',
                   borderColor: `${t.hex}66`,
                 }}
               >
