@@ -14,7 +14,7 @@ import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import TierBadge from '@/components/TierBadge';
 import MentionTextarea from '@/components/MentionTextarea';
 import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
-import { ChevronLeftIcon, CheckIcon, ImageIcon, XIcon } from '@/components/icons';
+import { ChevronLeftIcon, CheckIcon, ImageIcon, XIcon, SparklesIcon } from '@/components/icons';
 
 interface Player {
   id: string;
@@ -60,6 +60,25 @@ const DELTAS = [
   { value: 2, label: '+2', note: 'exceptional gain' },
 ];
 
+/** One drafted change from /api/evidence/[id]/stat-hints. */
+interface StatHint {
+  statId: string;
+  code: string;
+  label: string;
+  delta: number;
+  why: string;
+  value: number;
+  categoryCode: string;
+  categoryLabel: string;
+}
+
+/**
+ * Mirrors MIN_CAPTION_LENGTH in lib/statHints. The server refuses anything
+ * shorter; checking here too means the button is disabled with a reason
+ * instead of failing after a press.
+ */
+const HINT_MIN_CAPTION = 40;
+
 function NewSuggestionContent() {
   const { status, data: session } = useSession();
   const router = useRouter();
@@ -80,6 +99,18 @@ function NewSuggestionContent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // AI hints — a drafted starting point read off one evidence post's caption.
+  // Everything it returns is editable in steps 3 and 4 like anything else.
+  const [hints, setHints] = useState<StatHint[] | null>(null);
+  const [hintAccount, setHintAccount] = useState('');
+  const [hintPicks, setHintPicks] = useState<Record<string, boolean>>({});
+  const [hintLoading, setHintLoading] = useState(false);
+  const [hintError, setHintError] = useState('');
+  const [hintNote, setHintNote] = useState('');
+  // Which post the draft on screen belongs to. Attaching a different one makes
+  // it stale by derivation, so nothing has to remember to clear it.
+  const [hintsFor, setHintsFor] = useState<string | null>(null);
 
   const currentPlayerId = (session?.user as any)?.playerId;
   const myLockouts = useMyLockouts(status === 'authenticated');
@@ -233,6 +264,79 @@ function NewSuggestionContent() {
   // (a written account has no tags, and the crew's vote vets relevance).
   const changeCount = Object.keys(changes).length;
   const selectedStats = subjectStats.filter((s) => changes[s.id] !== undefined);
+
+  // AI hints read one post, so they're offered only when exactly one is
+  // attached — which is also how these get used in practice (a suggestion per
+  // receipt). Two selected and the button waits rather than guessing which.
+  const soleEvidence =
+    selectedEvidenceIds.length === 1
+      ? subjectEvidence.find((e) => e.id === selectedEvidenceIds[0]) || null
+      : null;
+  const soleCaption = (soleEvidence?.caption || '').trim();
+  const hintsAvailable = !!soleEvidence && soleCaption.length >= HINT_MIN_CAPTION;
+
+  // A draft belongs to the post it was read from. Attach a different one (or
+  // change subject, which clears the attachments) and it stops being shown —
+  // derived rather than cleared, so there's no state to keep in sync.
+  const hintsStale = hintsFor !== (soleEvidence?.id || null);
+  const shownHints = hintsStale ? null : hints;
+
+  const fetchHints = async () => {
+    if (!soleEvidence) return;
+    setHintsFor(soleEvidence.id);
+    setHints(null);
+    setHintLoading(true);
+    setHintError('');
+    setHintNote('');
+    try {
+      const res = await fetch(`/api/evidence/${soleEvidence.id}/stat-hints`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        setHintError(data.error || 'Could not read this evidence');
+        return;
+      }
+      const drafted: StatHint[] = data.suggestions || [];
+      setHints(drafted);
+      setHintAccount(data.account || '');
+      setHintPicks(Object.fromEntries(drafted.map((h) => [h.statId, true])));
+      if (drafted.length === 0) {
+        setHintNote("Nothing in this post reads as a clear stat change — pick them by hand below.");
+      } else if (data.dropped?.length > 0) {
+        setHintNote(
+          `${data.dropped.length} more ${data.dropped.length === 1 ? 'was' : 'were'} drafted but ${
+            data.dropped.length === 1 ? 'is' : 'are'
+          } now locked or untracked for this player.`
+        );
+      }
+    } catch (err: any) {
+      setHintError(err.message || 'Could not read this evidence');
+    } finally {
+      setHintLoading(false);
+    }
+  };
+
+  // Merges rather than replaces — anything already picked by hand survives, and
+  // a hint for a stat already picked overwrites only its delta.
+  const applyHints = () => {
+    if (!shownHints) return;
+    const picked = shownHints.filter((h) => hintPicks[h.statId]);
+    if (picked.length === 0) return;
+    setChanges((prev) => {
+      const next = { ...prev };
+      for (const hint of picked) next[hint.statId] = hint.delta;
+      return next;
+    });
+    setHintNote(
+      `${picked.length} stat${picked.length > 1 ? 's' : ''} added — change the deltas or drop any of them below.`
+    );
+  };
+
+  const applyHintAccount = () => {
+    if (!hintAccount) return;
+    if (reason.trim() && !confirm('Replace what you have already written?')) return;
+    setReason(hintAccount);
+    setHintNote('Write-up applied — edit it freely, it saves to the stat history exactly as submitted.');
+  };
 
   const changeSubject = (id: string) => {
     if (editMode) return; // subject is fixed while editing an existing proposal
@@ -588,6 +692,149 @@ function NewSuggestionContent() {
                 Optional. Nothing on camera is fine — write what you witnessed in step 4 and the
                 crew's vote decides if it holds up.
               </p>
+            )}
+          </section>
+        )}
+
+        {/* AI starting point — reads the attached post's caption and drafts the
+            stats someone might propose off it. Purely a prefill: every row
+            lands in step 3/4 as an ordinary pick and the crew still votes. */}
+        {!editMode && subjectId && selectedEvidenceIds.length > 0 && (
+          <section className="glass card-shadow p-5 animate-rise">
+            <p
+              className="text-[11px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5"
+              style={{ color: 'var(--accent-cyan)' }}
+            >
+              <SparklesIcon size={13} />
+              AI starting point
+            </p>
+            <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+              Reads what they wrote and drafts the stats it seems to prove. A starting point only —
+              add, remove and adjust before you submit.
+            </p>
+
+            {!hintsAvailable ? (
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                {selectedEvidenceIds.length > 1
+                  ? 'Attach a single post to use this — it reads one at a time.'
+                  : 'There is not enough written on this post to read. Pick the stats by hand below.'}
+              </p>
+            ) : (
+              <>
+                {shownHints === null && (
+                  <button
+                    onClick={fetchHints}
+                    disabled={hintLoading || loadingStats}
+                    className="btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
+                    style={{ borderColor: 'rgba(34,211,238,0.4)' }}
+                  >
+                    <SparklesIcon size={14} />
+                    {hintLoading ? 'Reading the post...' : 'Draft stats from this post'}
+                  </button>
+                )}
+
+                {shownHints !== null && shownHints.length > 0 && (
+                  <div className="space-y-2">
+                    {shownHints.map((hint) => {
+                      const meta = getCategoryMeta(hint.categoryCode, hint.categoryLabel);
+                      const picked = !!hintPicks[hint.statId];
+                      return (
+                        <button
+                          key={hint.statId}
+                          onClick={() =>
+                            setHintPicks((prev) => ({ ...prev, [hint.statId]: !prev[hint.statId] }))
+                          }
+                          className="w-full flex items-start gap-3 px-3.5 py-2.5 rounded-xl border text-left transition"
+                          style={{
+                            borderColor: picked ? meta.hex : 'var(--surface-border)',
+                            background: picked ? `${meta.hex}14` : 'rgba(255,255,255,0.02)',
+                          }}
+                        >
+                          <span
+                            className="mt-0.5 w-4 h-4 rounded shrink-0 border flex items-center justify-center"
+                            style={{
+                              borderColor: picked ? meta.hex : 'var(--surface-border-strong)',
+                              background: picked ? meta.hex : 'transparent',
+                            }}
+                          >
+                            {picked && <CheckIcon size={11} />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-baseline gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-white">{hint.label}</span>
+                              <span
+                                className="text-[10px] font-bold uppercase tracking-wider"
+                                style={{ color: meta.hex }}
+                              >
+                                {hint.code}
+                              </span>
+                              <span
+                                className="text-xs font-bold"
+                                style={{
+                                  color: hint.delta > 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                                }}
+                              >
+                                {hint.delta > 0 ? '+' : ''}
+                                {hint.delta}
+                              </span>
+                            </span>
+                            {hint.why && (
+                              <span
+                                className="block text-[11px] mt-0.5"
+                                style={{ color: 'var(--text-secondary)' }}
+                              >
+                                {hint.why}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        onClick={applyHints}
+                        disabled={!shownHints.some((h) => hintPicks[h.statId])}
+                        className="btn-ghost inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-40"
+                        style={{ borderColor: 'rgba(34,211,238,0.4)' }}
+                      >
+                        <CheckIcon size={13} />
+                        Add {shownHints.filter((h) => hintPicks[h.statId]).length} to my suggestion
+                      </button>
+                      {hintAccount && (
+                        <button
+                          onClick={applyHintAccount}
+                          className="btn-ghost inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+                        >
+                          Use its write-up
+                        </button>
+                      )}
+                    </div>
+
+                    {hintAccount && (
+                      <p
+                        className="text-xs leading-relaxed rounded-xl border p-3 mt-1"
+                        style={{
+                          color: 'var(--text-secondary)',
+                          borderColor: 'var(--surface-border)',
+                          background: 'rgba(255,255,255,0.02)',
+                        }}
+                      >
+                        {hintAccount}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {!hintsStale && hintNote && (
+                  <p className="text-xs mt-3" style={{ color: 'var(--accent-cyan)' }}>
+                    {hintNote}
+                  </p>
+                )}
+                {!hintsStale && hintError && (
+                  <p className="text-xs mt-3 text-red-400">{hintError}</p>
+                )}
+              </>
             )}
           </section>
         )}

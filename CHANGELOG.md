@@ -8,6 +8,72 @@ file should always answer one question at a glance: what still needs telling?
 
 ---
 
+## AI starting point for suggestions — 15 August 2026
+
+Picking stats off someone's evidence means holding 70 definitions in your head,
+and the ones people miss are always the same ones: the mentality and skillset
+stats sitting underneath a physical result. This drafts them for you.
+
+<details>
+<summary>Message for the crew — copy everything in the block</summary>
+
+Plain text on purpose: `##` and `**` don't render in WhatsApp / iMessage /
+Discord.
+
+```
+🚀 4WARD UPDATE — AI starting point on suggestions
+
+Small one. When you're making a suggestion about someone and you attach one of
+their evidence posts, there's a new button: "Draft stats from this post".
+
+Press it and it reads what they wrote, then suggests which stats it thinks the
+post actually proves — with a +1 or +2 on each and a line on why. It also
+writes you a short version of the "what happened" box.
+
+Everything it gives you is a starting point, nothing more. Tick off the ones
+you don't agree with, add ones it missed, change any of the numbers, rewrite
+the text. Then submit like normal. It cannot change anyone's stats — the crew
+still votes on every single one exactly like before.
+
+Two things worth knowing:
+- It reads WRITING only. A video with a two-word caption gives it nothing to
+  work with, and it'll tell you so. The more you write on your evidence, the
+  better this gets for whoever proposes off it.
+- You can't run it on your own evidence. It's for whoever's proposing about
+  you.
+
+That's it. Ignore it entirely if you'd rather pick by hand.
+```
+
+</details>
+
+**What landed**
+
+- **New panel in New Suggestion.** Appears once you've picked a subject and
+  attached exactly one of their evidence posts. Drafts up to 6 `{stat, delta}`
+  pairs, each with a one-line rationale, plus a compact written account.
+- **Everything is a prefill.** Drafted stats land in step 3 as ordinary picks;
+  the write-up lands in the step 4 box and saves to stat history exactly as
+  submitted. No new path to changing a stat value — `POST /api/suggestions` and
+  the vote are untouched.
+- **Read once per post.** Cached on the evidence row, so the first press pays
+  and everyone after reads the same answer. Cleared when the author edits the
+  caption.
+- **Can't name an impossible stat.** Hidden and locked stats are stripped from
+  the catalogue before the model sees it, the schema constrains `code` to a real
+  enum and `delta` to `-2/-1/+1/+2`, and cached hints are re-checked against the
+  live catalogue on every read — so a stat locked since generation quietly
+  drops out instead of failing on submit.
+- **Text only, and honest about it.** Captions under 40 characters are refused
+  rather than guessed at. Subjects can't read hints on their own evidence.
+
+**Setup:** one env var, `ANTHROPIC_API_KEY` — see
+[AI-SETUP.md](./AI-SETUP.md). Until it's set the button returns a clear message
+and nothing else changes. Runs Claude Haiku 4.5 at roughly **$2–3 a year** at
+30–50 evidence posts a month.
+
+---
+
 ## Seven changes — 11 August 2026
 
 A batch covering a long-standing data loss in suggestions, three new

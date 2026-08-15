@@ -6,6 +6,7 @@ import { destroyCloudinaryAsset } from '@/lib/cloudinaryServer';
 import { firePush } from '@/lib/push';
 import { featureLockMessage } from '@/lib/featureLocks';
 import { getFolderTagsByEvidence, setEvidenceFolders } from '@/lib/evidenceFolders';
+import { clearCachedHints } from '@/lib/statHints';
 import { v4 as uuid } from 'uuid';
 import { errorPayload } from '@/lib/apiError';
 
@@ -175,6 +176,9 @@ export async function PATCH(request: Request) {
         now,
         evidenceId,
       ]);
+      // Any cached AI stat hints describe the caption that was just replaced —
+      // drop them so the next proposer regenerates against the new text.
+      await clearCachedHints(String(evidenceId));
     }
     if (typeof captionHidden === 'boolean') {
       await query('UPDATE Evidence SET captionHidden = ?, updatedAt = ? WHERE id = ?', [
