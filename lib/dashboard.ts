@@ -1,6 +1,5 @@
-import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from './serverStats';
-import { computeAchievements, type Achievement } from './achievements';
-import { fetchSocialCounts } from './socialCounts';
+import { type Achievement } from './achievements';
+import { getCrewStats } from './crewStats';
 import { computePlayerTrends, type PlayerTrends } from './trends';
 
 export interface DashboardData {
@@ -28,22 +27,14 @@ export interface DashboardData {
  * projections, which the dashboard never shows.
  */
 export async function getDashboardData(playerId: string): Promise<DashboardData | null> {
-  const [rows, history, social, trends] = await Promise.all([
-    fetchAllPlayerStats(),
-    fetchAllHistory(),
-    fetchSocialCounts(),
-    computePlayerTrends(playerId),
-  ]);
+  const [crew, trends] = await Promise.all([getCrewStats(), computePlayerTrends(playerId)]);
 
-  const players = buildPlayerAggregates(rows);
-  const me = players.find((p) => p.id === playerId);
+  const me = crew.players.find((p) => p.id === playerId);
   if (!me) return null;
-
-  const computed = computeAchievements(players, history, social);
 
   return {
     categories: me.categories,
     trends,
-    achievements: computed[playerId] || [],
+    achievements: crew.achievements[playerId] || [],
   };
 }

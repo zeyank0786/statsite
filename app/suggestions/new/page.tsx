@@ -8,6 +8,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import LockBadge from '@/components/LockBadge';
+import StatPicker from '@/components/StatPicker';
 import { getUserColorHex } from '@/lib/userColors';
 import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
@@ -163,7 +164,8 @@ function NewSuggestionContent() {
       try {
         const res = await fetch('/api/suggestions');
         if (!res.ok || cancelled) return;
-        const all = (await res.json()) as any[];
+        const body = await res.json();
+        const all = (Array.isArray(body) ? body : body.suggestions || []) as any[];
         if (cancelled) return;
         const anchor = all.find((s) => s.id === editAnchor);
         if (!anchor) {
@@ -857,66 +859,11 @@ function NewSuggestionContent() {
                 No tracked stats for this player.
               </p>
             ) : (
-              <div className="space-y-4">
-                {[...new Set(subjectStats.map((s) => s.categoryCode))].map((catCode) => {
-                  const catStats = subjectStats.filter((s) => s.categoryCode === catCode);
-                  const meta = getCategoryMeta(catCode, catStats[0]?.categoryLabel);
-                  return (
-                    <div key={catCode}>
-                      <p
-                        className="text-[11px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"
-                        style={{ color: meta.hex }}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.hex }} />
-                        {catStats[0]?.categoryLabel || catCode}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {catStats.map((stat) => {
-                          const active = changes[stat.id] !== undefined;
-                          return (
-                            <button
-                              key={stat.id}
-                              onClick={() => !stat.locked && toggleStat(stat.id)}
-                              disabled={stat.locked}
-                              className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-left transition ${
-                                stat.locked
-                                  ? 'opacity-50 cursor-not-allowed'
-                                  : active
-                                  ? 'text-white'
-                                  : 'text-neutral-300 hover:text-white'
-                              }`}
-                              style={{
-                                borderColor: active ? meta.hex : 'var(--surface-border)',
-                                background: active ? `${meta.hex}18` : 'rgba(255,255,255,0.02)',
-                              }}
-                            >
-                              <span className="min-w-0">
-                                <span className="block text-sm font-medium truncate">{stat.label}</span>
-                                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: meta.hex }}>
-                                  {stat.code} · now {stat.value}
-                                </span>
-                              </span>
-                              <span className="shrink-0 flex items-center gap-1.5">
-                                {stat.locked ? (
-                                  <LockBadge
-                                    reasons={stat.lockReasons}
-                                    source={stat.lockSource}
-                                    statLabel={stat.label}
-                                  />
-                                ) : active ? (
-                                  <span style={{ color: meta.hex }}>
-                                    <CheckIcon size={16} />
-                                  </span>
-                                ) : null}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <StatPicker
+                stats={subjectStats}
+                selectedIds={selectedStats.map((s) => s.id)}
+                onToggle={toggleStat}
+              />
             )}
           </section>
         )}

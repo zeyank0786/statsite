@@ -13,9 +13,7 @@ import {
   updateProfile,
   type ProfileUpdate,
 } from '@/lib/profile';
-import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from '@/lib/serverStats';
-import { fetchSocialCounts } from '@/lib/socialCounts';
-import { computeAchievements } from '@/lib/achievements';
+import { getCrewStats } from '@/lib/crewStats';
 import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
@@ -48,13 +46,8 @@ export async function GET() {
     // a lie on a board built entirely on evidence.
     let flairOptions: { id: string; name: string }[] = [];
     try {
-      const [rows, history, social] = await Promise.all([
-        fetchAllPlayerStats(),
-        fetchAllHistory(),
-        fetchSocialCounts(),
-      ]);
-      const computed = computeAchievements(buildPlayerAggregates(rows), history, social);
-      flairOptions = (computed[playerId] || [])
+      const { achievements } = await getCrewStats();
+      flairOptions = (achievements[playerId] || [])
         .filter((a) => a.earned)
         .map((a) => ({ id: a.id, name: a.name }));
     } catch (e) {
@@ -162,12 +155,8 @@ export async function PATCH(request: Request) {
         const id = String(body.flairAchievementId);
         // Verify it's actually earned rather than trusting the client — the
         // label is denormalised so rendering a name never costs a recompute.
-        const [rows, history, social] = await Promise.all([
-          fetchAllPlayerStats(),
-          fetchAllHistory(),
-          fetchSocialCounts(),
-        ]);
-        const mine = computeAchievements(buildPlayerAggregates(rows), history, social)[playerId] || [];
+        const { achievements } = await getCrewStats();
+        const mine = achievements[playerId] || [];
         const match = mine.find((a) => a.id === id && a.earned);
         if (!match) {
           return NextResponse.json(

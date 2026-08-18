@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { queryAll } from '@/lib/db';
-import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from '@/lib/serverStats';
-import { computeAchievements } from '@/lib/achievements';
-import { fetchSocialCounts } from '@/lib/socialCounts';
+import { getCrewStats } from '@/lib/crewStats';
 import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
@@ -32,13 +30,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const playerId = searchParams.get('playerId');
 
-    const [rows, history, social] = await Promise.all([
-      fetchAllPlayerStats(),
-      fetchAllHistory(),
-      fetchSocialCounts(),
-    ]);
-    const players = buildPlayerAggregates(rows);
-    const computed = computeAchievements(players, history, social);
+    const { players, achievements: computed } = await getCrewStats();
 
     const nameById = new Map(players.map((p) => [p.id, p.username]));
 

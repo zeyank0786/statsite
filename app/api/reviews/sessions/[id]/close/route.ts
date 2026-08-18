@@ -3,7 +3,7 @@ import { queryOne, query } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { errorPayload } from '@/lib/apiError';
-import { invalidateStatsCache } from '@/lib/statsCache';
+import { afterStatChange } from '@/lib/statsWrite';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,7 +87,7 @@ export async function POST(
             );
             // The cached crew leaderboard is now stale — drop it so this change
             // is visible immediately rather than up to a TTL later.
-            invalidateStatsCache();
+            await afterStatChange();
           } else {
             console.log(`[REVERT] No existing value found for ${snap.statId}`);
           }

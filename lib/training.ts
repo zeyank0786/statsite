@@ -1,4 +1,5 @@
 import { query, queryAll } from './db';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * The Training Facility — drills you can actually play, with their own scores
@@ -232,6 +233,10 @@ export interface LeaderboardEntry {
 }
 
 export async function ensureTrainingTables(): Promise<void> {
+  return ensureOnce('training', ensureTrainingTablesUncached);
+}
+
+async function ensureTrainingTablesUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS TrainingResult (
        id        TEXT PRIMARY KEY,

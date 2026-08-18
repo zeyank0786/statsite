@@ -1,5 +1,6 @@
 import { query, queryAll } from './db';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Per-player feature lockouts — the admin can bar a player from PARTICIPATING
@@ -28,7 +29,11 @@ export type LockableFeature = (typeof LOCKABLE_FEATURES)[number]['key'];
 const FEATURE_KEYS = new Set<string>(LOCKABLE_FEATURES.map((f) => f.key));
 
 /** Additive table — created on first use, no manual migration. */
-async function ensureTable() {
+async function ensureTable(): Promise<void> {
+  return ensureOnce('featureLocks', ensureTableUncached);
+}
+
+async function ensureTableUncached() {
   await query(
     `CREATE TABLE IF NOT EXISTS FeatureLock (
        id          TEXT PRIMARY KEY,

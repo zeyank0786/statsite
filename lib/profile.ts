@@ -1,5 +1,6 @@
 import { query, queryAll, queryOne } from './db';
 import { BIO_PLACE_KEYS, type BioPlace } from './bioPlaces';
+import { ensureOnce } from './ensureOnce';
 
 export { BIO_PLACES, type BioPlace } from './bioPlaces';
 
@@ -60,6 +61,10 @@ let columnsEnsured = false;
  * is how every other table here evolves.
  */
 export async function ensureProfileColumns(): Promise<void> {
+  return ensureOnce('profileColumns', ensureProfileColumnsUncached);
+}
+
+async function ensureProfileColumnsUncached(): Promise<void> {
   if (columnsEnsured) return;
   for (const column of PROFILE_COLUMNS) {
     try {

@@ -9,7 +9,12 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "bench:seed": "tsx scripts/bench/seed.ts",
+    "bench": "tsx scripts/bench/measure.ts",
+    "bench:baseline": "tsx scripts/bench/measure.ts --baseline",
+    "bench:compare": "tsx scripts/bench/measure.ts --compare scripts/bench/before.json scripts/bench/after.json",
+    "migrate": "node migrations/run.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

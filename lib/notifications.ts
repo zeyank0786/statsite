@@ -1,8 +1,6 @@
 import { query, queryOne, queryAll } from './db';
 import { getStatTier } from './categories';
-import { fetchAllPlayerStats, fetchAllHistory, buildPlayerAggregates } from './serverStats';
-import { computeAchievements } from './achievements';
-import { fetchSocialCounts } from './socialCounts';
+import { getCrewStats } from './crewStats';
 import { getAllLocks } from './featureLocks';
 import { getNudgesFor, NUDGE_KINDS } from './nudges';
 import { getMentionsFor } from './mentionsServer';
@@ -10,6 +8,7 @@ import { getReminderFiresFor } from './reminders';
 import { getRecentBroadcasts } from './broadcasts';
 import { getRecentCompletions } from './ambitions';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Unified activity feed + personal celebrations.
@@ -87,7 +86,11 @@ const FEED_LIMIT = 50;
 const SOURCE_LIMIT = 30;
 const CELEBRATION_CAP = 8;
 
-async function ensureTables() {
+async function ensureTables(): Promise<void> {
+  return ensureOnce('notifications', ensureTablesUncached);
+}
+
+async function ensureTablesUncached() {
   await query(
     `CREATE TABLE IF NOT EXISTS AchievementEarned (
        id            TEXT PRIMARY KEY,
@@ -136,11 +139,19 @@ async function ensureTables() {
  * The middle case is why AchievementCatalog exists. Shipping a batch of new
  * definitions would otherwise read as everyone earning all of them at once,
  * and the celebration queue plays one full-screen modal at a time.
+ *
+ * WRITE PATH ONLY. This used to run on every notification poll — every 30
+ * seconds, per open tab — recomputing all 49 achievements for every player
+ * from the full stat table and all of StatHistory, and in the overwhelming
+ * majority of runs writing nothing at all. Achievements derive from stats, so
+ * it now runs where stats change (`afterStatChange` in lib/statsWrite) plus
+ * once a day from cron, to catch the handful that turn over with the calendar
+ * rather than with a write: the rolling 90-day window, week streaks, months
+ * active.
  */
-async function syncAchievements(): Promise<void> {
-  const [rows, history, social] = await Promise.all([fetchAllPlayerStats(), fetchAllHistory(), fetchSocialCounts()]);
-  const players = buildPlayerAggregates(rows);
-  const computed = computeAchievements(players, history, social);
+export async function syncAchievements(): Promise<void> {
+  await ensureTables();
+  const { achievements: computed } = await getCrewStats();
 
   const existing = await queryAll('SELECT playerId, achievementId FROM AchievementEarned');
   const known = new Set((existing as any[]).map((r) => `${r.playerId}:${r.achievementId}`));
@@ -183,11 +194,6 @@ export async function buildFeed(currentPlayerId: string): Promise<{
   celebrations: Celebration[];
 }> {
   await ensureTables();
-  try {
-    await syncAchievements();
-  } catch (e) {
-    console.error('Achievement sync failed (feed continues):', e);
-  }
 
   const nameRows = await queryAll('SELECT id, username FROM Player');
   const nameById = new Map((nameRows as any[]).map((p) => [String(p.id), String(p.username)]));

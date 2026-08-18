@@ -5,7 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { broadcastUpdate } from '@/lib/realtime';
 import { v4 as uuid } from 'uuid';
 import { errorPayload } from '@/lib/apiError';
-import { invalidateStatsCache } from '@/lib/statsCache';
+import { afterStatChange } from '@/lib/statsWrite';
 
 export const dynamic = 'force-dynamic';
 
@@ -167,7 +167,7 @@ export async function PUT(
     );
     // The cached crew leaderboard is now stale — drop it so this change
     // is visible immediately rather than up to a TTL later.
-    invalidateStatsCache();
+    await afterStatChange();
 
     broadcastUpdate(id, {
       type: 'stat_updated',

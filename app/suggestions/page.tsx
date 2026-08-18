@@ -113,6 +113,10 @@ export default function SuggestionsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  // Resolved history is paged; pending always arrives whole.
+  const [resolvedCount, setResolvedCount] = useState(20);
+  const [hasMoreResolved, setHasMoreResolved] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -121,21 +125,40 @@ export default function SuggestionsPage() {
     }
   }, [status, router]);
 
-  // Fires immediately on mount, then every 8s while the tab is visible.
-  usePoll(() => loadSuggestions(), 8000, { enabled: status === 'authenticated' });
+  // Fires immediately on mount, then on a timer while the tab is visible.
+  // 8s was chasing a queue that changes a few times a day; the poll exists so
+  // a vote someone else casts appears without a refresh, which 20s does fine.
+  usePoll(() => loadSuggestions(), 20000, { enabled: status === 'authenticated' });
 
-  const loadSuggestions = async () => {
+  /**
+   * Pending suggestions always come back in full. Resolved history is paged —
+   * `resolvedWanted` is how many the server has been asked for, and it grows
+   * by MORE_RESOLVED each time "Show older" is pressed. Keeping it in state
+   * means the poll re-fetches whatever has already been revealed rather than
+   * collapsing the list back to the first page under the reader.
+   */
+  const loadSuggestions = async (resolvedWanted = resolvedCount) => {
     try {
-      const res = await fetch('/api/suggestions');
+      const res = await fetch(`/api/suggestions?resolved=${resolvedWanted}`);
       if (res.ok) {
-        const data = await res.json();
-        setSuggestions(Array.isArray(data) ? data : []);
+        const body = await res.json();
+        const list = Array.isArray(body) ? body : body.suggestions || [];
+        setSuggestions(list);
+        setHasMoreResolved(Boolean(body.hasMoreResolved));
       }
     } catch (error) {
       console.error('Failed to load suggestions:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const showOlderResolved = async () => {
+    const next = resolvedCount + 50;
+    setResolvedCount(next);
+    setLoadingMore(true);
+    await loadSuggestions(next);
+    setLoadingMore(false);
   };
 
   const flash = (text: string) => {
@@ -595,6 +618,20 @@ export default function SuggestionsPage() {
               </article>
             );
           })}
+
+          {/* Resolved history is paged so a poll every 20s doesn't re-read
+              years of it. Pending is never paged — it's the working queue. */}
+          {tab !== 'pending' && hasMoreResolved && (
+            <div className="pt-2 text-center">
+              <button
+                onClick={showOlderResolved}
+                disabled={loadingMore}
+                className="btn-ghost inline-flex disabled:opacity-50"
+              >
+                {loadingMore ? 'Loading…' : `Show older (${resolved.length} shown)`}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

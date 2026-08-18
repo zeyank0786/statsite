@@ -1,4 +1,5 @@
 import { query, queryAll, queryOne } from './db';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Crew group goals — one target the whole crew chips away at together
@@ -82,6 +83,10 @@ export interface GroupGoal {
 }
 
 export async function ensureGroupGoalTables(): Promise<void> {
+  return ensureOnce('groupGoals', ensureGroupGoalTablesUncached);
+}
+
+async function ensureGroupGoalTablesUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS GroupGoal (
        id           TEXT PRIMARY KEY,

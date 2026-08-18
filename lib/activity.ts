@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { queryAll } from './db';
 import { getStatTier } from './categories';
 
@@ -5,6 +6,11 @@ import { getStatTier } from './categories';
  * Lightweight, crew-wide PUBLIC activity for the live ticker. Deliberately not
  * the per-user notification feed (no achievement sync, no nudges/mentions) —
  * just a cheap pull of recent public moments to scroll across the dashboard.
+ *
+ * Nothing in here depends on who is looking: it is the same eight queries
+ * producing the same marquee for everybody. So it is computed once per TTL for
+ * the whole crew rather than once per viewer per tick — four people with the
+ * dashboard open used to mean four identical rebuilds every 25 seconds.
  */
 
 export interface ActivityItem {
@@ -18,7 +24,7 @@ export interface ActivityItem {
 
 const PER_SOURCE = 12;
 
-export async function getRecentActivity(limit = 30): Promise<ActivityItem[]> {
+export async function buildRecentActivity(limit = 30): Promise<ActivityItem[]> {
   const items: ActivityItem[] = [];
 
   const nameRows = await queryAll('SELECT id, username FROM Player');
@@ -175,4 +181,26 @@ export async function getRecentActivity(limit = 30): Promise<ActivityItem[]> {
 
   items.sort((a, b) => (a.at < b.at ? 1 : -1));
   return items.slice(0, limit);
+}
+
+/**
+ * How stale the ticker may get. It scrolls past continuously and nothing in it
+ * is actionable, so a shorter window would buy nothing a reader could notice.
+ */
+const ACTIVITY_TTL_SECONDS = 60;
+
+const cachedActivity = unstable_cache(buildRecentActivity, ['recent-activity'], {
+  revalidate: ACTIVITY_TTL_SECONDS,
+});
+
+/** Cached ticker, falling back to a direct build outside a request scope. */
+export async function getRecentActivity(limit = 30): Promise<ActivityItem[]> {
+  try {
+    return await cachedActivity(limit);
+  } catch (error) {
+    if (/incrementalCache missing|Invariant/i.test(String((error as Error)?.message))) {
+      return buildRecentActivity(limit);
+    }
+    throw error;
+  }
 }

@@ -20,6 +20,7 @@ import TypingGame from '@/components/training/TypingGame';
 import SearchGame from '@/components/training/SearchGame';
 import GameTutorial, { hasSeenTutorial } from '@/components/training/GameTutorial';
 import { TUTORIALS } from '@/components/training/tutorials';
+import { useScrollLock } from '@/lib/useScrollLock';
 import { getUserColorHex } from '@/lib/userColors';
 import { CheckIcon, InfoIcon, LightbulbIcon, TrophyIcon, XIcon } from '@/components/icons';
 
@@ -110,6 +111,11 @@ export default function TrainingPage() {
   // The walkthrough opens automatically until it's been completed once for
   // that game, and is reachable again from "How it works".
   const [showTutorial, setShowTutorial] = useState(false);
+
+  // A drill is played with fast taps and key presses; a stray swipe or space
+  // bar scrolling the page underneath mid-run costs the attempt. The board has
+  // its own scroll container, so only the page behind it is frozen.
+  useScrollLock(playing !== null);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/auth/signin');

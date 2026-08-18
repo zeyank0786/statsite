@@ -1,4 +1,5 @@
 import { query, queryAll } from './db';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Ambitions — long-term goals each crew member declares on a shared board.
@@ -39,6 +40,10 @@ export interface Ambition {
 
 /** Additive tables/columns — created on first use, no manual migration. */
 export async function ensureAmbitionTables(): Promise<void> {
+  return ensureOnce('ambitions', ensureAmbitionTablesUncached);
+}
+
+async function ensureAmbitionTablesUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS Ambition (
        id          TEXT PRIMARY KEY,

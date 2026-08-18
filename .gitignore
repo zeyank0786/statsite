@@ -45,3 +45,11 @@ next-env.d.ts
 # prisma
 prisma/dev.db
 .prisma/
+
+# benchmark databases (regenerate with: npm run bench:seed)
+/bench.db
+/bench-before.db
+/devrun.db
+*.db-journal
+
+.vercel

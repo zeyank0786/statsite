@@ -1,5 +1,6 @@
 import { query, queryAll } from './db';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Evidence folders — a per-user way to group your own evidence into "projects"
@@ -28,6 +29,10 @@ export const FOLDER_NAME_MAX = 40;
 
 /** Additive tables — created on first use, no manual migration. */
 export async function ensureEvidenceFolderTables(): Promise<void> {
+  return ensureOnce('evidenceFolders', ensureEvidenceFolderTablesUncached);
+}
+
+async function ensureEvidenceFolderTablesUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS EvidenceFolder (
        id        TEXT PRIMARY KEY,

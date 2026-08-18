@@ -1,0 +1,137 @@
+[
+  {
+    "name": "crewStats",
+    "trigger": "shared computation, once per 60s TTL + once per stat write",
+    "queries": 8,
+    "rowsRead": 4848,
+    "rowsReturned": 1034,
+    "ms": 12.961700000000008,
+    "scannedTables": [
+      "Ambition",
+      "Category",
+      "Evidence",
+      "StatHistory",
+      "Vote"
+    ],
+    "transcribed": false,
+    "sharesCrewStats": false
+  },
+  {
+    "name": "pulse",
+    "trigger": "every page, 15s timer",
+    "queries": 5,
+    "rowsRead": 286,
+    "rowsReturned": 4,
+    "ms": 0.9187000000000012,
+    "scannedTables": [],
+    "transcribed": false,
+    "sharesCrewStats": false
+  },
+  {
+    "name": "notifications",
+    "trigger": "every page, 30s timer",
+    "queries": 14,
+    "rowsRead": 331,
+    "rowsReturned": 221,
+    "ms": 5.241699999999923,
+    "scannedTables": [
+      "Broadcast",
+      "Player"
+    ],
+    "transcribed": false,
+    "sharesCrewStats": false
+  },
+  {
+    "name": "activity",
+    "trigger": "dashboard ticker, 25s timer",
+    "queries": 7,
+    "rowsRead": 352,
+    "rowsReturned": 77,
+    "ms": 2.116800000000012,
+    "scannedTables": [
+      "Player"
+    ],
+    "transcribed": false,
+    "sharesCrewStats": false
+  },
+  {
+    "name": "dashboard",
+    "trigger": "home page render (force-dynamic)",
+    "queries": 10,
+    "rowsRead": 5507,
+    "rowsReturned": 1257,
+    "ms": 13.056799999999953,
+    "scannedTables": [
+      "Ambition",
+      "Category",
+      "Evidence",
+      "Stat",
+      "StatHistory",
+      "Vote"
+    ],
+    "transcribed": false,
+    "sharesCrewStats": true
+  },
+  {
+    "name": "achievements",
+    "trigger": "/achievements page load",
+    "queries": 9,
+    "rowsRead": 5091,
+    "rowsReturned": 1277,
+    "ms": 11.924199999999928,
+    "scannedTables": [
+      "AchievementEarned",
+      "Ambition",
+      "Category",
+      "Evidence",
+      "StatHistory",
+      "Vote"
+    ],
+    "transcribed": true,
+    "sharesCrewStats": true
+  },
+  {
+    "name": "suggestions",
+    "trigger": "/suggestions page, 20s timer",
+    "queries": 8,
+    "rowsRead": 1400,
+    "rowsReturned": 140,
+    "ms": 2.8231000000000677,
+    "scannedTables": [
+      "Suggestion",
+      "User"
+    ],
+    "transcribed": true,
+    "sharesCrewStats": false
+  },
+  {
+    "name": "messages",
+    "trigger": "/messages page, 15s timer",
+    "queries": 6,
+    "rowsRead": 361,
+    "rowsReturned": 93,
+    "ms": 1.435200000000009,
+    "scannedTables": [
+      "Message"
+    ],
+    "transcribed": true,
+    "sharesCrewStats": false
+  },
+  {
+    "name": "leaderboard",
+    "trigger": "/leaderboard page load",
+    "queries": 8,
+    "rowsRead": 4848,
+    "rowsReturned": 1034,
+    "ms": 11.723099999999931,
+    "scannedTables": [
+      "Ambition",
+      "Category",
+      "Evidence",
+      "StatHistory",
+      "Vote"
+    ],
+    "transcribed": false,
+    "sharesCrewStats": true
+  }
+]

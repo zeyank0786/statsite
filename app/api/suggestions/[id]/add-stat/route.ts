@@ -14,14 +14,26 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_DELTAS = [-2, -1, 1, 2];
 
+/** One stat being added, after validation. */
+interface Addition {
+  statId: string;
+  delta: number;
+  label: string;
+}
+
 /**
- * Add a stat the original proposer missed to an existing suggestion.
+ * Add stats the original proposer missed to an existing suggestion.
  *
  * A suggestion is really a batch of per-stat rows (auto-split), so "adding a
  * stat" = adding another row to the same batch: same subject, same evidence,
  * same written account. The person who adds it becomes that row's proposer,
  * their add counts as their implicit yes, and the crew votes on it
  * independently like every other stat in the batch.
+ *
+ * Accepts several at once, each with its own delta — one moment routinely
+ * demonstrates more than one thing. Validation is all-or-nothing: if any stat
+ * in the request is locked, hidden or already present, nothing is written, so
+ * a partial add can't leave a half-built batch behind.
  *
  * Only an eligible voter can add — never the affected player, and never
  * someone locked out of suggesting.
@@ -39,9 +51,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const lockMsg = await featureLockMessage(String(adderId), 'suggest');
     if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
-    const { statId, delta } = await request.json();
-    if (!statId || !ALLOWED_DELTAS.includes(Number(delta))) {
-      return NextResponse.json({ error: 'A statId and a delta of -2/-1/+1/+2 are required' }, { status: 400 });
+    const body = await request.json();
+    // `{ stats: [{statId, delta}] }` is the current shape; `{ statId, delta }`
+    // is what a client cached from before this accepted more than one.
+    const requested: { statId: unknown; delta: unknown }[] = Array.isArray(body?.stats)
+      ? body.stats
+      : [{ statId: body?.statId, delta: body?.delta }];
+
+    if (requested.length === 0) {
+      return NextResponse.json({ error: 'Pick at least one stat' }, { status: 400 });
+    }
+    for (const r of requested) {
+      if (!r?.statId || !ALLOWED_DELTAS.includes(Number(r.delta))) {
+        return NextResponse.json(
+          { error: 'Every stat needs an id and a delta of -2/-1/+1/+2' },
+          { status: 400 }
+        );
+      }
+    }
+    const uniqueIds = new Set(requested.map((r) => String(r.statId)));
+    if (uniqueIds.size !== requested.length) {
+      return NextResponse.json({ error: 'The same stat was listed twice' }, { status: 400 });
     }
 
     // The referenced row anchors the batch and carries the shared grounding
@@ -77,76 +107,92 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!anyPending) {
       return NextResponse.json({ error: 'This suggestion is already resolved' }, { status: 400 });
     }
-    if ((members as any[]).some((m) => String(m.statId) === String(statId))) {
-      return NextResponse.json({ error: 'That stat is already part of this suggestion' }, { status: 400 });
-    }
+    const alreadyPresent = new Set((members as any[]).map((m) => String(m.statId)));
 
-    // Same gating as creating a suggestion: visible + unlocked for the subject
-    const stat = await queryOne('SELECT id, label FROM Stat WHERE id = ?', [statId]);
-    if (!stat) return NextResponse.json({ error: 'Stat not found' }, { status: 404 });
+    // Validate EVERY stat before writing any of them.
+    const additions: Addition[] = [];
+    for (const r of requested) {
+      const statId = String(r.statId);
+      const delta = Number(r.delta);
 
-    const hidden = await queryOne(
-      'SELECT hidden FROM StatVisibility WHERE statId = ? AND playerId = ? AND hidden = 1',
-      [statId, subjectId]
-    );
-    if (hidden) {
-      return NextResponse.json({ error: `"${String(stat.label)}" isn't tracked for this player` }, { status: 400 });
-    }
-    const lock = await isStatLockedForPlayer(String(statId), subjectId);
-    if (lock.locked) {
-      return NextResponse.json(
-        { error: `"${String(stat.label)}" is locked for this player. ${describeLock(lock)}` },
-        { status: 400 }
+      if (alreadyPresent.has(statId)) {
+        return NextResponse.json(
+          { error: 'One of those stats is already part of this suggestion' },
+          { status: 400 }
+        );
+      }
+
+      // Same gating as creating a suggestion: visible + unlocked for the subject
+      const stat = await queryOne('SELECT id, label FROM Stat WHERE id = ?', [statId]);
+      if (!stat) return NextResponse.json({ error: 'Stat not found' }, { status: 404 });
+      const label = String(stat.label);
+
+      const hidden = await queryOne(
+        'SELECT hidden FROM StatVisibility WHERE statId = ? AND playerId = ? AND hidden = 1',
+        [statId, subjectId]
       );
+      if (hidden) {
+        return NextResponse.json({ error: `"${label}" isn't tracked for this player` }, { status: 400 });
+      }
+      const lock = await isStatLockedForPlayer(statId, subjectId);
+      if (lock.locked) {
+        return NextResponse.json(
+          { error: `"${label}" is locked for this player. ${describeLock(lock)}` },
+          { status: 400 }
+        );
+      }
+
+      additions.push({ statId, delta, label });
     }
 
-    // Create the new row, inheriting the batch's account + evidence. An anchor
-    // written back when there were two boxes is merged into the single field
-    // the new row stores, so the addition carries the whole story.
-    const newId = uuid();
-    const now = new Date().toISOString();
-    await query(
-      `INSERT INTO Suggestion (id, playerId, proposedById, statId, delta, reason, testimony, batchId, status, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
-      [
-        newId,
-        subjectId,
-        String(adderId),
-        String(statId),
-        Number(delta),
-        mergeAccount(
-          anchor.reason ? String(anchor.reason) : '',
-          anchor.testimony ? String(anchor.testimony) : null
-        ),
-        null,
-        batchId,
-        now,
-        now,
-      ]
+    // Shared grounding for every new row. An anchor written back when there
+    // were two boxes is merged into the single field the new rows store, so
+    // each addition carries the whole story.
+    const sharedReason = mergeAccount(
+      anchor.reason ? String(anchor.reason) : '',
+      anchor.testimony ? String(anchor.testimony) : null
     );
-
     const evidence = await queryAll('SELECT evidenceId FROM SuggestionEvidence WHERE suggestionId = ?', [
       String(anchor.id),
     ]);
-    for (const e of evidence as any[]) {
-      await query('INSERT INTO SuggestionEvidence (suggestionId, evidenceId) VALUES (?, ?)', [
+
+    const now = new Date().toISOString();
+    const createdIds: string[] = [];
+    const resolutions: unknown[] = [];
+    const applied: Parameters<typeof notifyApprovedChanges>[1] = [];
+
+    for (const addition of additions) {
+      const newId = uuid();
+      createdIds.push(newId);
+      await query(
+        `INSERT INTO Suggestion (id, playerId, proposedById, statId, delta, reason, testimony, batchId, status, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+        [newId, subjectId, String(adderId), addition.statId, addition.delta, sharedReason, null, batchId, now, now]
+      );
+
+      for (const e of evidence as any[]) {
+        await query('INSERT INTO SuggestionEvidence (suggestionId, evidenceId) VALUES (?, ?)', [
+          newId,
+          String(e.evidenceId),
+        ]);
+      }
+
+      // Adding it is the adder's yes vote (mirrors how proposing works)
+      await query('INSERT INTO Vote (id, suggestionId, userId, choice, createdAt) VALUES (?, ?, ?, ?, ?)', [
+        uuid(),
         newId,
-        String(e.evidenceId),
+        String(adderId),
+        'yes',
+        now,
       ]);
+
+      const resolution = await resolveSuggestion(newId);
+      resolutions.push(resolution);
+      if (resolution?.applied) applied.push(resolution.applied);
     }
 
-    // Adding it is the adder's yes vote (mirrors how proposing works)
-    await query('INSERT INTO Vote (id, suggestionId, userId, choice, createdAt) VALUES (?, ?, ?, ?, ?)', [
-      uuid(),
-      newId,
-      String(adderId),
-      'yes',
-      now,
-    ]);
-
-    const resolution = await resolveSuggestion(newId);
-
-    // Ping the subject + the other eligible voters that there's a new change to weigh
+    // Ping the subject + the other eligible voters that there's a new change to
+    // weigh. One push for the whole add, however many stats it carried.
     const [adder, subject] = await Promise.all([
       queryOne('SELECT username FROM Player WHERE id = ?', [adderId]),
       queryOne('SELECT username FROM Player WHERE id = ?', [subjectId]),
@@ -155,21 +201,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const notify = [subjectId, ...eligible].filter(
       (pid) => pid !== String(adderId) && !voteLocked.has(pid)
     );
+    const summary =
+      additions.length === 1
+        ? `${additions[0].delta > 0 ? '+' : ''}${additions[0].delta} ${additions[0].label}`
+        : `${additions.length} stats`;
     await sendPushToPlayers([...new Set(notify)], {
-      title: 'Stat added to a suggestion',
-      body: `${String(adder?.username || 'Someone')} added ${Number(delta) > 0 ? '+' : ''}${Number(
-        delta
-      )} ${String(stat.label)} to the suggestion about ${String(subject?.username || 'a player')}.`,
+      title: additions.length === 1 ? 'Stat added to a suggestion' : 'Stats added to a suggestion',
+      body: `${String(adder?.username || 'Someone')} added ${summary} to the suggestion about ${String(
+        subject?.username || 'a player'
+      )}.`,
       url: '/suggestions',
       tag: `suggestion-batch-${batchId}`,
     });
 
-    // If adding it immediately cleared the threshold, tell the subject.
-    if (resolution?.applied) {
-      await notifyApprovedChanges(resolution.applied.playerId, [resolution.applied]);
+    // If adding them immediately cleared the threshold, tell the subject — one
+    // notification covering everything that landed, not one per stat.
+    if (applied.length > 0) {
+      await notifyApprovedChanges(applied[0].playerId, applied);
     }
 
-    return NextResponse.json({ success: true, id: newId, resolution });
+    return NextResponse.json({
+      success: true,
+      ids: createdIds,
+      id: createdIds[0], // legacy single-add callers
+      resolutions,
+    });
   } catch (error: any) {
     console.error('Error adding stat to suggestion:', error);
     return NextResponse.json(errorPayload('Failed to add stat', error), { status: 500 });

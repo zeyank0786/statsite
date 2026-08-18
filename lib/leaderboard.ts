@@ -1,15 +1,7 @@
 import { unstable_cache } from 'next/cache';
-import {
-  fetchAllPlayerStats,
-  fetchAllHistory,
-  buildPlayerAggregates,
-  historySince,
-  daysAgo,
-} from './serverStats';
-import { computeAchievements } from './achievements';
-import { fetchSocialCounts } from './socialCounts';
+import { historySince, daysAgo } from './serverStats';
+import { getCrewStats } from './crewStats';
 import { computeStreakWeeks } from './streaks';
-import { queryAll } from './db';
 import { STATS_TAG, STATS_TTL_SECONDS } from './statsCache';
 
 export interface LeaderboardEntry {
@@ -35,32 +27,20 @@ export interface LeaderboardEntry {
  * Deliberately identical for every viewer — there is nothing user-specific in
  * here, which is what makes it cacheable crew-wide rather than per session.
  */
-async function buildLeaderboard(): Promise<LeaderboardEntry[]> {
-  const [rows, history, social] = await Promise.all([
-    fetchAllPlayerStats(),
-    fetchAllHistory(),
-    fetchSocialCounts(),
-  ]);
-  const players = buildPlayerAggregates(rows);
-  // With the social counts: without them the community, commitment and
-  // streak achievements read as unearned and the board undercounts everyone.
-  const achievements = computeAchievements(players, history, social);
+export async function buildLeaderboard(): Promise<LeaderboardEntry[]> {
+  // Shared with the dashboard, achievements page and profile editor — the
+  // stat table is read once per TTL for all of them, not once per surface.
+  const { players, history, social, achievements } = await getCrewStats();
 
   const cutoff90 = daysAgo(90);
   const cutoff30 = daysAgo(30);
 
-  // Evidence posts also count toward activity streaks
-  const evidenceDatesByPlayer = new Map<string, string[]>();
-  try {
-    const evidenceRows = await queryAll('SELECT playerId, createdAt FROM Evidence');
-    for (const r of evidenceRows as any[]) {
-      const pid = String(r.playerId);
-      if (!evidenceDatesByPlayer.has(pid)) evidenceDatesByPlayer.set(pid, []);
-      evidenceDatesByPlayer.get(pid)!.push(String(r.createdAt));
-    }
-  } catch {
-    /* streaks degrade to history-only */
-  }
+  // Evidence posts also count toward activity streaks. These dates already
+  // came back with the social counts, so the board no longer re-reads the
+  // whole Evidence table to get them a second time.
+  const evidenceDatesByPlayer = new Map<string, string[]>(
+    Object.entries(social).map(([pid, counts]) => [pid, counts.evidenceDates || []])
+  );
 
   return players.map((p) => {
     const ph = history.filter((h) => h.playerId === p.id);

@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import { query, queryAll } from './db';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Web Push delivery.
@@ -35,6 +36,10 @@ function ensureVapid(): boolean {
 
 /** Additive table — created on first use, no manual migration. */
 export async function ensurePushTable(): Promise<void> {
+  return ensureOnce('push', ensurePushTableUncached);
+}
+
+async function ensurePushTableUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS PushSubscription (
        id        TEXT PRIMARY KEY,

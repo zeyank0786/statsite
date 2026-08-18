@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryAll, queryOne } from '@/lib/db';
-import { getEligibleVoterIds } from '@/lib/suggestionEngine';
+import { getEligibleVoterIds, expireStaleSuggestions } from '@/lib/suggestionEngine';
+import { syncAchievements } from '@/lib/notifications';
 import { sendPushToPlayers } from '@/lib/push';
 import { runCommitmentUpkeep } from '@/lib/commitments';
 import { runDueReminders } from '@/lib/reminders';
@@ -83,6 +84,27 @@ export async function GET(request: Request) {
     console.error('Season Wrapped announce failed (vote reminders continue):', e);
   }
 
+  // Achievements are recorded when a stat changes, which covers almost all of
+  // them. A few turn over with the calendar instead of with a write — the
+  // rolling 90-day window, consecutive-week streaks, months active — so this
+  // daily pass catches those. Without it a streak award could sit unrecorded
+  // until the next time someone happened to change a stat.
+  try {
+    await syncAchievements();
+  } catch (e) {
+    console.error('Achievement sweep failed (vote reminders continue):', e);
+  }
+
+  // Resolving week-old suggestions used to happen on every GET of the
+  // suggestions list — seven times a minute, per open tab, to do something
+  // that can only become true once a day.
+  let expired = 0;
+  try {
+    expired = await expireStaleSuggestions();
+  } catch (e) {
+    console.error('Stale-suggestion expiry failed (vote reminders continue):', e);
+  }
+
   try {
     await ensureTable();
     const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
@@ -92,7 +114,7 @@ export async function GET(request: Request) {
       [cutoff]
     );
     if (pending.length === 0) {
-      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments, reminders, automations, wrapped });
+      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments, reminders, automations, wrapped, expired });
     }
 
     const votes = await queryAll('SELECT suggestionId, userId FROM Vote');
@@ -154,6 +176,7 @@ export async function GET(request: Request) {
       reminders,
       automations,
       wrapped,
+      expired,
     });
   } catch (error: any) {
     console.error('Vote reminder cron failed:', error);

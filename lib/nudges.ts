@@ -1,5 +1,6 @@
 import { query, queryOne, queryAll } from './db';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Nudges — a lightweight poke between crew members ("post some evidence",
@@ -46,6 +47,10 @@ export const NUDGE_COOLDOWN_HOURS = 12;
 
 /** Additive table — created on first use, no manual migration. */
 export async function ensureNudgeTable(): Promise<void> {
+  return ensureOnce('nudges', ensureNudgeTableUncached);
+}
+
+async function ensureNudgeTableUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS Nudge (
        id           TEXT PRIMARY KEY,

@@ -1,6 +1,7 @@
 import { query, queryAll } from './db';
 import { firePush } from './push';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Custom reminders — user- (or admin-) defined notifications that fire on a
@@ -49,6 +50,10 @@ export interface Reminder {
 
 /** Additive tables + column — created on first use, no manual migration. */
 export async function ensureReminderTables(): Promise<void> {
+  return ensureOnce('reminders', ensureReminderTablesUncached);
+}
+
+async function ensureReminderTablesUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS Reminder (
        id           TEXT PRIMARY KEY,

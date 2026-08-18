@@ -2,6 +2,7 @@ import { query, queryAll } from './db';
 import { firePush } from './push';
 import { mentionedPlayerIds, MentionablePlayer } from './mentions';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Server side of @mentions: record who was mentioned where (for the bell feed)
@@ -14,7 +15,11 @@ import { v4 as uuid } from 'uuid';
  */
 
 let tableReady = false;
-async function ensureTable() {
+async function ensureTable(): Promise<void> {
+  return ensureOnce('mentions', ensureTableUncached);
+}
+
+async function ensureTableUncached() {
   if (tableReady) return;
   await query(
     `CREATE TABLE IF NOT EXISTS Mention (

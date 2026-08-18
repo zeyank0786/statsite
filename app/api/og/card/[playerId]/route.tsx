@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { queryAll } from '@/lib/db';
-import { fetchAllPlayerStats, buildPlayerAggregates } from '@/lib/serverStats';
+import { getCrewStats } from '@/lib/crewStats';
 import { getCategoryMeta, getStatTier, categoryRadarValue } from '@/lib/categories';
 import { setKnownRoster, setCustomColors, getUserColorHex, getInitials } from '@/lib/userColors';
 import { loadDisplayFont } from '@/lib/ogFont';
@@ -43,7 +43,7 @@ export async function GET(
     const profiles = await getAllProfiles();
     setCustomColors(Object.fromEntries(profiles.map((p) => [p.playerId, p.accentColor])));
 
-    const aggregates = buildPlayerAggregates(await fetchAllPlayerStats());
+    const { players: aggregates } = await getCrewStats();
     const player = aggregates.find((p) => p.id === playerId);
     if (!player) {
       return new Response('Player not found', { status: 404 });

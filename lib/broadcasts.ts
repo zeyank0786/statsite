@@ -1,5 +1,6 @@
 import { query, queryAll } from './db';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Broadcasts — an admin "mass nudge" to the whole crew. Unlike a Nudge (one
@@ -24,6 +25,10 @@ export interface Broadcast {
 
 /** Additive table — created on first use, no manual migration. */
 export async function ensureBroadcastTable(): Promise<void> {
+  return ensureOnce('broadcasts', ensureBroadcastTableUncached);
+}
+
+async function ensureBroadcastTableUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS Broadcast (
        id          TEXT PRIMARY KEY,

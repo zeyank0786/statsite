@@ -3,6 +3,7 @@ import { query, queryOne, queryAll } from './db';
 import { computeLocksForPlayer } from './locks';
 import { CATEGORY_ORDER, orderStats } from './categories';
 import { STAT_DESCRIPTIONS } from './statDescriptions';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * AI stat hints — a starting point for a suggestion, read off a piece of
@@ -98,6 +99,10 @@ export function isAiConfigured(): boolean {
  * suggestion and stat-note tables use, so there's no migration to run.
  */
 export async function ensureHintColumns(): Promise<void> {
+  return ensureOnce('statHints', ensureHintColumnsUncached);
+}
+
+async function ensureHintColumnsUncached(): Promise<void> {
   for (const alter of [
     'ALTER TABLE Evidence ADD COLUMN aiHints TEXT',
     'ALTER TABLE Evidence ADD COLUMN aiHintsAt TEXT',

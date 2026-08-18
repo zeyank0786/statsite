@@ -1,29 +1,23 @@
 'use client';
 
 import { useState } from 'react';
-import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
-import LockBadge from '@/components/LockBadge';
-import { PlusIcon, CheckIcon, XIcon } from '@/components/icons';
-
-interface SubjectStat {
-  id: string;
-  code: string;
-  label: string;
-  value: number;
-  locked: boolean;
-  lockSource: 'override' | 'rules' | null;
-  lockReasons: any[];
-  categoryCode: string;
-  categoryLabel: string;
-}
+import { orderCategories, orderStats } from '@/lib/categories';
+import StatPicker, { type PickableStat } from '@/components/StatPicker';
+import { PlusIcon, XIcon } from '@/components/icons';
 
 const DELTAS = [-2, -1, 1, 2];
 
 /**
- * "Add a stat the proposer missed" — lets an eligible voter tack another stat
- * onto someone else's suggestion. The added stat shares the suggestion's
- * evidence/reason and is voted on independently (server-side), so this is just
- * the picker.
+ * "Add a stat the proposer missed" — lets an eligible voter tack more stats
+ * onto someone else's suggestion. The added stats share the suggestion's
+ * evidence and reason and are voted on independently (server-side), so this is
+ * just the picker.
+ *
+ * Several stats at a time, each with its own value: one moment usually
+ * demonstrates more than one thing, and forcing a separate trip through this
+ * panel per stat meant people added the obvious one and gave up on the rest.
+ * A shared value would be the wrong compromise — the whole point of adding
+ * three stats is that they didn't all move by the same amount.
  */
 export default function AddStatToSuggestion({
   anchorId,
@@ -39,10 +33,10 @@ export default function AddStatToSuggestion({
   onAdded: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [stats, setStats] = useState<SubjectStat[] | null>(null);
+  const [stats, setStats] = useState<PickableStat[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [pick, setPick] = useState<string | null>(null);
-  const [delta, setDelta] = useState(1);
+  /** statId → delta. Insertion order is the order they were picked. */
+  const [picks, setPicks] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -55,9 +49,10 @@ export default function AddStatToSuggestion({
       const res = await fetch(`/api/players/${subjectId}`);
       if (res.ok) {
         const data = await res.json();
-        const flat: SubjectStat[] = [];
-        for (const cat of orderCategories<any>(data.categories || [])) {
-          for (const s of orderStats<any>(cat.stats || [])) {
+        type ApiCategory = { code: string; label: string; stats: PickableStat[] };
+        const flat: PickableStat[] = [];
+        for (const cat of orderCategories<ApiCategory>(data.categories || [])) {
+          for (const s of orderStats<PickableStat>(cat.stats || [])) {
             flat.push({ ...s, categoryCode: cat.code, categoryLabel: cat.label });
           }
         }
@@ -72,24 +67,39 @@ export default function AddStatToSuggestion({
     }
   };
 
+  const toggle = (statId: string) => {
+    setPicks((current) => {
+      if (statId in current) {
+        const next = { ...current };
+        delete next[statId];
+        return next;
+      }
+      return { ...current, [statId]: 1 }; // +1 is the default, as everywhere
+    });
+  };
+
+  const setDelta = (statId: string, delta: number) =>
+    setPicks((current) => ({ ...current, [statId]: delta }));
+
+  const chosen = Object.entries(picks);
+
   const submit = async () => {
-    if (!pick) return;
+    if (chosen.length === 0) return;
     setBusy(true);
     setError('');
     try {
       const res = await fetch(`/api/suggestions/${anchorId}/add-stat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ statId: pick, delta }),
+        body: JSON.stringify({ stats: chosen.map(([statId, delta]) => ({ statId, delta })) }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setOpen(false);
-        setPick(null);
-        setDelta(1);
+        setPicks({});
         onAdded();
       } else {
-        setError(data.error || 'Failed to add the stat');
+        setError(data.error || 'Failed to add the stats');
       }
     } finally {
       setBusy(false);
@@ -102,14 +112,12 @@ export default function AddStatToSuggestion({
         onClick={openPicker}
         className="mt-3 flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border text-purple-300 border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 transition"
       >
-        <PlusIcon size={14} /> Add a stat they missed
+        <PlusIcon size={14} /> Add stats they missed
       </button>
     );
   }
 
   const available = (stats || []).filter((s) => !existingStatIds.includes(s.id));
-  const categories = [...new Set(available.map((s) => s.categoryCode))];
-  const selected = available.find((s) => s.id === pick);
 
   return (
     <div
@@ -117,101 +125,78 @@ export default function AddStatToSuggestion({
       style={{ borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.05)' }}
     >
       <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-semibold text-white">Add a stat to {subjectName}&apos;s suggestion</p>
-        <button onClick={() => setOpen(false)} className="p-1 rounded-lg text-neutral-500 hover:text-white transition">
+        <p className="text-sm font-semibold text-white">
+          Add stats to {subjectName}&apos;s suggestion
+        </p>
+        <button
+          onClick={() => setOpen(false)}
+          className="p-1 rounded-lg text-neutral-500 hover:text-white transition"
+        >
           <XIcon size={15} />
         </button>
       </div>
       <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
-        It shares the same evidence and reason, and the crew votes on it on its own.
+        They share the same evidence and reason, and the crew votes on each one on its own.
       </p>
 
       {loading ? (
         <div className="h-24 rounded-xl animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }} />
+      ) : available.length === 0 ? (
+        <p className="text-sm py-2" style={{ color: 'var(--text-secondary)' }}>
+          Every tracked stat is already in this suggestion.
+        </p>
       ) : (
         <>
-          <div className="space-y-3 max-h-64 overflow-y-auto mb-3 pr-1">
-            {categories.map((code) => {
-              const catStats = available.filter((s) => s.categoryCode === code);
-              const meta = getCategoryMeta(code, catStats[0]?.categoryLabel);
-              return (
-                <div key={code}>
-                  <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: meta.hex }}>
-                    {catStats[0]?.categoryLabel || code}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    {catStats.map((s) => {
-                      const active = pick === s.id;
-                      return (
-                        <button
-                          key={s.id}
-                          onClick={() => !s.locked && setPick(s.id)}
-                          disabled={s.locked}
-                          className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-left transition ${
-                            s.locked ? 'opacity-50 cursor-not-allowed' : active ? 'text-white' : 'text-neutral-300 hover:text-white'
-                          }`}
-                          style={{
-                            borderColor: active ? meta.hex : 'var(--surface-border)',
-                            background: active ? `${meta.hex}18` : 'rgba(255,255,255,0.02)',
-                          }}
-                        >
-                          <span className="text-sm truncate">{s.label}</span>
-                          {s.locked ? (
-                            <LockBadge reasons={s.lockReasons} source={s.lockSource} statLabel={s.label} />
-                          ) : active ? (
-                            <CheckIcon size={14} />
-                          ) : (
-                            <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-                              {s.value}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+          <div className="max-h-72 overflow-y-auto mb-3 pr-1">
+            <StatPicker
+              stats={available}
+              selectedIds={Object.keys(picks)}
+              onToggle={toggle}
+              placeholder="Search their stats…"
+              /* Each chosen stat carries its own value, revealed once picked. */
+              trailing={(stat) => (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {DELTAS.map((d) => {
+                    const on = picks[stat.id] === d;
+                    const color = d > 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDelta(stat.id, d)}
+                        aria-label={`${d > 0 ? '+' : ''}${d} ${stat.label}`}
+                        className={`py-1.5 rounded-lg border font-bold text-sm transition ${
+                          on ? 'text-white' : 'text-neutral-400 hover:text-white'
+                        }`}
+                        style={{
+                          borderColor: on ? color : 'var(--surface-border)',
+                          background: on
+                            ? `color-mix(in srgb, ${color} 20%, transparent)`
+                            : 'transparent',
+                        }}
+                      >
+                        {d > 0 ? '+' : ''}
+                        {d}
+                      </button>
+                    );
+                  })}
                 </div>
-              );
-            })}
-            {available.length === 0 && (
-              <p className="text-sm py-2" style={{ color: 'var(--text-secondary)' }}>
-                Every tracked stat is already in this suggestion.
-              </p>
-            )}
+              )}
+            />
           </div>
-
-          {selected && (
-            <div className="grid grid-cols-4 gap-1.5 mb-3">
-              {DELTAS.map((d) => {
-                const on = delta === d;
-                const color = d > 0 ? 'var(--accent-green)' : 'var(--accent-red)';
-                return (
-                  <button
-                    key={d}
-                    onClick={() => setDelta(d)}
-                    className={`py-1.5 rounded-lg border font-bold text-sm transition ${
-                      on ? 'text-white' : 'text-neutral-400 hover:text-white'
-                    }`}
-                    style={{
-                      borderColor: on ? color : 'var(--surface-border)',
-                      background: on ? `color-mix(in srgb, ${color} 20%, transparent)` : 'transparent',
-                    }}
-                  >
-                    {d > 0 ? '+' : ''}
-                    {d}
-                  </button>
-                );
-              })}
-            </div>
-          )}
 
           {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
 
           <button
             onClick={submit}
-            disabled={busy || !pick}
+            disabled={busy || chosen.length === 0}
             className="btn-gradient text-sm py-2 disabled:opacity-50"
           >
-            {busy ? 'Adding…' : selected ? `Add ${delta > 0 ? '+' : ''}${delta} ${selected.label}` : 'Pick a stat'}
+            {busy
+              ? 'Adding…'
+              : chosen.length === 0
+              ? 'Pick a stat'
+              : `Add ${chosen.length} stat${chosen.length > 1 ? 's' : ''}`}
           </button>
         </>
       )}

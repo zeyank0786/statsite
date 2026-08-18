@@ -2,8 +2,9 @@ import { query, queryOne, queryAll } from './db';
 import { announceStatMilestones } from './milestones';
 import { getStatTier } from './categories';
 import { sendPushToPlayers } from './push';
-import { invalidateStatsCache } from './statsCache';
+import { afterStatChange } from './statsWrite';
 import { v4 as uuid } from 'uuid';
+import { ensureOnce } from './ensureOnce';
 
 /**
  * Automatic stat changes — standing rules that move stats on a schedule.
@@ -126,6 +127,10 @@ export interface AppliedChange {
 
 /** Additive tables — created on first use, no manual migration. */
 export async function ensureAutomationTables(): Promise<void> {
+  return ensureOnce('automations', ensureAutomationTablesUncached);
+}
+
+async function ensureAutomationTablesUncached(): Promise<void> {
   await query(
     `CREATE TABLE IF NOT EXISTS Automation (
        id               TEXT PRIMARY KEY,
@@ -797,7 +802,7 @@ async function applyRuleToPlayer(
     }
   }
 
-  if (applied.length > 0) invalidateStatsCache();
+  if (applied.length > 0) await afterStatChange();
   return applied;
 }
 

@@ -8,6 +8,62 @@ file should always answer one question at a glance: what still needs telling?
 
 ---
 
+## Search, multi-add, scroll lock, home avatar — and an 87% database cut — 18 August 2026
+
+Four things the crew will notice, and one they won't but the bill will.
+
+**Search every stat list.** One shared picker now backs the suggest flow, "add
+stats they missed" and the stat reference, with fuzzy search over label, code
+and category. Type `disc` for Discipline, `mtl` to narrow to Mentality. With
+the box empty it still shows the familiar category grouping.
+
+**Add several missed stats at once, each with its own value.** Adding a stat a
+proposer missed used to be one stat per trip through the panel with a single
++/-. Pick as many as apply and set each one's value independently — one moment
+usually demonstrates more than one thing.
+
+**Training drills lock the page.** A stray swipe or space bar used to scroll
+the page behind a running drill, which on a timed game costs the attempt. The
+board keeps its own scrolling; the page behind it is frozen until you're done.
+
+**Your face on your own dashboard.** The greeting names you — now it shows you
+too, linked to your profile.
+
+### The database work
+
+Turso bills rows *read*, and the app was reading roughly 276M a month at this
+crew's usage. It's now ~36M — an **87% cut** — with no feature removed.
+
+What was actually wrong:
+
+- The notification bell recomputed all 49 achievements for every player, from
+  the full stat table and all of StatHistory, **on every poll** — every 30
+  seconds, per open tab — and almost always wrote nothing. Achievements derive
+  from stats, so they're now recorded when a stat changes, plus a daily cron
+  sweep for the few that turn over with the calendar (90-day window, streaks).
+- Six surfaces each ran the same crew-wide stat computation for themselves.
+  They now share one cached result, dropped the instant a stat changes.
+- Almost nothing was indexed. `ORDER BY createdAt DESC LIMIT 30` was reading
+  and sorting whole tables to return 30 rows, in the feed, the ticker, the
+  evidence board and the suggestions list. 38 indexes fix that, including an
+  expression index for the `COALESCE(resolvedAt, createdAt)` ordering.
+- The message board returned every message ever posted, then ran 3-4 more
+  queries *per message* — about 1,200 round trips — every five seconds. It's
+  five queries and a page of 20 now, with "Show older".
+- The suggestions list did the same with the whole Suggestion, Vote and
+  StatHistory tables. Pending is still shown in full; resolved history pages.
+- Housekeeping (expiring week-old suggestions, a one-shot backfill) ran on
+  every read of the suggestions list. It runs once a day now.
+
+Timers were also relaxed where they were chasing things that change a few times
+a day: messages 5s → 15s, suggestions 8s → 20s.
+
+`scripts/bench/` holds the harness this was measured with — seed a database at
+your scale, run the real code paths, price each query from its actual SQLite
+query plan. `npm run bench:compare` prints the before/after.
+
+---
+
 ## AI starting point for suggestions — 15 August 2026
 
 Picking stats off someone's evidence means holding 70 definitions in your head,

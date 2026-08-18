@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Avatar from '@/components/Avatar';
 import RadarChart from '@/components/RadarChart';
 import Sparkline from '@/components/Sparkline';
 import AchievementBadge, { AchievementData } from '@/components/AchievementBadge';
@@ -92,15 +93,37 @@ export default function DashboardView({
         />
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-8 items-center">
           <div>
-            <p
-              className="text-xs font-bold uppercase tracking-[0.2em] mb-3"
-              style={{ color: 'var(--accent-cyan)' }}
-            >
-              Welcome back
-            </p>
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">
-              {playerName}
-            </h1>
+            {/* Your own face on your own dashboard: the greeting was the one
+                place in the app that named you without showing you. The
+                morphKey pairs it with the hero avatar on your profile, so
+                navigating there animates one element rather than swapping two. */}
+            <div className="flex items-center gap-4 mb-4">
+              <Link
+                href={`/players/${playerId}`}
+                aria-label="Your profile"
+                className="shrink-0 transition hover:opacity-90"
+              >
+                <Avatar
+                  id={playerId}
+                  name={playerName}
+                  size={64}
+                  ring
+                  morphKey={`player-avatar-${playerId}`}
+                  profileCard={false}
+                />
+              </Link>
+              <div className="min-w-0">
+                <p
+                  className="text-xs font-bold uppercase tracking-[0.2em] mb-1"
+                  style={{ color: 'var(--accent-cyan)' }}
+                >
+                  Welcome back
+                </p>
+                <h1 className="font-display text-4xl md:text-5xl font-bold text-white truncate">
+                  {playerName}
+                </h1>
+              </div>
+            </div>
 
             <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
               <div>

@@ -29,27 +29,33 @@ async function getSessionPlayerId(): Promise<string | null> {
   return playerId ? String(playerId) : null;
 }
 
-/** GET: pending queue + resolved history, with everything the page needs. */
-export async function GET() {
+/** Resolved suggestions returned on the first page; older ones on request. */
+const INITIAL_RESOLVED = 20;
+const MORE_RESOLVED = 50;
+
+/**
+ * GET: the pending queue in full, plus a page of resolved history.
+ *
+ * The queue is what the page is for and is never large, so it is never capped.
+ * Resolved history is, because it only grows — and this endpoint is polled.
+ */
+export async function GET(request: Request) {
   const currentPlayerId = await getSessionPlayerId();
   if (!currentPlayerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  try {
-    // Lazy housekeeping: resolve week-old pending suggestions by votes cast
-    try {
-      await expireStaleSuggestions();
-    } catch (e) {
-      console.error('Stale-suggestion expiry failed (listing continues):', e);
-    }
+  // Pending suggestions are always returned in full — they're the queue, and
+  // there are never many. Only resolved history pages.
+  const { searchParams } = new URL(request.url);
+  const requested = Number(searchParams.get('resolved'));
+  const resolvedLimit =
+    Number.isFinite(requested) && requested > 0
+      ? Math.min(requested, 500)
+      : INITIAL_RESOLVED;
 
-    // One-shot: repair stat history that recorded "see other box" back when
-    // suggestions had two text fields. Self-marking, so this is a no-op after
-    // the first run.
-    try {
-      await backfillPointerHistory();
-    } catch (e) {
-      console.error('Pointer-reason backfill failed (listing continues):', e);
-    }
+  try {
+    // Housekeeping that used to run here — expiring week-old suggestions and a
+    // one-shot history backfill — now runs from the daily cron. Both could only
+    // change once a day, and this endpoint is polled every few seconds.
 
     // Recap watermark: a suggestion that resolved WITHOUT your vote after this
     // moment counts as "missed". Defaults to when you joined, so a new player
@@ -67,21 +73,42 @@ export async function GET() {
     }
     if (Number.isNaN(recapWatermarkMs)) recapWatermarkMs = 0;
 
-    const suggestions = await queryAll(
-      `SELECT sg.*,
+    // Pending and resolved are fetched separately so the resolved half can be
+    // capped. A single ORDER BY over both meant every poll read, joined and
+    // sorted the entire Suggestion table to render a screen showing ~20 rows.
+    const COLUMNS = `sg.*,
               subject.username as subjectName, subject.active as subjectActive,
               proposer.username as proposerName,
               s.code as statCode, s.label as statLabel,
               c.code as categoryCode, c.label as categoryLabel,
-              COALESCE(sv.value, 5) as currentValue
-       FROM Suggestion sg
+              COALESCE(sv.value, 5) as currentValue`;
+    const JOINS = `FROM Suggestion sg
        JOIN Player subject ON sg.playerId = subject.id
        JOIN Player proposer ON sg.proposedById = proposer.id
        JOIN Stat s ON sg.statId = s.id
        JOIN Category c ON s.categoryId = c.id
-       LEFT JOIN StatValue sv ON sv.statId = sg.statId AND sv.playerId = sg.playerId
-       ORDER BY (sg.status = 'pending') DESC, COALESCE(sg.resolvedAt, sg.createdAt) DESC`
-    );
+       LEFT JOIN StatValue sv ON sv.statId = sg.statId AND sv.playerId = sg.playerId`;
+
+    // One row past the limit answers "is there more?" for free. Asking
+    // COUNT(*) instead meant scanning the whole table on every poll to render
+    // a button label.
+    const [pending, resolvedPlusOne] = await Promise.all([
+      queryAll(
+        `SELECT ${COLUMNS} ${JOINS}
+         WHERE sg.status = 'pending'
+         ORDER BY sg.createdAt DESC`
+      ),
+      queryAll(
+        `SELECT ${COLUMNS} ${JOINS}
+         WHERE sg.status != 'pending'
+         ORDER BY COALESCE(sg.resolvedAt, sg.createdAt) DESC
+         LIMIT ?`,
+        [resolvedLimit + 1]
+      ),
+    ]);
+    const hasMoreResolved = resolvedPlusOne.length > resolvedLimit;
+    const resolved = hasMoreResolved ? resolvedPlusOne.slice(0, resolvedLimit) : resolvedPlusOne;
+    const suggestions = [...pending, ...resolved];
 
     // What an approved suggestion ACTUALLY moved the stat from/to.
     // `currentValue` above is the live value, which for a resolved suggestion
@@ -89,13 +116,33 @@ export async function GET() {
     // count it. applyApproval() stamps the StatHistory row with the same
     // timestamp it sets resolvedAt to, so statId+playerId+timestamp identifies
     // the exact row (works retroactively; no migration needed).
-    const appliedRows = await queryAll(
-      `SELECT sv.statId as statId, sv.playerId as playerId,
-              sh.oldValue, sh.newValue, sh.createdAt
-       FROM StatHistory sh
-       JOIN StatValue sv ON sh.statValueId = sv.id
-       WHERE sh.source = 'suggestion'`
+    // Everything below is scoped to the suggestions actually being returned.
+    // These three used to read the whole StatHistory, Vote and
+    // SuggestionEvidence tables on every poll, then throw most of it away.
+    const ids = (suggestions as unknown as { id: string }[]).map((s) => String(s.id));
+    const idHoles = ids.map(() => '?').join(',');
+    const noRows = ids.length === 0;
+
+    // The earliest suggestion on this page bounds how far back the applied
+    // history can possibly be, which keeps the scan off the whole table.
+    const oldestAt = (suggestions as unknown as { resolvedAt?: string; createdAt: string }[]).reduce(
+      (min, s) => {
+        const at = String(s.resolvedAt || s.createdAt);
+        return !min || at < min ? at : min;
+      },
+      ''
     );
+
+    const appliedRows = noRows
+      ? []
+      : await queryAll(
+          `SELECT sv.statId as statId, sv.playerId as playerId,
+                  sh.oldValue, sh.newValue, sh.createdAt
+           FROM StatHistory sh
+           JOIN StatValue sv ON sh.statValueId = sv.id
+           WHERE sh.source = 'suggestion' AND sh.createdAt >= ?`,
+          [oldestAt]
+        );
     const appliedByKey = new Map<string, { oldValue: number; newValue: number }>();
     for (const r of appliedRows as any[]) {
       appliedByKey.set(`${String(r.statId)}:${String(r.playerId)}:${String(r.createdAt)}`, {
@@ -104,10 +151,14 @@ export async function GET() {
       });
     }
 
-    const votes = await queryAll(
-      `SELECT v.suggestionId, v.userId, v.choice, p.username
-       FROM Vote v JOIN Player p ON v.userId = p.id`
-    );
+    const votes = noRows
+      ? []
+      : await queryAll(
+          `SELECT v.suggestionId, v.userId, v.choice, p.username
+           FROM Vote v JOIN Player p ON v.userId = p.id
+           WHERE v.suggestionId IN (${idHoles})`,
+          ids
+        );
     const votesBySuggestion = new Map<string, any[]>();
     for (const vote of votes as any[]) {
       const key = String(vote.suggestionId);
@@ -115,13 +166,17 @@ export async function GET() {
       votesBySuggestion.get(key)!.push(vote);
     }
 
-    const evidenceLinks = await queryAll(
-      `SELECT se.suggestionId, e.id, e.mediaUrl, e.mediaType, e.caption, e.captionHidden, e.playerId,
-              p.username as posterName
-       FROM SuggestionEvidence se
-       JOIN Evidence e ON se.evidenceId = e.id
-       JOIN Player p ON e.playerId = p.id`
-    );
+    const evidenceLinks = noRows
+      ? []
+      : await queryAll(
+          `SELECT se.suggestionId, e.id, e.mediaUrl, e.mediaType, e.caption, e.captionHidden, e.playerId,
+                  p.username as posterName
+           FROM SuggestionEvidence se
+           JOIN Evidence e ON se.evidenceId = e.id
+           JOIN Player p ON e.playerId = p.id
+           WHERE se.suggestionId IN (${idHoles})`,
+          ids
+        );
     const evidenceBySuggestion = new Map<string, any[]>();
     for (const link of evidenceLinks as any[]) {
       const key = String(link.suggestionId);
@@ -231,7 +286,14 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json(payload);
+    // Still an array at the top level so existing callers keep working; the
+    // paging flags ride alongside as non-enumerable-ish extras on the body.
+    return NextResponse.json({
+      suggestions: payload,
+      hasMoreResolved,
+      resolvedShown: resolved.length,
+      nextResolved: hasMoreResolved ? resolved.length + MORE_RESOLVED : null,
+    });
   } catch (error: any) {
     console.error('Error fetching suggestions:', error);
     return NextResponse.json(errorPayload('Failed to fetch suggestions', error), { status: 500 });

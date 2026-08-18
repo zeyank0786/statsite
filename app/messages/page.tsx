@@ -87,6 +87,11 @@ function MessagesContent() {
   const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  // Paging state for the board.
+  const [messageLimit, setMessageLimit] = useState(20);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalMessages, setTotalMessages] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [messageContent, setMessageContent] = useState('');
   const [posting, setPosting] = useState(false);
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
@@ -144,9 +149,11 @@ function MessagesContent() {
     }
   }, [status, router]);
 
-  // usePoll runs once immediately on mount, then every 5s while the tab is
+  // usePoll runs once immediately on mount, then on a timer while the tab is
   // visible — a board left open in a background tab stops querying entirely.
-  usePoll(() => loadMessages(), 5000, { enabled: status === 'authenticated' });
+  // 5s was fast enough to feel like chat without being chat; 15s reads the
+  // same in practice for a board people post to a few times a day.
+  usePoll(() => loadMessages(), 15000, { enabled: status === 'authenticated' });
 
   // Mark all messages as read when page loads or messages change
   useEffect(() => {
@@ -160,17 +167,34 @@ function MessagesContent() {
     }
   }, [messages.length, currentPlayerId]);
 
-  const loadMessages = async () => {
+  /**
+   * The board is paged. `wanted` is how many messages the server has been
+   * asked for; it grows by 50 each time "Show older" is pressed and is kept
+   * in state so the poll refetches everything already on screen instead of
+   * snapping the list back to the newest 20 while someone is reading.
+   */
+  const loadMessages = async (wanted = messageLimit) => {
     try {
-      const res = await fetch('/api/messages');
+      const res = await fetch(`/api/messages?limit=${wanted}`);
       if (res.ok) {
-        setMessages(await res.json());
+        const body = await res.json();
+        setMessages(Array.isArray(body) ? body : body.messages || []);
+        setHasMore(Boolean(body.hasMore));
+        setTotalMessages(Number(body.total) || 0);
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const showOlderMessages = async () => {
+    const next = messageLimit + 50;
+    setMessageLimit(next);
+    setLoadingMore(true);
+    await loadMessages(next);
+    setLoadingMore(false);
   };
 
   const loadPlayers = async () => {
@@ -1023,6 +1047,23 @@ function MessagesContent() {
               </article>
             );
           })
+        )}
+
+        {/* The board is paged: the newest 20 load first, older ones on
+            request. Returning the whole archive on a timer was most of what
+            this page cost. */}
+        {hasMore && !filterUser && (
+          <div className="pt-2 text-center">
+            <button
+              onClick={showOlderMessages}
+              disabled={loadingMore}
+              className="btn-ghost inline-flex disabled:opacity-50"
+            >
+              {loadingMore
+                ? 'Loading…'
+                : `Show older (${messages.length} of ${totalMessages})`}
+            </button>
+          </div>
         )}
       </div>
     </AppShell>
