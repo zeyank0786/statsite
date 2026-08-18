@@ -14,7 +14,7 @@ import { getCategoryMeta, orderCategories, orderStats } from '@/lib/categories';
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import TierBadge from '@/components/TierBadge';
 import MentionTextarea from '@/components/MentionTextarea';
-import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
+import LockoutBanner, { useMyLockouts, isLockedOut } from '@/components/LockoutBanner';
 import { ChevronLeftIcon, CheckIcon, ImageIcon, XIcon, SparklesIcon } from '@/components/icons';
 
 interface Player {
@@ -115,7 +115,7 @@ function NewSuggestionContent() {
 
   const currentPlayerId = (session?.user as any)?.playerId;
   const myLockouts = useMyLockouts(status === 'authenticated');
-  const suggestLocked = 'suggest' in myLockouts;
+  const suggestLocked = isLockedOut(myLockouts, 'suggest');
   const paramSubject = searchParams.get('subject');
   const paramEvidence = searchParams.get('evidenceId');
   // Starting text for the account, so deep-links from elsewhere in the app

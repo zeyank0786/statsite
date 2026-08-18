@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { featureLockMessage } from '@/lib/featureLocks';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import {
@@ -44,6 +45,11 @@ export async function GET() {
 export async function POST(request: Request) {
   const playerId = await getPlayerId();
   if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Runs land on a crew-visible leaderboard, so playing is taking part even
+  // though a drill awards no stats.
+  const lockMsg = await featureLockMessage(String(playerId), 'training');
+  if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
   try {
     const body = await request.json();

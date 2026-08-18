@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { featureLockMessage } from '@/lib/featureLocks';
 import { queryOne } from '@/lib/db';
 import {
   ensureEvidenceFolderTables,
@@ -45,6 +46,10 @@ export async function GET() {
 export async function POST(request: Request) {
   const actor = await getActor();
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const lockMsg = await featureLockMessage(actor.playerId, 'folders');
+  if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
+
   try {
     const { name } = await request.json();
     const clean = typeof name === 'string' ? name.trim() : '';

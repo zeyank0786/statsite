@@ -1,6 +1,7 @@
 import { query, queryAll } from './db';
 import { v4 as uuid } from 'uuid';
 import { ensureOnce } from './ensureOnce';
+import { invalidateAccessLocks, type AccessLock } from './accessLocks';
 
 /**
  * Per-player feature lockouts — the admin can bar a player from PARTICIPATING
@@ -22,6 +23,11 @@ export const LOCKABLE_FEATURES = [
   { key: 'messages', label: 'Messages', description: 'Posting, replying and reacting on the board' },
   { key: 'reviews', label: 'Reviews', description: 'Joining review sessions' },
   { key: 'targets', label: 'Targets', description: 'Setting or changing targets' },
+  { key: 'ambitions', label: 'Ambitions', description: 'Declaring ambitions and marking them complete' },
+  { key: 'goals', label: 'Group goals', description: 'Creating goals and logging contributions' },
+  { key: 'training', label: 'Training', description: 'Playing drills and appearing on their leaderboards' },
+  { key: 'automations', label: 'Automations', description: 'Creating or requesting automatic stat rules' },
+  { key: 'folders', label: 'Evidence folders', description: 'Creating and organising folders' },
 ] as const;
 
 export type LockableFeature = (typeof LOCKABLE_FEATURES)[number]['key'];
@@ -80,16 +86,19 @@ export async function featureLockMessage(
   return `You are locked out of ${label} by the admin${reason ? ` — ${reason}` : ''}. You can view, but not participate.`;
 }
 
-/** Admin: set or clear one lock. */
+/** Admin: set or clear one lock. Accepts account-level keys too. */
 export async function setFeatureLock(params: {
   playerId: string;
-  feature: LockableFeature;
+  feature: LockableFeature | AccessLock;
   locked: boolean;
   reason?: string | null;
   createdById?: string | null;
 }): Promise<void> {
   await ensureTable();
   const { playerId, feature, locked, reason, createdById } = params;
+  // The account-level locks are read through a short in-process cache, so an
+  // admin's change has to drop it or it would take up to a TTL to bite.
+  invalidateAccessLocks();
   await query('DELETE FROM FeatureLock WHERE playerId = ? AND feature = ?', [playerId, feature]);
   if (locked) {
     await query(

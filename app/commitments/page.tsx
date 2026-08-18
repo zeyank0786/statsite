@@ -8,7 +8,7 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
-import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
+import LockoutBanner, { useMyLockouts, isLockedOut } from '@/components/LockoutBanner';
 import CommitmentCard, { Commitment } from '@/components/CommitmentCard';
 import { PlusIcon } from '@/components/icons';
 
@@ -80,7 +80,7 @@ export default function CommitmentsPage() {
         eyebrow="Promises"
         eyebrowColor="var(--accent-green)"
         actions={
-          'commit' in myLockouts ? undefined : (
+          isLockedOut(myLockouts, 'commit') ? undefined : (
             <Link href="/commitments/new" className="btn-gradient text-sm">
               <PlusIcon size={16} />
               New commitment
@@ -163,7 +163,7 @@ export default function CommitmentsPage() {
               ? "You haven't committed to anything yet."
               : 'Nothing resolved yet.'}
           </p>
-          {tab !== 'done' && !('commit' in myLockouts) && (
+          {tab !== 'done' && !(isLockedOut(myLockouts, 'commit')) && (
             <Link href="/commitments/new" className="btn-gradient inline-flex">
               <PlusIcon size={16} />
               Make a commitment

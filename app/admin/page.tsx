@@ -1269,6 +1269,7 @@ interface LockableFeatureInfo {
 
 function LockoutSection({ players }: { players: { id: string; username: string }[] }) {
   const [features, setFeatures] = useState<LockableFeatureInfo[]>([]);
+  const [accessLocks, setAccessLocks] = useState<LockableFeatureInfo[]>([]);
   const [locks, setLocks] = useState<{ playerId: string; feature: string; reason: string | null }[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [reason, setReason] = useState('');
@@ -1281,6 +1282,7 @@ function LockoutSection({ players }: { players: { id: string; username: string }
       if (res.ok) {
         const data = await res.json();
         setFeatures(data.features || []);
+        setAccessLocks(data.accessLocks || []);
         setLocks(data.locks || []);
       }
     } catch (e) {
@@ -1323,9 +1325,12 @@ function LockoutSection({ players }: { players: { id: string; username: string }
         Feature lockouts
       </h2>
       <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-        Bar a player from participating in a feature — they can still view everything, and their
-        stats stay fully suggestable. A vote-locked player leaves the eligible-voter pool, so
-        majorities shrink accordingly.
+        Their stats stay fully suggestable either way — a lock is about what THEY can do.
+        A vote-locked player leaves the eligible-voter pool, so majorities shrink accordingly.
+        <br />
+        <span className="text-white">Locked out of everything</span> covers every feature by
+        blocking writes outright, so anything added to the app later is included automatically.
+        The individual toggles below are for finer control.
       </p>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -1361,6 +1366,55 @@ function LockoutSection({ players }: { players: { id: string; username: string }
             className="field max-w-lg"
           />
 
+          {/* Account-level first, and visually separated: these two are the
+              ones that cover features nobody has written yet. */}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider mb-2 text-white">
+              Whole account
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {accessLocks.map((f) => {
+                const locked = playerLocks.has(f.key);
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => setLock(f.key, !locked)}
+                    disabled={busy}
+                    className={`text-left px-3.5 py-3 rounded-xl border-2 transition ${
+                      locked ? '' : 'hover:bg-white/[0.03]'
+                    }`}
+                    style={{
+                      borderColor: locked ? 'rgba(239,68,68,0.8)' : 'var(--surface-border)',
+                      background: locked ? 'rgba(239,68,68,0.14)' : 'rgba(255,255,255,0.015)',
+                    }}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className={`text-sm font-bold ${locked ? 'text-red-300' : 'text-white'}`}>
+                        {locked ? '🔒 ' : ''}
+                        {f.label}
+                      </span>
+                      <span
+                        className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded"
+                        style={{
+                          background: locked ? 'rgba(239,68,68,0.2)' : 'rgba(52,211,153,0.12)',
+                          color: locked ? 'var(--accent-red)' : 'var(--accent-green)',
+                        }}
+                      >
+                        {locked ? 'On' : 'Off'}
+                      </span>
+                    </span>
+                    <span className="block text-[11px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+                      {f.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <p className="text-[11px] font-bold uppercase tracking-wider pt-1 text-white">
+            Individual features
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {features.map((f) => {
               const locked = playerLocks.has(f.key);

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
-import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
+import LockoutBanner, { useMyLockouts, isLockedOut } from '@/components/LockoutBanner';
 import LockBadge from '@/components/LockBadge';
 import MentionTextarea from '@/components/MentionTextarea';
 import { usePlayers } from '@/lib/usePlayers';
@@ -121,7 +121,7 @@ export default function NewCommitmentPage() {
   const selected = stats.filter((s) => changes[s.id] !== undefined);
   const categoriesInPlay = [...new Set(stats.map((s) => s.categoryCode))];
 
-  if ('commit' in myLockouts) {
+  if (isLockedOut(myLockouts, 'commit')) {
     return (
       <AppShell width="narrow">
         <PageHeader title="New Commitment" eyebrow="Promises" eyebrowColor="var(--accent-green)" />

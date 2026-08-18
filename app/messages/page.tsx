@@ -14,7 +14,7 @@ import { CATEGORY_ORDER, getCategoryMeta, orderStats, categoryCodeOfStat } from 
 import { cldThumb, cldVideoThumb } from '@/lib/cloudinary';
 import MentionTextarea from '@/components/MentionTextarea';
 import MentionText from '@/components/MentionText';
-import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
+import LockoutBanner, { useMyLockouts, isLockedOut } from '@/components/LockoutBanner';
 import { ShareMessageButton } from '@/components/ShareCardButton';
 import {
   XIcon,
@@ -115,7 +115,7 @@ function MessagesContent() {
 
   const currentPlayerId = (session?.user as any)?.playerId;
   const myLockouts = useMyLockouts(status === 'authenticated');
-  const messagesLocked = 'messages' in myLockouts;
+  const messagesLocked = isLockedOut(myLockouts, 'messages');
   const evidenceRefParam = searchParams.get('evidenceRef');
 
   // "Reference in message" from the evidence board lands here with ?evidenceRef=

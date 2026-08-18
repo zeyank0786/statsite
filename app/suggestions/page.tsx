@@ -10,7 +10,7 @@ import PageHeader from '@/components/PageHeader';
 import Avatar from '@/components/Avatar';
 import { getCategoryMeta } from '@/lib/categories';
 import { cldImage, cldThumb, cldVideoThumb } from '@/lib/cloudinary';
-import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
+import LockoutBanner, { useMyLockouts, isLockedOut } from '@/components/LockoutBanner';
 import AddStatToSuggestion from '@/components/AddStatToSuggestion';
 import MentionText from '@/components/MentionText';
 import { usePlayers } from '@/lib/usePlayers';
@@ -265,7 +265,7 @@ export default function SuggestionsPage() {
         eyebrow="Crew Votes"
         eyebrowColor="var(--accent-purple)"
         actions={
-          'suggest' in myLockouts ? undefined : (
+          isLockedOut(myLockouts, 'suggest') ? undefined : (
             <Link href="/suggestions/new" className="btn-gradient text-sm">
               <PlusIcon size={16} />
               New suggestion
@@ -327,7 +327,7 @@ export default function SuggestionsPage() {
             );
           })}
         </div>
-        {tab === 'pending' && votableIds.length > 1 && !('vote' in myLockouts) && (
+        {tab === 'pending' && votableIds.length > 1 && !(isLockedOut(myLockouts, 'vote')) && (
           <button
             onClick={() => {
               setSelectMode(!selectMode);
@@ -396,7 +396,7 @@ export default function SuggestionsPage() {
               anyPending &&
               !first.isSubject &&
               batch.items.some((s) => s.status === 'pending' && s.canVote) &&
-              !('suggest' in myLockouts);
+              !(isLockedOut(myLockouts, 'suggest'));
             const addAnchorId = (batch.items.find((s) => s.status === 'pending') || first).id;
             const existingStatIds = batch.items.map((s) => s.statId);
 
@@ -415,7 +415,7 @@ export default function SuggestionsPage() {
             // far are your own implicit yeses.
             const canEdit =
               !selectMode &&
-              !('suggest' in myLockouts) &&
+              !(isLockedOut(myLockouts, 'suggest')) &&
               batch.items.every((s) => s.isProposer) &&
               batch.items.every((s) => s.status === 'pending') &&
               batch.items.every((s) => s.voters.every((v) => v.playerId === first.proposerId));

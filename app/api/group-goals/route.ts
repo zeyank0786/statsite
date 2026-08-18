@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { featureLockMessage } from '@/lib/featureLocks';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { query, queryAll, queryOne } from '@/lib/db';
@@ -42,6 +43,9 @@ export async function GET() {
 export async function POST(request: Request) {
   const playerId = await getPlayerId();
   if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const lockMsg = await featureLockMessage(String(playerId), 'goals');
+  if (lockMsg) return NextResponse.json({ error: lockMsg }, { status: 403 });
 
   try {
     await ensureGroupGoalTables();

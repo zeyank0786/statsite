@@ -9,7 +9,7 @@ import Avatar from '@/components/Avatar';
 import { getUserColorHex } from '@/lib/userColors';
 import { orderCategories } from '@/lib/categories';
 import { cloudinaryConfigured } from '@/lib/cloudinary';
-import LockoutBanner, { useMyLockouts } from '@/components/LockoutBanner';
+import LockoutBanner, { useMyLockouts, isLockedOut } from '@/components/LockoutBanner';
 import EvidenceCard, { EvidenceTile, CardHandlers } from '@/components/EvidenceCard';
 import EvidenceToolbar from '@/components/EvidenceToolbar';
 import EvidenceComposer from '@/components/EvidenceComposer';
@@ -34,7 +34,7 @@ export default function EvidenceBoardPage() {
 
   const currentPlayerId = (session?.user as any)?.playerId;
   const myLockouts = useMyLockouts(status === 'authenticated');
-  const evidenceLocked = 'evidence' in myLockouts;
+  const evidenceLocked = isLockedOut(myLockouts, 'evidence');
 
   useEffect(() => {
     if (status === 'unauthenticated') {

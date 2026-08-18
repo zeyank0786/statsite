@@ -8,6 +8,43 @@ file should always answer one question at a glance: what still needs telling?
 
 ---
 
+## Lockouts that actually hold — 18 August 2026
+
+Feature lockouts were a list of named things a player couldn't do, and that
+list had one structural problem: a feature shipped *after* the list was written
+wasn't on it. So every new feature quietly arrived unlocked for accounts the
+admin had barred from everything else. Ambitions, group goals, training drills,
+automations and evidence folders were all reachable by a "locked" account.
+
+There are now two account-level switches, above the per-feature ones:
+
+- **Locked out of everything** — they can view the whole app and change nothing.
+- **No access at all** — every page shows a lockout screen instead.
+
+The important part is *how* they're enforced. Rather than naming features, they
+block by request type at the front door (`proxy.ts`), so a feature added next
+month is covered the moment it exists, with no code change. The per-feature
+toggles remain for finer control, and five missing ones were added
+(ambitions, group goals, training, automations, folders).
+
+A locked account can still do a short, deliberate list of things that affect
+nobody else: view everything, clear its own notifications and unread badges,
+manage its own reminders, and stay subscribed to push — which is how they'll
+hear when the lock lifts. That list is shown to them, plainly, on the lockout
+banner and screen, so "what am I still allowed to do?" has an answer on the
+page rather than by trial and error.
+
+They also now get a **notification** when a lock is applied or lifted, with the
+admin's reason. Being silently unable to do anything, with no idea why, was the
+worst version of this.
+
+Two smaller things: "Clear all lockouts" now really does clear everything
+(it used to clear only the features that existed when the button was written),
+and an admin can no longer lock their own account — there'd be no way back in
+to undo it.
+
+---
+
 ## Search, multi-add, scroll lock, home avatar — and a 92% database cut — 18 August 2026
 
 Four things the crew will notice, and one they won't but the bill will.
