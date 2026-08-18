@@ -8,7 +8,7 @@ file should always answer one question at a glance: what still needs telling?
 
 ---
 
-## Search, multi-add, scroll lock, home avatar — and an 87% database cut — 18 August 2026
+## Search, multi-add, scroll lock, home avatar — and a 92% database cut — 18 August 2026
 
 Four things the crew will notice, and one they won't but the bill will.
 
@@ -31,8 +31,13 @@ too, linked to your profile.
 
 ### The database work
 
-Turso bills rows *read*, and the app was reading roughly 276M a month at this
-crew's usage. It's now ~36M — an **87% cut** — with no feature removed.
+Turso bills rows *read*, and the app was reading roughly 607M a month at this
+crew's usage. It's now ~48M — a **92% cut** — with no feature removed.
+
+(Those figures are measured against a database seeded to match the live one:
+2,092 StatHistory rows, 1,315 suggestions, 2,694 votes, 20 evidence posts. The
+shape matters — this crew suggests and votes constantly and barely posts to the
+board, so the tables the hot queries were scanning were the big ones.)
 
 What was actually wrong:
 

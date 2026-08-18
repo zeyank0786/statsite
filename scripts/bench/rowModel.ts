@@ -103,6 +103,42 @@ export class RowModel {
   }
 
   /**
+   * Rows matching an equality lookup where the SQL pins the column to a
+   * literal — `WHERE status = 'pending'`.
+   *
+   * Average group size is badly wrong for a skewed column. Suggestion has
+   * three statuses but is overwhelmingly resolved, so averaging says a status
+   * lookup returns ~650 rows when `status = 'pending'` returns about twelve.
+   * That one artifact was inflating the two most frequent paths in the app.
+   */
+  private async literalSelectivity(
+    table: string,
+    columns: string[],
+    sql: string
+  ): Promise<number | null> {
+    const clauses: string[] = [];
+    const values: unknown[] = [];
+    for (const col of columns) {
+      // `col = 'value'` / `col='value'`, optionally alias-qualified.
+      const re = new RegExp(`(?:\\w+\\.)?\\b${col}\\s*=\\s*'([^']*)'`, 'i');
+      const m = re.exec(sql);
+      if (!m) return null; // any unpinned column and this is not usable
+      clauses.push(`"${col}" = ?`);
+      values.push(m[1]);
+    }
+    if (clauses.length === 0) return null;
+    try {
+      const r = await this.db.execute({
+        sql: `SELECT COUNT(*) AS c FROM "${table}" WHERE ${clauses.join(' AND ')}`,
+        args: values as never[],
+      });
+      return Math.max(1, Number(r.rows[0].c));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Average number of rows matching an equality lookup on `columns`.
    * Measured from the data rather than assumed: a lookup by suggestionId
    * genuinely returns ~3 votes, and pretending it returns 1 would understate
@@ -255,7 +291,10 @@ export class RowModel {
               .split(/\s+AND\s+/i)
               .map((c) => c.split(/[=><]/)[0].trim())
               .filter(Boolean);
-            perLookup = await this.fanout(table, columns);
+            // Prefer the exact count when the query pins the column to a
+            // literal; fall back to the average group size otherwise.
+            const exact = await this.literalSelectivity(table, columns, sql);
+            perLookup = exact ?? (await this.fanout(table, columns));
           } else if (USING_PK.test(detail)) {
             perLookup = 1;
           } else {

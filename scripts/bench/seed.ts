@@ -19,20 +19,34 @@ import { CATEGORY_ORDER, CATEGORY_META, STAT_LETTER_ORDER } from '../../lib/cate
 
 const DB_URL = process.env.BENCH_DB || 'file:bench.db';
 
-/** The usage model. Every table size below follows from these. */
+/**
+ * The usage model. Every table size below follows from these.
+ *
+ * Calibrated against the live database on 2026-08-18, so the benchmark is
+ * measuring the shape of the real thing rather than a guess at it. Production
+ * row counts at that point:
+ *
+ *   Vote 2694 · StatHistory 2092 · Suggestion 1315 · MessageRead 444
+ *   SuggestionEvidence 315 · TrainingResult 314 · StatValue 282 · Message 111
+ *   Evidence 20 · Player 4        (8,285 rows total)
+ *
+ * The lopsidedness is the interesting part and it is not what you would guess:
+ * this crew suggests and votes constantly and barely posts to the board, so
+ * the tables the hot queries scan are the big ones.
+ */
 export const WORKLOAD = {
   activePlayers: 4,
   archivedPlayers: 1,
-  days: 42, // six weeks
-  suggestionsPerDay: 10,
-  statChangesPerDay: 14,
-  evidencePerDay: 3.5,
-  messagesPerDay: 6,
-  repliesPerMessage: 1.5,
-  reactionsPerMessage: 2,
-  trainingGamesPerDay: 9,
-  commitmentsPerWeek: 8,
-  reviewCyclesTotal: 6, // one a week, each covering all four players
+  days: 45,
+  suggestionsPerDay: 29, // → ~1,315 Suggestion, ~2,700 Vote
+  statChangesPerDay: 46, // → ~2,092 StatHistory
+  evidencePerDay: 0.45, // → ~20 Evidence
+  messagesPerDay: 2.5, // → ~111 Message
+  repliesPerMessage: 0.2,
+  reactionsPerMessage: 0.4,
+  trainingGamesPerDay: 7, // → ~314 TrainingResult
+  commitmentsPerWeek: 0.2,
+  reviewCyclesTotal: 1,
 };
 
 // Deterministic PRNG (mulberry32) — no dependency, reproducible across runs.
@@ -240,6 +254,11 @@ async function main() {
     for (const voter of active) {
       if (voter.id === subject.id) continue;
       if (pending && rand() < 0.4) continue; // some votes not yet cast
+      // Production averages ~2.05 votes per suggestion, not the full 3: a
+      // suggestion resolves as soon as it clears the threshold, so the last
+      // eligible voter often never gets to it. Over-seeding Vote would
+      // inflate the "before" number, since the old listing scanned it whole.
+      if (!pending && rand() < 0.32) continue;
       await run(
         `INSERT INTO Vote (id, suggestionId, userId, choice, createdAt) VALUES (?, ?, ?, ?, ?)`,
         [`v_${voteId++}`, `sg_${i}`, voter.id, rand() < 0.8 ? 'yes' : 'no', created]

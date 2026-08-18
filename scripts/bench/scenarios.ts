@@ -110,15 +110,17 @@ export const SCENARIOS: Scenario[] = [
          LEFT JOIN StatValue sv ON sv.statId = sg.statId AND sv.playerId = sg.playerId`;
 
       await queryOne('SELECT recapSeenAt, createdAt FROM Player WHERE id = ?', [playerId]);
-      const [pending, resolved] = await Promise.all([
+      // One row past the limit answers "is there more?", so there is no
+      // COUNT(*) over the whole table any more.
+      const [pending, resolvedPlusOne] = await Promise.all([
         queryAll(`SELECT ${COLUMNS} ${JOINS} WHERE sg.status = 'pending' ORDER BY sg.createdAt DESC`),
         queryAll(
           `SELECT ${COLUMNS} ${JOINS} WHERE sg.status != 'pending'
            ORDER BY COALESCE(sg.resolvedAt, sg.createdAt) DESC LIMIT ?`,
-          [RESOLVED_LIMIT]
+          [RESOLVED_LIMIT + 1]
         ),
       ]);
-      await queryOne(`SELECT COUNT(*) as c FROM Suggestion WHERE status != 'pending'`);
+      const resolved = resolvedPlusOne.slice(0, RESOLVED_LIMIT);
 
       const rows = [...pending, ...resolved] as unknown as {
         id: string;
