@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { runDueReminders } from '@/lib/reminders';
+import { describeSource, recordCronRun } from '@/lib/cronHealth';
 import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,10 @@ export const dynamic = 'force-dynamic';
  * pinger at this endpoint — see REMINDERS-SETUP.md. The daily Vercel cron
  * (vote-reminders) also calls runDueReminders() as a once-a-day backstop.
  *
+ * Every run is stamped in `CronRun` (lib/cronHealth) so the admin panel can
+ * show whether the pinger is actually alive. A dead pinger is otherwise
+ * completely silent — reminders just start arriving at the wrong time.
+ *
  * Auth: when CRON_SECRET is set, send it as either an `Authorization: Bearer`
  * header (Vercel + most cron services) or a `?secret=` query param (for
  * services that can't set headers). Unset → open, for local testing.
@@ -23,15 +28,21 @@ async function handle(request: Request) {
     const url = new URL(request.url);
     const qs = url.searchParams.get('secret') || url.searchParams.get('key');
     if (auth !== `Bearer ${secret}` && qs !== secret) {
+      // Deliberately not stamped: an unauthorised caller is not this job
+      // running, and letting one write the health row would make a
+      // misconfigured pinger look healthy while firing nothing.
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }
 
+  const source = describeSource(request);
   try {
     const result = await runDueReminders();
-    return NextResponse.json({ ok: true, ...result });
+    await recordCronRun('reminders', { ok: true, source });
+    return NextResponse.json({ ok: true, source, ...result });
   } catch (error: any) {
     console.error('Reminder cron failed:', error);
+    await recordCronRun('reminders', { ok: false, source, error });
     return NextResponse.json(errorPayload('Cron failed', error), { status: 500 });
   }
 }

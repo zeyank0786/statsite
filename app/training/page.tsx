@@ -19,6 +19,7 @@ import RhythmGame from '@/components/training/RhythmGame';
 import TypingGame from '@/components/training/TypingGame';
 import SearchGame from '@/components/training/SearchGame';
 import GameTutorial, { hasSeenTutorial } from '@/components/training/GameTutorial';
+import PracticeBoard from '@/components/training/practice/PracticeBoard';
 import { TUTORIALS } from '@/components/training/tutorials';
 import { useScrollLock } from '@/lib/useScrollLock';
 import { getUserColorHex } from '@/lib/userColors';
@@ -111,6 +112,7 @@ export default function TrainingPage() {
   // The walkthrough opens automatically until it's been completed once for
   // that game, and is reachable again from "How it works".
   const [showTutorial, setShowTutorial] = useState(false);
+  const [tab, setTab] = useState<'ranked' | 'practice'>('ranked');
 
   // A drill is played with fast taps and key presses; a stray swipe or space
   // bar scrolling the page underneath mid-run costs the attempt. The board has
@@ -182,10 +184,34 @@ export default function TrainingPage() {
     <AppShell>
       <PageHeader
         title="Training Facility"
-        subtitle="Drills with their own records. Nothing here moves a stat by itself."
-        eyebrow="Practice"
+        subtitle="Ranked drills keep records. The practice range keeps nothing at all."
+        eyebrow="Training"
         eyebrowColor="var(--accent-purple)"
       />
+
+      {/* Two halves of the facility, and they work on opposite principles. */}
+      <div
+        className="flex gap-1 p-1 rounded-xl border w-fit mb-6"
+        style={{ borderColor: 'var(--surface-border)' }}
+      >
+        {(
+          [
+            { key: 'ranked', label: 'Ranked drills' },
+            { key: 'practice', label: 'Practice range' },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+              tab === t.key ? 'text-white' : 'text-neutral-400 hover:text-white'
+            }`}
+            style={tab === t.key ? { background: 'rgba(255,255,255,0.1)' } : {}}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/40 bg-red-500/10 mb-5">
@@ -193,6 +219,10 @@ export default function TrainingPage() {
         </div>
       )}
 
+      {tab === 'practice' && <PracticeBoard />}
+
+      {tab === 'ranked' && (
+        <>
       <div
         className="rounded-xl px-4 py-3 text-xs mb-6 border flex items-start gap-2.5"
         style={{ borderColor: 'var(--surface-border)', color: 'var(--text-secondary)' }}
@@ -338,6 +368,8 @@ export default function TrainingPage() {
             })}
           </div>
         </section>
+      )}
+        </>
       )}
 
       {/* Game modal */}

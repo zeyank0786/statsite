@@ -7,6 +7,7 @@ import { runCommitmentUpkeep } from '@/lib/commitments';
 import { runDueReminders } from '@/lib/reminders';
 import { runDueAutomations } from '@/lib/automations';
 import { maybeAnnounceNewSeason } from '@/lib/wrapped';
+import { describeSource, recordCronRun } from '@/lib/cronHealth';
 import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }
+
+  const source = describeSource(request);
 
   // Commitments upkeep rides along with this job — Vercel's Hobby plan allows
   // very few cron entries, and a failure here must not stop vote reminders.
@@ -114,7 +117,8 @@ export async function GET(request: Request) {
       [cutoff]
     );
     if (pending.length === 0) {
-      return NextResponse.json({ ok: true, stale: 0, reminded: 0, commitments, reminders, automations, wrapped, expired });
+      await recordCronRun('vote-reminders', { ok: true, source });
+      return NextResponse.json({ ok: true, source, stale: 0, reminded: 0, commitments, reminders, automations, wrapped, expired });
     }
 
     const votes = await queryAll('SELECT suggestionId, userId FROM Vote');
@@ -167,8 +171,10 @@ export async function GET(request: Request) {
       if (sent > 0) reminded++;
     }
 
+    await recordCronRun('vote-reminders', { ok: true, source });
     return NextResponse.json({
       ok: true,
+      source,
       stale: pending.length,
       owed: owedBy.size,
       reminded,
@@ -180,6 +186,7 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error('Vote reminder cron failed:', error);
+    await recordCronRun('vote-reminders', { ok: false, source, error });
     return NextResponse.json(errorPayload('Cron failed', error), { status: 500 });
   }
 }

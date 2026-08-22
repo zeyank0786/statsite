@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { runDueAutomations } from '@/lib/automations';
+import { describeSource, recordCronRun } from '@/lib/cronHealth';
 import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
@@ -29,11 +30,14 @@ async function handle(request: Request) {
     }
   }
 
+  const source = describeSource(request);
   try {
     const result = await runDueAutomations();
-    return NextResponse.json({ ok: true, ...result });
+    await recordCronRun('automations', { ok: true, source });
+    return NextResponse.json({ ok: true, source, ...result });
   } catch (error: any) {
     console.error('Automation cron failed:', error);
+    await recordCronRun('automations', { ok: false, source, error });
     return NextResponse.json(errorPayload('Cron failed', error), { status: 500 });
   }
 }

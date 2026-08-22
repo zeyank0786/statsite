@@ -8,6 +8,13 @@ Everything is already built and deployed. The **only** thing that needs setting
 up is a free "pinger" that pokes the app every ~15 minutes so time-of-day
 reminders actually fire on time.
 
+> **Check first: Admin → Schedules.** That tab reports whether each scheduled
+> job is actually running, when it last ran, and — most usefully — *who called
+> it*. If the reminder pinger shows "Not running", or shows "Running" with a
+> last caller of `vercel-cron`, then the 15-minute pinger is dead and reminders
+> are landing on the once-a-day backstop instead of at their set time. That is
+> the symptom this whole document exists to fix.
+
 ## Why this is needed
 
 The reminder-firing endpoint is `/api/cron/reminders`. Something has to call it
@@ -49,38 +56,32 @@ GET https://<your-domain>/api/cron/reminders?secret=<CRON_SECRET>
 
 That's it. You can delete a cronjob any time to turn the pinger off.
 
-## Option B — GitHub Actions (free, lives in the repo)
+## Option B — GitHub Actions (already written, lives in the repo)
 
-Because the repo is public, the secret **must** be a repository secret, never
-inline in the workflow.
+The workflow now exists at **`.github/workflows/cron-pinger.yml`** — nothing to
+write. Because the repo is public, the secrets **must** be repository secrets,
+never inline in the workflow.
 
 1. Repo → **Settings → Secrets and variables → Actions → New repository secret**:
-   - Name: `CRON_SECRET`  → value: the same secret as in Vercel.
-   - (Optional) `APP_URL` → your production URL.
-2. Add `.github/workflows/reminders.yml`:
+   - `CRON_SECRET` → the same secret as in Vercel.
+   - `APP_URL` → your production origin, e.g. `https://example.vercel.app`.
+2. Actions tab → **Cron pinger** → **Run workflow** to test it immediately.
 
-```yaml
-name: Fire reminders
-on:
-  schedule:
-    - cron: '*/15 * * * *' # every 15 minutes (UTC)
-  workflow_dispatch: {}
-jobs:
-  ping:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Hit reminder cron
-        run: |
-          curl -fsS -X POST \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_URL || 'https://<your-domain>' }}/api/cron/reminders"
-```
+The workflow fails loudly on a 401 or 500 rather than showing a green tick over
+a reminder that never fired, so a broken secret is visible in the Actions tab.
 
-> Note: GitHub's scheduled Actions are best-effort and can run several minutes
-> late (and pause on repos with no activity for 60 days). cron-job.org is more
-> punctual — Option A is recommended.
+> Two caveats. GitHub only runs scheduled workflows from the repository's
+> **default branch**, so the file has to be on that branch to fire at all. And
+> scheduled Actions are best-effort: they can run several minutes late and pause
+> on repos with no activity for 60 days. cron-job.org is more punctual, but it
+> can also disable itself after a run of failures — which is exactly what an
+> outage produces. Running both is fine; firing twice is a no-op.
 
 ## Testing it works
+
+Fastest check of all: **Admin → Schedules**. Within 15 minutes of a working
+pinger, the reminder job reads "Running" with a last caller of `github-actions`
+or `cron-job.org`.
 
 - Set a reminder for yourself 1–2 minutes from now (make sure push is enabled on
   the device — Settings → notifications, and on iPhone the site must be added to

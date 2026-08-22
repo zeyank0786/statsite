@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { runCommitmentUpkeep } from '@/lib/commitments';
+import { describeSource, recordCronRun } from '@/lib/cronHealth';
 import { errorPayload } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
@@ -20,11 +21,14 @@ export async function GET(request: Request) {
     }
   }
 
+  const source = describeSource(request);
   try {
     const result = await runCommitmentUpkeep();
-    return NextResponse.json({ ok: true, ...result });
+    await recordCronRun('commitments', { ok: true, source });
+    return NextResponse.json({ ok: true, source, ...result });
   } catch (error: any) {
     console.error('Commitments cron failed:', error);
+    await recordCronRun('commitments', { ok: false, source, error });
     return NextResponse.json(errorPayload('Cron failed', error), { status: 500 });
   }
 }

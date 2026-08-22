@@ -19,6 +19,8 @@ import {
   EyeOffIcon,
   ShieldIcon,
   SendIcon,
+  ClockIcon,
+  RefreshIcon,
 } from '@/components/icons';
 
 interface AdminPlayer {
@@ -50,7 +52,7 @@ interface CatalogData {
   players: { id: string; username: string; active: number }[];
 }
 
-type Tab = 'roster' | 'announce' | 'catalog' | 'gating' | 'editstats' | 'danger';
+type Tab = 'roster' | 'announce' | 'catalog' | 'gating' | 'editstats' | 'schedules' | 'danger';
 
 export default function AdminPage() {
   const { status, data: session } = useSession();
@@ -170,6 +172,7 @@ export default function AdminPage() {
             { key: 'catalog', label: 'Categories & Stats' },
             { key: 'gating', label: 'Locks & Prereqs' },
             { key: 'editstats', label: 'Edit Stats' },
+            { key: 'schedules', label: 'Schedules' },
             { key: 'danger', label: 'Danger Zone' },
           ] as const
         ).map((t) => (
@@ -195,6 +198,7 @@ export default function AdminPage() {
       {tab === 'catalog' && catalog && <CatalogTab catalog={catalog} busy={busy} call={call} />}
       {tab === 'gating' && catalog && <GatingTab catalog={catalog} busy={busy} call={call} />}
       {tab === 'editstats' && <StatEditTab roster={roster} flash={flash} />}
+      {tab === 'schedules' && <SchedulesTab />}
       {tab === 'danger' && <DangerTab />}
     </AppShell>
   );
@@ -1789,6 +1793,263 @@ function BackupSection() {
         </div>
       )}
     </section>
+  );
+}
+
+/* ============================== Schedules ============================== */
+
+interface CronStatusRow {
+  key: string;
+  label: string;
+  path: string;
+  covers: string;
+  optional?: boolean;
+  expectedIntervalMinutes: number;
+  lastRunAt: string | null;
+  lastOkAt: string | null;
+  lastError: string | null;
+  lastSource: string | null;
+  runs: number;
+  failures: number;
+  minutesSinceRun: number | null;
+  state: 'never' | 'stale' | 'failing' | 'ok';
+}
+
+const CRON_STATE_META: Record<
+  CronStatusRow['state'],
+  { label: string; hex: string; blurb: string }
+> = {
+  ok: { label: 'Running', hex: '#34d399', blurb: 'Being hit on schedule.' },
+  stale: {
+    label: 'Not running',
+    hex: '#f87171',
+    blurb: 'Nothing has hit this endpoint recently, so whatever it covers is not happening.',
+  },
+  failing: {
+    label: 'Erroring',
+    hex: '#fb923c',
+    blurb: 'Something is hitting it, but the last run threw. The pinger is fine — the job is not.',
+  },
+  never: {
+    label: 'Never seen',
+    hex: '#a1a1aa',
+    blurb: 'This endpoint has not been hit once since health tracking was added.',
+  },
+};
+
+/** "3 min ago" / "2 days ago" — no precision beyond this is useful here. */
+function sinceLabel(minutes: number | null): string {
+  if (minutes === null) return 'never';
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
+function everyLabel(minutes: number): string {
+  if (minutes % (24 * 60) === 0) {
+    const days = minutes / (24 * 60);
+    return days === 1 ? 'once a day' : `every ${days} days`;
+  }
+  return `every ${minutes} min`;
+}
+
+/**
+ * Whether the scheduled jobs are actually running.
+ *
+ * This exists because a dead scheduler is completely silent: reminders simply
+ * start arriving at the wrong time of day and nothing anywhere says why. The
+ * last-caller column is what usually answers it — if the reminder endpoint is
+ * only ever hit by `vercel-cron`, the 15-minute pinger is dead and reminders
+ * are landing on the once-a-day backstop instead of at their set time.
+ */
+function SchedulesTab() {
+  const [jobs, setJobs] = useState<CronStatusRow[] | null>(null);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    try {
+      const res = await fetch('/api/admin/cron-health');
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to load schedules');
+        return;
+      }
+      setError('');
+      setJobs(data.jobs || []);
+    } catch (e: any) {
+      setError(e.message || 'Failed to load schedules');
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const pinger = jobs?.find((j) => j.key === 'reminders');
+
+  return (
+    <div className="space-y-5">
+      <section className="glass card-shadow p-5">
+        <div className="flex items-start gap-3 mb-4">
+          <span className="text-neutral-400 mt-0.5">
+            <ClockIcon size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-lg font-bold text-white">Scheduled jobs</h2>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              Reminders, commitment sweeps, automations and the Wrapped rollover only happen
+              because something outside the app pokes these endpoints. When that stops, nothing
+              errors — the work just quietly never runs.
+            </p>
+          </div>
+          <button onClick={() => void load()} className="btn-ghost px-3 py-1.5 text-xs shrink-0">
+            <RefreshIcon size={13} />
+            Refresh
+          </button>
+        </div>
+
+        {error && (
+          <div className="rounded-xl px-4 py-3 text-sm text-red-400 border border-red-500/40 bg-red-500/10 mb-4">
+            {error}
+          </div>
+        )}
+
+        {/* The headline verdict, because it is the question being asked. */}
+        {pinger && pinger.state !== 'ok' && (
+          <div
+            className="rounded-xl px-4 py-3.5 text-sm border mb-4 flex items-start gap-2.5"
+            style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)' }}
+          >
+            <WarningIcon size={16} className="shrink-0 mt-0.5 text-red-400" />
+            <div>
+              <p className="font-semibold text-white mb-1">
+                Reminders are not firing at their set time.
+              </p>
+              <p style={{ color: 'var(--text-secondary)' }}>
+                The 15-minute pinger is {pinger.state === 'never' ? 'not set up' : 'not running'}, so
+                reminders only go out once a day when the daily job runs — whatever time that
+                happens to be. Setup is in <span className="text-white">REMINDERS-SETUP.md</span>.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {pinger && pinger.state === 'ok' && pinger.lastSource === 'vercel-cron' && (
+          <div
+            className="rounded-xl px-4 py-3.5 text-sm border mb-4 flex items-start gap-2.5"
+            style={{ borderColor: 'rgba(251,146,60,0.4)', background: 'rgba(251,146,60,0.08)' }}
+          >
+            <span className="shrink-0 mt-0.5" style={{ color: '#fb923c' }}>
+              <WarningIcon size={16} />
+            </span>
+            <div>
+              <p className="font-semibold text-white mb-1">Only the daily job is calling this.</p>
+              <p style={{ color: 'var(--text-secondary)' }}>
+                The last caller was Vercel&apos;s own once-a-day cron, not an external pinger — so
+                reminders are still landing on the daily backstop rather than on time.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {jobs === null ? (
+          <div
+            className="h-40 rounded-xl animate-pulse"
+            style={{ background: 'rgba(255,255,255,0.04)' }}
+          />
+        ) : (
+          <div className="space-y-3">
+            {jobs.map((job) => {
+              const meta = CRON_STATE_META[job.state];
+              return (
+                <div
+                  key={job.key}
+                  className="rounded-xl border p-4"
+                  style={{ borderColor: 'var(--surface-border)' }}
+                >
+                  <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
+                    <span className="font-semibold text-white">{job.label}</span>
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                      style={{ background: `${meta.hex}1f`, color: meta.hex }}
+                    >
+                      {meta.label}
+                    </span>
+                    {job.optional && (
+                      <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                        optional — the daily job covers it
+                      </span>
+                    )}
+                    <span
+                      className="ml-auto text-xs tabular-nums"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {sinceLabel(job.minutesSinceRun)}
+                    </span>
+                  </div>
+
+                  <p className="text-xs font-mono mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    {job.path} · expected {everyLabel(job.expectedIntervalMinutes)}
+                  </p>
+
+                  <p className="text-xs mb-2.5" style={{ color: 'var(--text-secondary)' }}>
+                    {meta.blurb} {job.covers}
+                  </p>
+
+                  <div
+                    className="flex items-center gap-4 text-[11px] flex-wrap"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <span>
+                      last caller:{' '}
+                      <span className="text-neutral-300 font-mono">{job.lastSource || '—'}</span>
+                    </span>
+                    <span className="tabular-nums">{job.runs} runs</span>
+                    {job.failures > 0 && (
+                      <span className="tabular-nums" style={{ color: '#fb923c' }}>
+                        {job.failures} failed
+                      </span>
+                    )}
+                  </div>
+
+                  {job.lastError && job.state === 'failing' && (
+                    <p className="text-[11px] mt-2 font-mono text-red-400 break-words">
+                      {job.lastError}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="glass card-shadow p-5">
+        <h3 className="font-semibold text-white mb-2">If the pinger is dead</h3>
+        <ol
+          className="text-sm space-y-2 list-decimal pl-5"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          <li>
+            A GitHub Actions workflow in this repo (
+            <span className="font-mono text-xs">.github/workflows/cron-pinger.yml</span>) hits the
+            reminder endpoint every 15 minutes for free. It needs two repository secrets —{' '}
+            <span className="font-mono text-xs">CRON_SECRET</span> and{' '}
+            <span className="font-mono text-xs">APP_URL</span> — and nothing else.
+          </li>
+          <li>
+            If a cron-job.org job already exists, check its history there: repeated failures during
+            the database outage will have auto-disabled it, and re-enabling is one click.
+          </li>
+          <li>
+            Either way this page shows &ldquo;Running&rdquo; with the matching caller name within 15
+            minutes of it working.
+          </li>
+        </ol>
+      </section>
+    </div>
   );
 }
 
