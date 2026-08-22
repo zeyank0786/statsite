@@ -9,6 +9,108 @@ needs telling — without losing the record of everything that came before.
 
 ---
 
+## The practice range — 22 August 2026
+
+Announced 22 August 2026. The reminder-timing work shipped the same day but
+was deliberately held back from the message until the pinger is confirmed
+running — it stays in CHANGELOG.md until then.
+
+The Training Facility now has two halves, and they work on opposite principles.
+
+<details>
+<summary>What the crew was actually told</summary>
+
+```
+🚀 4WARD UPDATE — the practice range
+
+New tab in the Training Facility. Ten new games, and not one of them keeps
+score.
+
+🧠 WHY NOTHING'S TRACKED
+
+The eleven drills you already know are untouched — still ranked, still with
+leaderboards and crew records. This is a second tab next to them.
+
+A leaderboard turns every go into a performance, which is the worst possible
+setting for actually getting better at something. So this half records nothing
+whatsoever. No score, no board, no crew record, not even a personal best. Play
+it for an hour, close it, and the only thing saved is where you left the
+difficulty slider.
+
+🎮 WHAT'S IN IT
+
+Memory:
+• Spatial Memory — cells all flash at once, tap them back
+• Kim's Game — study a tray of objects, then say what got taken off it
+• Digit Span — digits one at a time, type them back. Backwards, higher up
+• Card Pairs — matching, and it tells you how many turns you wasted
+• Word List — memorise a list, then find it buried in decoys
+
+Everything else:
+• Mental Rotation — same shape turned round, or a mirror image?
+• Logic Grid — a race and a few clues, exactly one order fits
+• Estimation — dots flash too fast to count, guess how many
+• Anagrams — unscramble the word
+• Pattern Matrix — nine squares, one missing, work out the rule
+
+🎚️ THE DIFFICULTY IS YOURS
+
+Every one has a slider from 1 to 20 and you set it yourself. It doesn't adapt
+and it doesn't get harder because you did well — you pick the level and you
+drill that level. It remembers where you left it for next time.
+
+Each game explains itself with a few pictures the first time you open it, and
+you can pull that back up whenever from "How it works".
+
+Nothing to do at your end. It's just there.
+```
+
+</details>
+
+**Ranked drills** are what was already there: eleven games that keep records, a
+leaderboard each, and a run good enough to be worth a stat change that a
+crewmate can turn into a suggestion.
+
+**The practice range** is ten new drills that record absolutely nothing. No
+score, no board, no crew record, not even a personal best. The reason for the
+split is that a leaderboard turns every attempt into a performance, and that is
+the wrong setting for actually getting better at something — nobody learns a
+memory technique while worrying where the attempt lands on a board.
+
+Five are memory drills, five are not:
+
+- **Spatial Memory** — cells flash all at once, tap them back. No order to lean
+  on, so you have to hold the shape rather than a sequence.
+- **Kim's Game** — study a tray, then say what was taken off it. The options mix
+  what went with objects that were never there, so scanning what is left tells
+  you nothing.
+- **Digit Span** — digits one at a time, typed back. From level 11 they come
+  back in reverse, which is a different skill rather than a harder one.
+- **Card Pairs** — matching, with turns used reported against the perfect
+  number. That gap is how much of what you saw you actually kept.
+- **Word List** — memorise a list, find it among decoys. Past level 11 the
+  decoys share the studied words' themes, so nothing can be ruled out on feel.
+- **Mental Rotation** — same shape turned, or its mirror image?
+- **Logic Grid** — a race and a handful of clues, with exactly one order that
+  fits. Every puzzle is brute-forced before you see it, so there is never a
+  second valid answer.
+- **Estimation** — dots flash too fast to count. Close enough counts, and the
+  tolerance tightens from 25% down to 6%.
+- **Anagrams** — one scrambled word at a time, hints one letter at a time.
+- **Pattern Matrix** — nine squares, one missing, rules running across and down.
+
+Every one has a **1–20 difficulty slider** you set yourself — no adaptive ramp,
+because the point of a practice range is to drill the level you chose. Where you
+left the slider is remembered in your own browser, and it is the only thing that
+survives closing the tab. Each drill also gets the same tap-through visual
+walkthrough the ranked drills have.
+
+Because nothing is recorded, nothing is fetched or written: the whole tab is
+client-side, it costs the database nothing however much anyone plays, and a
+player locked out of the ranked drills can still practise.
+
+---
+
 ## Automatic stats, a calmer surface, and a catalog fix — 9 August 2026
 
 Announced 9 August 2026. The catalog fix was left out of the message — it's
